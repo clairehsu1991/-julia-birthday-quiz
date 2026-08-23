@@ -394,7 +394,22 @@ function renderRoleSelect(){
     </div></div>
   `);
 }
-function chooseHost(){ ROLE='host'; renderHostSetup(); }
+async function chooseHost(){
+  ROLE = 'host';
+  render(`<div class="shell"><div class="center"><p class="sub">載入題目中...</p></div></div>`);
+  try{
+    const draft = await sGet('draft:setup');
+    if (draft){
+      if (Array.isArray(draft.questions) && draft.questions.length) QUESTIONS = draft.questions;
+      if (draft.timeLimitSeconds) TIME_LIMIT_SECONDS = draft.timeLimitSeconds;
+    }
+  } catch(e){ /* no draft yet, start fresh */ }
+  renderHostSetup();
+}
+async function saveDraft(){
+  try{ await sSet('draft:setup', { questions: QUESTIONS, timeLimitSeconds: TIME_LIMIT_SECONDS }); }
+  catch(e){ console.error('draft save failed', e); }
+}
 
 /* ============================================================
    HOST: SETUP
@@ -499,8 +514,8 @@ function onTypeChange(){
   document.getElementById('nq-text-fields').style.display = t==='text' ? 'flex' : 'none';
   document.getElementById('nq-image-fields').style.display = t==='image' ? 'flex' : 'none';
 }
-function setTimeLimit(s){ TIME_LIMIT_SECONDS = s; renderHostSetup(); }
-function deleteQuestion(i){ QUESTIONS.splice(i,1); renderHostSetup(); }
+function setTimeLimit(s){ TIME_LIMIT_SECONDS = s; renderHostSetup(); saveDraft(); }
+function deleteQuestion(i){ QUESTIONS.splice(i,1); renderHostSetup(); saveDraft(); }
 
 async function addQuestionFromForm(){
   const text = document.getElementById('nq-text').value.trim();
@@ -530,6 +545,7 @@ async function addQuestionFromForm(){
     }
     QUESTIONS.push({ text, type, headerImg, options });
     renderHostSetup();
+    saveDraft();
   } catch(e){
     console.error(e);
     alert('圖片處理失敗，請再試一次');
