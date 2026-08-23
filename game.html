@@ -145,9 +145,15 @@
 
   .q-header-img{ max-width:100%; max-height:240px; object-fit:contain; border-radius:16px; margin:0 auto 4px; display:block; }
   .qtext{
-    font-size: clamp(21px, 4.2vw, 34px); font-weight:900; line-height:1.32; text-align:center;
+    font-size: clamp(21px, 4.2vw, 34px); font-weight:900; line-height:1.38; text-align:center;
     margin: 6px 0 4px; padding: 0 6px;
+    white-space: pre-wrap;        /* honour the line breaks the host typed */
+    overflow-wrap: anywhere;
+    max-width: 20em; margin-inline: auto;   /* stop long lines running the full width */
   }
+  /* Long questions step down a size so they still fit on the projector. */
+  .qtext.long{ font-size: clamp(18px, 3.1vw, 26px); line-height:1.45; max-width:24em; }
+  .qtext.xlong{ font-size: clamp(16px, 2.5vw, 21px); line-height:1.5; max-width:28em; }
   .options-grid{ display:grid; grid-template-columns:1fr; gap:14px; width:100%; max-width:1000px; margin:0 auto; }
   @media(min-width:760px){ .options-grid{ grid-template-columns:1fr 1fr; } }
 
@@ -212,7 +218,7 @@
   .qrow{ background:#fff; border:1px solid var(--line); border-radius:14px; padding:12px 14px; display:flex; gap:12px; align-items:flex-start; }
   .qrow .qi{ font-family:'Fredoka',sans-serif; font-size:20px; color:var(--ink-dim); width:26px; flex:none; }
   .qrow .qb{ flex:1; min-width:0; }
-  .qrow .qb .qt{ font-weight:700; font-size:14.5px; margin-bottom:6px; }
+  .qrow .qb .qt{ font-weight:700; font-size:14.5px; margin-bottom:6px; white-space:pre-wrap; overflow-wrap:anywhere; }
   .qrow .qb .oo{ font-size:12.5px; color:var(--ink-dim); }
   .qrow .del{ flex:none; background:none; border:none; color:var(--alert); font-size:13px; font-weight:700; padding:4px 8px; }
 
@@ -288,7 +294,19 @@ const MASCOT_IMG = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAUDB
 /* ---------- state ---------- */
 let ROLE = null;
 let IS_STAR_LINK = false;         // true only when opened via the private ?join=star link
-let PLAYER_ID = 'p_' + Math.random().toString(36).slice(2,10) + Date.now().toString(36);
+/* One stable id per phone, kept in localStorage.
+   Previously this was regenerated on every page load, so anyone who reloaded,
+   lost signal, or reopened the link came back as a brand-new player: the name
+   list grew and grew, and a returning 壽星 could not reclaim the badge. */
+let PLAYER_ID = (function(){
+  const mint = () => 'p_' + Math.random().toString(36).slice(2,10) + Date.now().toString(36);
+  try{
+    let v = localStorage.getItem('julia_player_id');
+    if (!v){ v = mint(); localStorage.setItem('julia_player_id', v); }
+    return v;
+  } catch(e){ return mint(); }   // private mode etc — fall back to a one-off id
+})();
+let lastRejoinAt = 0;
 let PLAYER_NAME = '';
 let QUESTIONS = [];               // { text, type:'text'|'image', headerImg:null|dataURL, options:[{label,img}] }
 let TIME_LIMIT_SECONDS = 15;
@@ -460,6 +478,33 @@ function revealRowHtml(opt, i, count, isShouxingPick){
       <span class="num" style="font-size:20px">${count}</span>
     </div>
   `;
+}
+/* A 壽星 who isn't on the player list any more (they never came back after a
+   name-list wipe, or the badge was left over from a test run) must not count.
+   Otherwise the host could start a round with a phantom 壽星, and since nobody
+   would ever submit "the" answer, every question would score zero for everyone. */
+function dropMissingShouxing(state){
+  if (state && state.shouxingId && !(state.players || {})[state.shouxingId]){
+    state.shouxingId = null;
+    return true;
+  }
+  return false;
+}
+/* Everyone except the 壽星, best score first. */
+function rankedGuessers(players, shouxingId){
+  return Object.entries(players || {})
+    .filter(([id]) => id !== shouxingId)
+    .sort((a,b) => b[1].score - a[1].score);
+}
+/* Estimate how many lines the question will occupy — the box is about 20
+   characters wide at full size — and step the type down only once it would
+   start crowding the screen. Counting lines rather than raw characters means a
+   question the host split with Enter keeps its big, projector-friendly size. */
+function qtextHtml(text, extraStyle){
+  const lines = String(text == null ? '' : text).split('\n');
+  const est = lines.reduce((n, line) => n + Math.max(1, Math.ceil(line.length / 20)), 0);
+  const cls = 'qtext' + (est > 5 ? ' xlong' : est > 3 ? ' long' : '');
+  return `<div class="${cls}"${extraStyle ? ` style="${extraStyle}"` : ''}>${esc(text)}</div>`;
 }
 function mascot(caption){
   return `<div class="mascot-row"><div class="mascot-bubble"><img src="${MASCOT_IMG}" alt="quokka"></div>${caption? `<div class="mascot-caption">${esc(caption)}</div>`:''}</div>`;
@@ -896,7 +941,7 @@ function renderHostSetup(){
       <div class="panel" id="add-q-panel">
         <h2>➕ 新增題目</h2>
         <div class="stack" style="margin-top:8px">
-          <div class="field"><label>題目文字</label><input id="nq-text" placeholder="例如：壽星這趟日本行最喜歡哪張照片？"></div>
+          <div class="field"><label>題目文字（可以按 Enter 換行）</label><textarea id="nq-text" rows="3" placeholder="例如：壽星這趟日本行&#10;最喜歡哪張照片？" style="resize:vertical;line-height:1.5"></textarea></div>
           <div class="field"><label>題目附圖（選填，會顯示在題目上方）</label><input id="nq-header-img" type="file" accept="image/*"></div>
           <div class="field"><label>選項類型</label>
             <select id="nq-type" onchange="onTypeChange()">
@@ -1076,6 +1121,16 @@ async function addQuestionFromForm(){
    HOST: LOBBY
    ============================================================ */
 async function startLobby(){
+  // Drop join records left over from an earlier party so the list doesn't grow
+  // across sessions. Anyone whose phone is still open re-joins within seconds.
+  try{
+    const cutoff = Date.now() - 12 * 60 * 60 * 1000;
+    for (const k of await sList('join:')){
+      const info = await sGet(k);
+      if (!info || (info.requestedAt || 0) < cutoff) await sDel(k);
+    }
+  } catch(e){ console.error('stale join cleanup failed', e); }
+
   hostState = {
     status: 'lobby',
     // Stamped on every answer so leftover answers from an earlier round can never
@@ -1094,8 +1149,10 @@ async function startLobby(){
 }
 function renderHostLobby(){
   const url = joinUrl();
+  dropMissingShouxing(hostState);
   const players = Object.entries(hostState.players);
   const total = hostState.questions.length;
+  const sxReady = !!(hostState.shouxingId && hostState.players[hostState.shouxingId]);
   render(`
     <div class="shell"><div class="col" style="align-items:center;text-align:center">
       ${hostNav(true)}
@@ -1116,12 +1173,13 @@ function renderHostLobby(){
             </button>
           `).join('') : '<p class="sub">還沒有人加入，請大家掃上面的 QR code</p>'}
         </div>
-        <p class="sub" style="margin-top:8px">${hostState.shouxingId? '點其他人的名字可以改指定壽星' : '壽星還沒加入，或請確認她是用你私下傳給她的專屬連結加入的（也可以直接點名字手動指定）'}</p>
+        <p class="sub" style="margin-top:8px">${sxReady? '點其他人的名字可以改指定壽星' : '壽星還沒加入，或請確認她是用你私下傳給她的專屬連結加入的（也可以直接點名字手動指定）'}</p>
       </div>
 
       <div class="btn-row" style="margin-top:8px">
         <button class="btn secondary" onclick="backToSetupFromLobby()">← 回設定</button>
-        <button class="btn" onclick="nextQuestion()" ${hostState.shouxingId? '' : 'disabled'}>▶ 開始第一題</button>
+        <button class="btn ghost" onclick="clearAllPlayers()">🧹 清空名單</button>
+        <button class="btn" onclick="nextQuestion()" ${sxReady? '' : 'disabled'}>▶ 開始第一題</button>
       </div>
     </div></div>
   `);
@@ -1161,17 +1219,47 @@ async function processJoins(){
   let changed = false;
   for (const k of keys){
     const id = k.slice('join:'.length);
-    if (hostState.players[id]) continue;
     const info = await sGet(k);
     if (!info) continue;
-    hostState.players[id] = { name: info.name, score: 0 };
-    if (info.isShouxing && !hostState.shouxingId) hostState.shouxingId = id;
+    const token = info.requestedAt || 0;
+    const existing = hostState.players[id];
+    if (existing && existing.joinToken === token) continue;   // nothing new from this phone
+
+    if (existing){
+      // Same phone coming back (reload, lost signal, renamed) — keep their score.
+      existing.name = info.name;
+      existing.joinToken = token;
+    } else {
+      hostState.players[id] = { name: info.name, score: 0, joinToken: token };
+    }
+    // Anyone arriving through the private 壽星 link claims the badge, even if
+    // someone else (or their own earlier ghost) is holding it.
+    if (info.isShouxing) hostState.shouxingId = id;
     changed = true;
   }
+  if (dropMissingShouxing(hostState)) changed = true;
   if (changed){
     await sSet('game:state', hostState);
     if (hostState.status === 'lobby') renderHostLobby();
   }
+}
+/* Wipe the player list. Phones that are still open re-join within a couple of
+   seconds; ghosts from closed tabs and crashed sessions stay gone. */
+async function clearAllPlayers(){
+  const ok = await uiConfirm('清空所有玩家？',
+    '目前的名單和分數會全部清掉。還開著頁面的人幾秒內會自動重新加入，關掉頁面的「幽靈玩家」就不會回來了。',
+    '清空名單', true);
+  if (!ok) return;
+  const keys = (await sList('join:')).concat(await sList('answer:'));
+  for (const k of keys) await sDel(k);
+  hostState.players = {};
+  hostState.currentAnswers = {};
+  // Nobody is on the list now, so no one can hold the badge. Whoever comes back
+  // through the 壽星 link reclaims it automatically a second later.
+  hostState.shouxingId = null;
+  await sSet('game:state', hostState);
+  renderHostLobby();
+  toast('已清空，還在線上的人會自動回來');
 }
 async function processAnswers(){
   const keys = await sList('answer:');
@@ -1243,7 +1331,7 @@ function renderHostQuestion(){
         <div class="chip timer" id="host-timer-chip"><span>⏱</span><span class="num">${Math.ceil(hostState.timeLimitMs/1000)}</span></div>
       </div>
       ${q.headerImg? `<img class="q-header-img" src="${q.headerImg}" alt="">` : ''}
-      <div class="qtext">${esc(q.text)}</div>
+      ${qtextHtml(q.text)}
       <div class="options-grid">
         ${q.options.map((o,i)=> optionCardHtml(o, i, null)).join('')}
       </div>
@@ -1286,29 +1374,34 @@ function renderHostReveal(){
   const shouxingChoice = hostState.currentAnswers[sx] ? hostState.currentAnswers[sx].choice : null;
   const counts = [0,0,0,0];
   Object.values(hostState.currentAnswers).forEach(a=>{ if (a.choice!=null) counts[a.choice]++; });
-  const ranked = Object.entries(hostState.players).sort((a,b)=> b[1].score - a[1].score);
+  // The 壽星 sets the answer rather than guessing it, so they never score —
+  // leaving them in the table just parked them at the bottom on 0. They get
+  // their own line above the board instead.
+  const ranked = rankedGuessers(hostState.players, sx);
+  const sxName = hostState.players[sx] ? hostState.players[sx].name : '';
   const isLast = hostState.questionIndex >= hostState.questions.length - 1;
 
   render(`
     <div class="shell"><div class="col">
       ${hostNav(true)}
       <span class="eyebrow">🎂 壽星的選擇</span>
-      <div class="qtext" style="font-size:clamp(17px,3vw,24px)">${esc(q.text)}</div>
+      ${qtextHtml(q.text, "font-size:clamp(17px,3vw,24px);max-width:30em")}
       ${shouxingChoice==null ? '<p class="sub" style="text-align:center">壽星這題沒來得及作答，這題大家都不計分</p>' : ''}
       <div class="options-grid">
         ${q.options.map((o,i)=> revealRowHtml(o, i, counts[i], i===shouxingChoice)).join('')}
       </div>
       <div class="panel" style="margin-top:8px">
         <h2>🏆 目前排行榜</h2>
+        ${sxName? `<p class="sub" style="margin-top:2px">🎂 ${esc(sxName)} 是今天的壽星，負責出正解，不列入排名</p>`:''}
         <div class="stack" style="margin-top:10px">
           ${ranked.map(([id,p],i)=>`
             <div class="lb-row">
               <div class="lb-rank ${i===0?'top1':i===1?'top2':i===2?'top3':''}">${i+1}</div>
-              <div class="lb-name">${esc(p.name)}${id===sx? '<span class=\"badge-shouxing\">🎂 壽星</span>':''}</div>
+              <div class="lb-name">${esc(p.name)}</div>
               ${hostState.currentAnswers[id] && hostState.currentAnswers[id].points>0 ? `<div class="lb-delta">+${hostState.currentAnswers[id].points}</div>` : ''}
               <div class="lb-score num">${p.score}</div>
             </div>
-          `).join('') || '<p class="sub">目前沒有玩家</p>'}
+          `).join('') || '<p class="sub">還沒有人猜</p>'}
         </div>
       </div>
       <div class="btn-row" style="margin-top:6px">
@@ -1330,7 +1423,8 @@ function goFinal(){
 }
 function renderHostFinal(){
   const sx = hostState.shouxingId;
-  const ranked = Object.entries(hostState.players).sort((a,b)=> b[1].score - a[1].score);
+  const ranked = rankedGuessers(hostState.players, sx);
+  const sxName = hostState.players[sx] ? hostState.players[sx].name : '';
   const top3 = ranked.slice(0,3);
   const rest = ranked.slice(3);
   render(`
@@ -1339,14 +1433,15 @@ function renderHostFinal(){
       ${mascot()}
       <span class="eyebrow">🎊 遊戲結束</span>
       <h1 class="marquee-title">最終<span class="hl">排行榜</span></h1>
+      ${sxName? `<div class="chip shouxing" style="margin:0 auto">🎂 今天的壽星 ${esc(sxName)}</div>`:''}
       <div class="podium">
-        ${top3[1]?`<div class="p second"><div class="medal">🥈</div><div class="name">${esc(top3[1][1].name)}${top3[1][0]===sx?' 🎂':''}</div><div class="score num">${top3[1][1].score}</div></div>`:''}
-        ${top3[0]?`<div class="p first"><div class="medal">🥇</div><div class="name">${esc(top3[0][1].name)}${top3[0][0]===sx?' 🎂':''}</div><div class="score num">${top3[0][1].score}</div></div>`:''}
-        ${top3[2]?`<div class="p third"><div class="medal">🥉</div><div class="name">${esc(top3[2][1].name)}${top3[2][0]===sx?' 🎂':''}</div><div class="score num">${top3[2][1].score}</div></div>`:''}
+        ${top3[1]?`<div class="p second"><div class="medal">🥈</div><div class="name">${esc(top3[1][1].name)}</div><div class="score num">${top3[1][1].score}</div></div>`:''}
+        ${top3[0]?`<div class="p first"><div class="medal">🥇</div><div class="name">${esc(top3[0][1].name)}</div><div class="score num">${top3[0][1].score}</div></div>`:''}
+        ${top3[2]?`<div class="p third"><div class="medal">🥉</div><div class="name">${esc(top3[2][1].name)}</div><div class="score num">${top3[2][1].score}</div></div>`:''}
       </div>
       ${rest.length? `<div class="stack" style="width:100%;max-width:520px">
         ${rest.map(([id,p],i)=>`
-          <div class="lb-row"><div class="lb-rank">${i+4}</div><div class="lb-name">${esc(p.name)}${id===sx?'<span class=\"badge-shouxing\">🎂 壽星</span>':''}</div><div class="lb-score num">${p.score}</div></div>
+          <div class="lb-row"><div class="lb-rank">${i+4}</div><div class="lb-name">${esc(p.name)}</div><div class="lb-score num">${p.score}</div></div>
         `).join('')}
       </div>` : ''}
       <div class="btn-row" style="margin-top:14px">
@@ -1409,11 +1504,27 @@ function renderPlayerNameEntry(){
 }
 async function submitJoin(){
   const val = document.getElementById('pname').value.trim();
-  if (!val){ alert('請輸入暱稱'); return; }
+  if (!val){ toast('請輸入暱稱'); return; }
   PLAYER_NAME = val;
-  await sSet('join:' + PLAYER_ID, { name: PLAYER_NAME, requestedAt: Date.now(), isShouxing: IS_STAR_LINK });
+  try{ localStorage.setItem('julia_player_name', val); }catch(e){}
+  await postJoin();
   renderPlayerWaiting();
   startPlayerPolling();
+}
+async function postJoin(){
+  lastRejoinAt = Date.now();
+  await sSet('join:' + PLAYER_ID, {
+    name: PLAYER_NAME,
+    requestedAt: Date.now(),     // doubles as the host's "this is new" token
+    isShouxing: IS_STAR_LINK
+  });
+}
+/* Put ourselves back on the host's list after a server restart or a name-list wipe.
+   Throttled so a slow host poll can't turn this into a write loop. */
+async function rejoinIfNeeded(){
+  if (!PLAYER_NAME) return;
+  if (Date.now() - lastRejoinAt < 4000) return;
+  await postJoin();
 }
 
 /* ============================================================
@@ -1429,10 +1540,33 @@ async function playerPollTick(){
   pollBusy = true;
   try{
     const state = await sGet('game:state');
-    if (!state) return;
+    if (!state){
+      // Server restarted and lost everything (a Render wake-up does exactly this).
+      // Don't freeze on the old screen — say so, and keep offering ourselves up
+      // so we're already on the list when the host opens the next game.
+      renderPlayerReconnecting();
+      await rejoinIfNeeded();
+      return;
+    }
     lastPlayerState = state;
+    // Host doesn't know us any more (restart, or they cleared the name list) — get back on.
+    if (state.players && !state.players[PLAYER_ID] && ['lobby','idle'].includes(state.status)){
+      await rejoinIfNeeded();
+    }
     renderPlayerView(state);
   } finally { pollBusy = false; }
+}
+function renderPlayerReconnecting(){
+  localSeenQuestionIndex = -1;
+  hasAnsweredCurrent = false;
+  render(`
+    <div class="shell"><div class="center">
+      <div style="font-size:54px">📡</div>
+      <h1 class="marquee-title" style="font-size:clamp(22px,6vw,32px)">重新連線中</h1>
+      <p class="sub">伺服器剛剛重新啟動，正在把你加回去<span class="waiting-dots"><span>.</span><span>.</span><span>.</span></span></p>
+      <p class="sub" style="font-size:12.5px">不用關掉這個畫面，主持人開始新的一場就會自動接上。</p>
+    </div></div>
+  `);
 }
 function renderPlayerView(state){
   if (state.status === 'idle'){ renderPlayerParked(state); return; }
@@ -1481,7 +1615,7 @@ function renderPlayerQuestionOrWaiting(state){
       <div class="chip" style="margin:0 auto">第 <span class="num">${state.questionIndex+1}</span> / ${state.questions.length} 題</div>
       <p class="sub" style="text-align:center;font-weight:700">${isSx? '🎂 這題換你決定！大家會猜你的答案' : '🤔 猜猜壽星會選哪一個？'}</p>
       ${q.headerImg? `<img class="q-header-img" src="${q.headerImg}" alt="">` : ''}
-      <div class="qtext">${esc(q.text)}</div>
+      ${qtextHtml(q.text)}
       <div class="options-grid">
         ${q.options.map((o,i)=> optionCardHtml(o, i, `onclick="playerAnswer(${i})"`)).join('')}
       </div>
@@ -1551,7 +1685,8 @@ function renderPlayerReveal(state){
 }
 function renderPlayerFinal(state){
   const sx = state.shouxingId;
-  const ranked = Object.entries(state.players).sort((a,b)=> b[1].score - a[1].score);
+  const ranked = rankedGuessers(state.players, sx);
+  const sxName = state.players[sx] ? state.players[sx].name : '';
   const myRank = ranked.findIndex(([id])=> id === PLAYER_ID);
   const medal = ['🥇','🥈','🥉'];
   render(`
@@ -1559,14 +1694,15 @@ function renderPlayerFinal(state){
       ${mascot()}
       <span class="eyebrow">🎊 遊戲結束</span>
       <h1 class="marquee-title" style="font-size:clamp(24px,7vw,38px)">${PLAYER_ID===sx? '🎂 生日快樂！' : (myRank>=0 && myRank<3 ? medal[myRank]+' 你最懂壽星！' : '感謝參加！')}</h1>
+      ${PLAYER_ID===sx && sxName? '<p class="sub">下面是大家猜你的成績～</p>' : ''}
       <div class="stack" style="width:100%;max-width:340px;margin-top:6px">
         ${ranked.map(([id,p],i)=>`
           <div class="lb-row ${id===PLAYER_ID?'me':''}">
             <div class="lb-rank ${i===0?'top1':i===1?'top2':i===2?'top3':''}">${i+1}</div>
-            <div class="lb-name">${esc(p.name)}${id===sx?'<span class=\"badge-shouxing\">🎂 壽星</span>':''}</div>
+            <div class="lb-name">${esc(p.name)}</div>
             <div class="lb-score num">${p.score}</div>
           </div>
-        `).join('')}
+        `).join('') || '<p class="sub">這場沒有人猜</p>'}
       </div>
     </div></div>
   `);
