@@ -182,8 +182,22 @@
   .progress-fill{ height:100%; background: linear-gradient(90deg, var(--leaf), var(--gold)); transition:width .3s ease; }
   .progress-label{ text-align:center; font-size:13px; color:var(--ink-dim); margin-top:6px; }
 
-  .qr-card{ background:#fff; border-radius:20px; padding:16px; display:inline-flex; box-shadow:0 8px 20px rgba(46,36,24,0.12); }
-  .qr-card img{ display:block; width:220px; height:220px; border-radius:8px; }
+  .qr-card{
+    background:#fff; border-radius:20px; display:inline-flex; max-width:100%;
+    padding: clamp(10px, 1.4vmin, 16px);
+    box-shadow:0 8px 20px rgba(46,36,24,0.12);
+  }
+  /* Sized in vmin so the code tracks the SHORTER side of the screen: it can't
+     overflow a narrow phone sideways, and it can't run off the bottom of a
+     short/4:3 projector. The clamp floor keeps it scannable on tiny screens. */
+  .qr-holder{
+    width: clamp(168px, 36vmin, 380px);
+    height: clamp(168px, 36vmin, 380px);
+  }
+  .qr-holder.sm{
+    width: clamp(140px, 18vmin, 180px);
+    height: clamp(140px, 18vmin, 180px);
+  }
   .join-url{ font-size:13px; color:var(--ink-dim); word-break:break-all; text-align:center; }
   .players-grid{ display:flex; flex-wrap:wrap; gap:10px; justify-content:center; padding:6px 0; }
   .player-pill{
@@ -213,6 +227,27 @@
   .podium .medal{ font-size:30px; }
   .podium .name{ font-weight:800; font-size:14px; margin-top:4px; }
   .podium .score{ font-family:'Fredoka',sans-serif; font-size:24px; color:var(--moss); }
+  /* Awards podium: each rank fades/rises into place in sequence (3rd, 2nd, 1st)
+     instead of the whole board just appearing at once. */
+  .podium .p.reveal{ opacity:0; transform:translateY(26px) scale(.94); transition:opacity .5s ease, transform .5s ease; }
+  .podium .p.reveal.show{ opacity:1; transform:translateY(0) scale(1); }
+
+  /* ---------- 頭像選擇 ---------- */
+  .avatar-grid{ display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
+  .avatar-btn{
+    width:46px; height:46px; border-radius:14px; font-size:24px; line-height:1;
+    background:#fff; border:2px solid var(--line); display:flex; align-items:center; justify-content:center;
+  }
+  .avatar-btn.sel{ border-color:var(--coral); background:rgba(232,101,75,0.12); }
+  .avatar-badge{ display:inline-block; margin-right:6px; font-size:1.1em; }
+
+  /* ---------- 猜拳抽籤 ---------- */
+  .rps-hand{ font-size:20px; margin-left:6px; }
+
+  /* ---------- 作答紀錄 ---------- */
+  .answerlog-row{ text-align:left; }
+  .answerlog-row.ok{ border-color: var(--leaf); }
+  .answerlog-row.no{ opacity:.88; }
 
   .qlist{ display:flex; flex-direction:column; gap:10px; }
   .qrow{ background:#fff; border:1px solid var(--line); border-radius:14px; padding:12px 14px; display:flex; gap:12px; align-items:flex-start; }
@@ -308,8 +343,22 @@ let PLAYER_ID = (function(){
 })();
 let lastRejoinAt = 0;
 let PLAYER_NAME = '';
+/* Cute avatar to show next to a player's name (join form, leaderboards, podium). */
+const AVATAR_LIST = ['🐨','🐰','🦊','🐼','🦁','🐯','🐸','🐷','🐵','🐧','🐶','🐱','🦉','🐻','🦄','🦘'];
+let PLAYER_AVATAR = (function(){
+  try{
+    const v = localStorage.getItem('julia_player_avatar');
+    if (v && AVATAR_LIST.includes(v)) return v;
+  } catch(e){}
+  return AVATAR_LIST[Math.floor(Math.random()*AVATAR_LIST.length)];
+})();
+/* True while the player is on a self-typed screen (wish-card editor, answer log)
+   that the 1.5s poll loop must NOT blow away mid-edit — same class of bug as the
+   old "changing the time limit wiped the half-typed question" one. */
+let manualPlayerScreen = false;
 let QUESTIONS = [];               // { text, type:'text'|'image', headerImg:null|dataURL, options:[{label,img}] }
 let TIME_LIMIT_SECONDS = 15;
+let PRIZES = ['', '', ''];        // free-text rewards for 🥇🥈🥉 on the awards podium
 
 let HOST_UNLOCKED = false;        // true only after the server confirmed this browser's host key
 let HOST_KEY = '';
@@ -432,7 +481,10 @@ function toast(msg){
   document.body.appendChild(d);
   setTimeout(()=> d.remove(), 2200);
 }
-function qrSvgHtml(url, sizePx){
+/* sizeClass: '' for the big lobby code, 'sm' for the 壽星 panel — the actual
+   pixel size comes from CSS so it adapts to the screen. */
+function qrSvgHtml(url, sizeClass){
+  const cls = 'qr-holder' + (sizeClass ? ' ' + sizeClass : '');
   try{
     let qr = null, lastErr = null;
     for (let tn = 1; tn <= 40; tn++){
@@ -444,12 +496,26 @@ function qrSvgHtml(url, sizePx){
       } catch(e){ lastErr = e; qr = null; }
     }
     if (!qr) throw lastErr || new Error('QR generation failed');
+
     let svg = qr.createSvgTag(4, 16);
-    svg = svg.replace('<svg ', '<svg style="width:100%;height:100%;display:block" ');
-    return `<div style="width:${sizePx}px;height:${sizePx}px">${svg}</div>`;
+    // The library emits <svg width="164px" height="164px"> with NO viewBox, so
+    // CSS sizing moved the canvas without scaling the drawing: the code sat in
+    // the top-left at its natural size, and in the smaller 壽星 panel it was
+    // clipped outright — which is exactly how a QR stops scanning. Give it a
+    // viewBox so it scales to whatever box we put it in, and paint the quiet
+    // zone white so the code keeps its contrast whatever sits behind it.
+    const n = parseInt((svg.match(/width="(\d+)px"/) || [])[1], 10);
+    if (!n) throw new Error('unexpected QR svg');
+    svg = svg.replace(/^<svg[^>]*>/,
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${n} ${n}"`
+      + ` preserveAspectRatio="xMidYMid meet" shape-rendering="crispEdges"`
+      + ` style="width:100%;height:100%;display:block">`
+      + `<rect x="0" y="0" width="${n}" height="${n}" fill="#ffffff"/>`);
+
+    return `<div class="${cls}">${svg}</div>`;
   } catch(e){
     console.error('QR generation failed', e);
-    return `<div style="width:${sizePx}px;height:${sizePx}px;display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--ink-dim);text-align:center;padding:8px;background:#fff">QR 產生失敗<br>請用下方連結加入</div>`;
+    return `<div class="${cls}" style="display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--ink-dim);text-align:center;padding:8px;background:#fff">QR 產生失敗<br>請用下方連結加入</div>`;
   }
 }
 
@@ -509,6 +575,7 @@ function qtextHtml(text, extraStyle){
 function mascot(caption){
   return `<div class="mascot-row"><div class="mascot-bubble"><img src="${MASCOT_IMG}" alt="quokka"></div>${caption? `<div class="mascot-caption">${esc(caption)}</div>`:''}</div>`;
 }
+function avatarSpan(av){ return `<span class="avatar-badge">${esc(av || '⭐')}</span>`; }
 
 /* ---------- client-side image compression (for question authoring) ---------- */
 function fileToCompressedDataUrl(file, maxDim, quality){
@@ -629,6 +696,7 @@ async function chooseHost(){
       RANDOM_ORDER   = !!draft.randomOrder;
       RANDOM_OPTIONS = !!draft.randomOptions;
       DRAW_COUNT     = Number(draft.drawCount) || 0;
+      if (Array.isArray(draft.prizes) && draft.prizes.length===3) PRIZES = draft.prizes;
     }
   } catch(e){ /* no draft yet, start fresh */ }
   await refreshBanks();
@@ -641,10 +709,12 @@ async function saveDraft(){
       timeLimitSeconds: TIME_LIMIT_SECONDS,
       randomOrder: RANDOM_ORDER,
       randomOptions: RANDOM_OPTIONS,
-      drawCount: DRAW_COUNT
+      drawCount: DRAW_COUNT,
+      prizes: PRIZES
     });
   } catch(e){ console.error('draft save failed', e); }
 }
+function setPrize(i, val){ PRIZES[i] = val; saveDraft(); }
 
 /* ============================================================
    HOST: 導覽 — 回設定 / 回主畫面
@@ -1008,6 +1078,16 @@ function renderHostSetup(){
       </div>
 
       <div class="panel">
+        <h2>🏆 前三名獎勵</h2>
+        <p class="sub">遊戲結束後的頒獎台會顯示在對應名次下面，選填。</p>
+        <div class="stack" style="margin-top:10px">
+          <div class="field"><label>🥇 第一名</label><input id="prize-0" value="${esc(PRIZES[0]||'')}" placeholder="例如：神秘小禮物" oninput="setPrize(0,this.value)"></div>
+          <div class="field"><label>🥈 第二名</label><input id="prize-1" value="${esc(PRIZES[1]||'')}" placeholder="選填" oninput="setPrize(1,this.value)"></div>
+          <div class="field"><label>🥉 第三名</label><input id="prize-2" value="${esc(PRIZES[2]||'')}" placeholder="選填" oninput="setPrize(2,this.value)"></div>
+        </div>
+      </div>
+
+      <div class="panel">
         <h2>🔐 你的主持人專屬網址</h2>
         <p class="sub">只有這組網址進得了主持人頁面，其他人打開遊戲網址只會看到「加入遊戲」。<b>不要投影、不要傳給別人。</b>建議加到書籤——金鑰不會變，下次開場用同一組就好。忘記了也沒關係，跑 server.py 的那個終端機視窗裡有印出來。</p>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px">
@@ -1020,7 +1100,7 @@ function renderHostSetup(){
         <h2>🎂 壽星專屬連結</h2>
         <p class="sub">這組連結只有你（主持人）看得到，請私下傳給壽星本人（例如用 LINE），不要投影出來——用這組連結加入的人會自動被標記成壽星，其他人掃大家共用的 QR code 不會有這個選項。下一頁「等待加入」開始就會投影在電視上了，記得先在這一頁把連結傳給她。</p>
         <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-top:10px">
-          <div class="qr-card" style="padding:10px">${qrSvgHtml(starJoinUrl(), 150)}</div>
+          <div class="qr-card">${qrSvgHtml(starJoinUrl(), 'sm')}</div>
           <div style="flex:1;min-width:200px">
             <div class="join-url" style="text-align:left">${esc(starJoinUrl())}</div>
             <button class="btn secondary" style="margin-top:8px" onclick="copyStarLink(this)">📋 複製連結</button>
@@ -1141,7 +1221,15 @@ async function startLobby(){
     questions: buildPlayList(),
     players: {},
     currentAnswers: {},
-    shouxingId: null
+    shouxingId: null,
+    prizes: PRIZES.slice(),
+    wishCards: ['', '', ''],
+    wishCardsUpdatedAt: 0,
+    awardsStage: null,
+    topIds: [],
+    bottomIds: [],
+    pickOrder: [],
+    pickedCards: {}
   };
   await sSet('game:state', hostState);
   renderHostLobby();
@@ -1158,7 +1246,7 @@ function renderHostLobby(){
       ${hostNav(true)}
       <span class="eyebrow">📶 等待加入</span>
       <h1 class="marquee-title" style="font-size:clamp(28px,5vw,48px)">掃碼<span class="hl">加入猜猜</span></h1>
-      <div class="qr-card">${qrSvgHtml(url, 240)}</div>
+      <div class="qr-card">${qrSvgHtml(url, '')}</div>
       <div class="join-url">${esc(url)}</div>
       <p class="sub" style="font-size:13px;margin-top:-4px">本場共 ${total} 題${RANDOM_ORDER?'．順序已隨機':''}${RANDOM_OPTIONS?'．選項已隨機':''}</p>
 
@@ -1169,7 +1257,7 @@ function renderHostLobby(){
         <div class="players-grid">
           ${players.length ? players.map(([id,p])=>`
             <button class="player-pill ${id===hostState.shouxingId?'is-shouxing':''}" onclick="setShouxing('${id}')">
-              <span class="dot"></span>${esc(p.name)}${id===hostState.shouxingId? '<span class=\"badge-shouxing\">🎂 壽星</span>' : ''}
+              <span class="dot"></span>${avatarSpan(p.avatar)}${esc(p.name)}${id===hostState.shouxingId? '<span class=\"badge-shouxing\">🎂 壽星</span>' : ''}
             </button>
           `).join('') : '<p class="sub">還沒有人加入，請大家掃上面的 QR code</p>'}
         </div>
@@ -1212,7 +1300,21 @@ async function hostPollTick(){
   try{
     if (['lobby','question','reveal'].includes(hostState.status)) await processJoins();
     if (hostState.status === 'question') await processAnswers();
+    if (['lobby','question','reveal','final'].includes(hostState.status)) await processStarCards();
+    if (hostState.status === 'awards' && hostState.awardsStage === 'picking') await processCardPicks();
   } finally { pollBusy = false; }
+}
+/* The 壽星 writes her 3 wish cards to her own storage key from her phone; pick it
+   up here and fold it into the authoritative state, same pattern as processJoins(). */
+async function processStarCards(){
+  const sx = hostState.shouxingId;
+  if (!sx) return;
+  const info = await sGet('starcards:' + sx);
+  if (!info || !Array.isArray(info.text)) return;
+  if ((info.updatedAt || 0) === (hostState.wishCardsUpdatedAt || 0)) return;
+  hostState.wishCards = [info.text[0]||'', info.text[1]||'', info.text[2]||''];
+  hostState.wishCardsUpdatedAt = info.updatedAt || 0;
+  await sSet('game:state', hostState);
 }
 async function processJoins(){
   const keys = await sList('join:');
@@ -1226,11 +1328,12 @@ async function processJoins(){
     if (existing && existing.joinToken === token) continue;   // nothing new from this phone
 
     if (existing){
-      // Same phone coming back (reload, lost signal, renamed) — keep their score.
+      // Same phone coming back (reload, lost signal, renamed) — keep their score & history.
       existing.name = info.name;
+      existing.avatar = info.avatar || existing.avatar || '⭐';
       existing.joinToken = token;
     } else {
-      hostState.players[id] = { name: info.name, score: 0, joinToken: token };
+      hostState.players[id] = { name: info.name, avatar: info.avatar || '⭐', score: 0, joinToken: token, history: [] };
     }
     // Anyone arriving through the private 壽星 link claims the badge, even if
     // someone else (or their own earlier ghost) is holding it.
@@ -1350,11 +1453,13 @@ function renderHostQuestion(){
 function goToReveal(){
   if (hostState.status !== 'question') return;
   if (hostCountdownHandle) clearInterval(hostCountdownHandle);
+  const q = hostState.questions[hostState.questionIndex];
   for (const id in hostState.players){
     if (!hostState.currentAnswers[id]) hostState.currentAnswers[id] = { choice:null, elapsedMs:null };
   }
   const sx = hostState.shouxingId;
   const shouxingChoice = (sx && hostState.currentAnswers[sx]) ? hostState.currentAnswers[sx].choice : null;
+  const shouxingLabel = shouxingChoice!=null && q.options[shouxingChoice] ? q.options[shouxingChoice].label : null;
   for (const id in hostState.currentAnswers){
     if (id === sx) continue;
     const a = hostState.currentAnswers[id];
@@ -1362,7 +1467,17 @@ function goToReveal(){
     const elapsed = a.elapsedMs==null ? hostState.timeLimitMs : Math.max(0, Math.min(a.elapsedMs, hostState.timeLimitMs));
     const points = correct ? Math.round(500 + 500 * (1 - elapsed / hostState.timeLimitMs)) : 0;
     a.correct = correct; a.points = points;
+    if (!hostState.players[id]) continue;
     hostState.players[id].score += points;
+    // Keep a per-question record so the player can review their answers after the game.
+    if (!hostState.players[id].history) hostState.players[id].history = [];
+    hostState.players[id].history.push({
+      q: q.text,
+      myLabel: a.choice!=null && q.options[a.choice] ? q.options[a.choice].label : null,
+      shouxingLabel: shouxingLabel,
+      correct: correct,
+      points: points
+    });
   }
   hostState.status = 'reveal';
   sSet('game:state', hostState);
@@ -1397,7 +1512,7 @@ function renderHostReveal(){
           ${ranked.map(([id,p],i)=>`
             <div class="lb-row">
               <div class="lb-rank ${i===0?'top1':i===1?'top2':i===2?'top3':''}">${i+1}</div>
-              <div class="lb-name">${esc(p.name)}</div>
+              <div class="lb-name">${avatarSpan(p.avatar)}${esc(p.name)}</div>
               ${hostState.currentAnswers[id] && hostState.currentAnswers[id].points>0 ? `<div class="lb-delta">+${hostState.currentAnswers[id].points}</div>` : ''}
               <div class="lb-score num">${p.score}</div>
             </div>
@@ -1435,18 +1550,19 @@ function renderHostFinal(){
       <h1 class="marquee-title">最終<span class="hl">排行榜</span></h1>
       ${sxName? `<div class="chip shouxing" style="margin:0 auto">🎂 今天的壽星 ${esc(sxName)}</div>`:''}
       <div class="podium">
-        ${top3[1]?`<div class="p second"><div class="medal">🥈</div><div class="name">${esc(top3[1][1].name)}</div><div class="score num">${top3[1][1].score}</div></div>`:''}
-        ${top3[0]?`<div class="p first"><div class="medal">🥇</div><div class="name">${esc(top3[0][1].name)}</div><div class="score num">${top3[0][1].score}</div></div>`:''}
-        ${top3[2]?`<div class="p third"><div class="medal">🥉</div><div class="name">${esc(top3[2][1].name)}</div><div class="score num">${top3[2][1].score}</div></div>`:''}
+        ${top3[1]?`<div class="p second">${avatarSpan(top3[1][1].avatar)}<div class="medal">🥈</div><div class="name">${esc(top3[1][1].name)}</div><div class="score num">${top3[1][1].score}</div></div>`:''}
+        ${top3[0]?`<div class="p first">${avatarSpan(top3[0][1].avatar)}<div class="medal">🥇</div><div class="name">${esc(top3[0][1].name)}</div><div class="score num">${top3[0][1].score}</div></div>`:''}
+        ${top3[2]?`<div class="p third">${avatarSpan(top3[2][1].avatar)}<div class="medal">🥉</div><div class="name">${esc(top3[2][1].name)}</div><div class="score num">${top3[2][1].score}</div></div>`:''}
       </div>
       ${rest.length? `<div class="stack" style="width:100%;max-width:520px">
         ${rest.map(([id,p],i)=>`
-          <div class="lb-row"><div class="lb-rank">${i+4}</div><div class="lb-name">${esc(p.name)}</div><div class="lb-score num">${p.score}</div></div>
+          <div class="lb-row"><div class="lb-rank">${i+4}</div><div class="lb-name">${avatarSpan(p.avatar)}${esc(p.name)}</div><div class="lb-score num">${p.score}</div></div>
         `).join('')}
       </div>` : ''}
       <div class="btn-row" style="margin-top:14px">
+        <button class="btn" onclick="goAwards()">🏆 進入頒獎典禮 →</button>
         <button class="btn secondary" onclick="restartSameGame()">🔄 再玩一輪（分數歸零${(RANDOM_ORDER||DRAW_COUNT)?'、重新抽題':''}）</button>
-        <button class="btn" onclick="hostNewGame()">🆕 回設定改題目</button>
+        <button class="btn ghost" onclick="hostNewGame()">🆕 回設定改題目</button>
       </div>
     </div></div>
   `);
@@ -1458,11 +1574,21 @@ async function hostNewGame(){
   renderHostSetup();
 }
 function restartSameGame(){
-  for (const id in hostState.players){ hostState.players[id].score = 0; }
+  for (const id in hostState.players){
+    hostState.players[id].score = 0;
+    hostState.players[id].history = [];
+  }
   hostState.status = 'lobby';
   hostState.roundId = 'r_' + Date.now().toString(36);
   hostState.questionIndex = -1;
   hostState.currentAnswers = {};
+  // A fresh round needs a fresh podium/RPS — the 壽星's wish cards carry over, though,
+  // since they're generic tasks rather than tied to this particular round.
+  hostState.awardsStage = null;
+  hostState.topIds = [];
+  hostState.bottomIds = [];
+  hostState.pickOrder = [];
+  hostState.pickedCards = {};
   // Re-roll so a second round isn't a repeat of the first.
   if (RANDOM_ORDER || RANDOM_OPTIONS || DRAW_COUNT) hostState.questions = buildPlayList();
   sSet('game:state', hostState);
@@ -1485,6 +1611,240 @@ function spawnConfetti(){
 }
 
 /* ============================================================
+   HOST: AWARDS — podium → 猜拳 → 選許願卡 → 結果
+   awardsStage: 'podium' -> 'rps' -> 'picking' -> 'done'
+   ============================================================ */
+function goAwards(){
+  const sx = hostState.shouxingId;
+  const ranked = rankedGuessers(hostState.players, sx);
+  const nonTop = ranked.slice(3);
+  hostState.status = 'awards';
+  hostState.awardsStage = 'podium';
+  hostState.topIds = ranked.slice(0,3).map(([id])=>id);
+  // Lowest-scoring up to 3 guessers who aren't already on the podium.
+  hostState.bottomIds = nonTop.slice(-3).map(([id])=>id);
+  hostState.pickOrder = [];
+  hostState.pickedCards = {};
+  sSet('game:state', hostState);
+  renderHostAwardsPodium();
+}
+function renderHostAwards(){
+  const stage = hostState.awardsStage;
+  if (stage === 'rps') return renderHostAwardsRps();
+  if (stage === 'picking') return renderHostAwardsPicking();
+  if (stage === 'done') return renderHostAwardsDone();
+  return renderHostAwardsPodium();
+}
+function renderHostAwardsPodium(){
+  const top3 = (hostState.topIds||[]).map(id=>[id, hostState.players[id]]).filter(([,p])=>p);
+  const prizes = hostState.prizes || ['','',''];
+  const prizeLine = (i) => prizes[i] ? `<div class="sub" style="font-size:11.5px;margin-top:4px">🎁 ${esc(prizes[i])}</div>` : '';
+  render(`
+    <div class="shell"><div class="col" style="align-items:center;text-align:center">
+      ${hostNav(true)}
+      ${mascot()}
+      <span class="eyebrow">🎊 頒獎典禮</span>
+      <h1 class="marquee-title">最懂壽星<span class="hl">前三名</span></h1>
+      <div class="podium" id="award-podium">
+        ${top3[1]?`<div class="p second reveal" id="ap-2">${avatarSpan(top3[1][1].avatar)}<div class="medal">🥈</div><div class="name">${esc(top3[1][1].name)}</div><div class="score num">${top3[1][1].score}</div>${prizeLine(1)}</div>`:''}
+        ${top3[0]?`<div class="p first reveal" id="ap-1">${avatarSpan(top3[0][1].avatar)}<div class="medal">🥇</div><div class="name">${esc(top3[0][1].name)}</div><div class="score num">${top3[0][1].score}</div>${prizeLine(0)}</div>`:''}
+        ${top3[2]?`<div class="p third reveal" id="ap-3">${avatarSpan(top3[2][1].avatar)}<div class="medal">🥉</div><div class="name">${esc(top3[2][1].name)}</div><div class="score num">${top3[2][1].score}</div>${prizeLine(2)}</div>`:''}
+      </div>
+      ${top3.length? '' : '<p class="sub">這場沒有人猜，先跳過頒獎</p>'}
+      <div class="btn-row" style="margin-top:14px">
+        <button class="btn" onclick="goAwardsRps()">🃏 最後三名 & 許願卡 →</button>
+      </div>
+    </div></div>
+  `);
+  animatePodiumReveal();
+}
+function animatePodiumReveal(){
+  [['ap-3',0],['ap-2',500],['ap-1',1000]].forEach(([id,delay])=>{
+    setTimeout(()=>{
+      const el = document.getElementById(id);
+      if (el) el.classList.add('show');
+      if (id === 'ap-1') spawnConfetti();
+    }, delay);
+  });
+}
+function goAwardsRps(){
+  hostState.awardsStage = 'rps';
+  sSet('game:state', hostState);
+  renderHostAwardsRps();
+}
+function renderHostAwardsRps(){
+  const bottom = (hostState.bottomIds||[]).map(id=>[id, hostState.players[id]]).filter(([,p])=>p);
+  render(`
+    <div class="shell"><div class="col" style="align-items:center;text-align:center">
+      ${hostNav(true)}
+      <span class="eyebrow">🃏 最後三名 & 許願卡</span>
+      <h1 class="marquee-title" style="font-size:clamp(26px,5vw,42px)">誰先選<span class="hl">許願卡</span>？</h1>
+      <p class="sub">猜拳決定順序，贏的人優先挑一張壽星準備的任務卡</p>
+      ${bottom.length ? `
+        <div class="players-grid" id="rps-players">
+          ${bottom.map(([id,p])=>`<div class="player-pill" id="rps-p-${id}">${avatarSpan(p.avatar)}${esc(p.name)}<span class="rps-hand" id="rps-hand-${id}">✊</span></div>`).join('')}
+        </div>
+        <div class="btn-row" style="margin-top:10px"><button class="btn" id="rps-btn" onclick="runRpsDraw()">🎲 開始猜拳！</button></div>
+      ` : `
+        <p class="sub">這場人數不到三位猜猜的人，這次先跳過猜拳環節。</p>
+        <div class="btn-row" style="margin-top:10px"><button class="btn" onclick="finishAwardsNoBottom()">下一步 →</button></div>
+      `}
+    </div></div>
+  `);
+}
+/* Not a real synced 3-way rock-paper-scissors (phones drift, ties are common) —
+   just a fun animated draw that LOOKS like everyone's throwing hands, then lands
+   on a genuinely random pick order. */
+function runRpsDraw(){
+  const btn = document.getElementById('rps-btn');
+  if (btn) btn.disabled = true;
+  const ids = (hostState.bottomIds||[]).slice();
+  const hands = ['✊','✋','✌️'];
+  let ticks = 0;
+  const handle = setInterval(()=>{
+    ticks++;
+    ids.forEach(id=>{
+      const el = document.getElementById('rps-hand-' + id);
+      if (el) el.textContent = hands[Math.floor(Math.random()*3)];
+    });
+    if (ticks >= 10){
+      clearInterval(handle);
+      finishRpsDraw(ids);
+    }
+  }, 180);
+}
+async function finishRpsDraw(ids){
+  const order = shuffled(ids);
+  const medal = ['🥇','🥈','🥉'];
+  order.forEach((id,i)=>{
+    const el = document.getElementById('rps-hand-' + id);
+    if (el) el.textContent = medal[i] || '';
+  });
+  hostState.pickOrder = order;
+  hostState.pickedCards = {};
+  for (const id of order) await sDel('cardpick:' + id);
+  await sSet('game:state', hostState);
+  setTimeout(()=>{
+    hostState.awardsStage = 'picking';
+    sSet('game:state', hostState);
+    renderHostAwardsPicking();
+  }, 1300);
+}
+function finishAwardsNoBottom(){
+  hostState.awardsStage = 'done';
+  sSet('game:state', hostState);
+  renderHostAwardsDone();
+}
+function renderHostAwardsPicking(){
+  const order = hostState.pickOrder || [];
+  const cards = hostState.wishCards || ['','',''];
+  const picked = hostState.pickedCards || {};
+  const pickedIdxs = Object.values(picked);
+  const currentId = order.find(id => picked[id] === undefined);
+  const currentP = currentId ? hostState.players[currentId] : null;
+  render(`
+    <div class="shell"><div class="col" style="align-items:center;text-align:center">
+      ${hostNav(true)}
+      <span class="eyebrow">🃏 選卡中</span>
+      ${currentP ? `
+        <h1 class="marquee-title" style="font-size:clamp(24px,5vw,40px)">輪到 <span class="hl">${esc(currentP.name)}</span> 選卡！</h1>
+        <p class="sub">請她／他看自己的手機，從剩下的許願卡中選一張</p>
+      ` : '<h1 class="marquee-title" style="font-size:clamp(24px,5vw,40px)">都選完了！</h1>'}
+      <div class="options-grid" style="max-width:760px">
+        ${[0,1,2].map(i=> `
+          <div class="opt-card ${OPT_CLASS[i]} ${pickedIdxs.includes(i)?'dim':''}">
+            <span class="tag">${i+1}</span>
+            <span>${pickedIdxs.includes(i) ? '（已被選走）' : (cards[i] ? esc(cards[i]) : '（壽星還沒填這張卡）')}</span>
+          </div>
+        `).join('')}
+      </div>
+      <div class="stack" style="width:100%;max-width:420px;margin-top:10px">
+        ${order.map((id,i)=>{
+          const p = hostState.players[id]; if (!p) return '';
+          const idx = picked[id];
+          return `<div class="lb-row"><div class="lb-rank">${i+1}</div><div class="lb-name">${avatarSpan(p.avatar)}${esc(p.name)}</div><div class="sub">${idx!==undefined ? '拿到：'+esc(cards[idx]||'—') : '等待中…'}</div></div>`;
+        }).join('')}
+      </div>
+      <div class="btn-row" style="margin-top:10px">
+        ${currentId ? `<button class="btn ghost" onclick="hostForcePick()">⏭ 沒反應，幫她隨機選一張</button>` : `<button class="btn" onclick="finishPicking()">🎉 公布結果 →</button>`}
+      </div>
+    </div></div>
+  `);
+}
+/* Player writes their pick to cardpick:<id>; picked up here on the next host poll. */
+async function processCardPicks(){
+  const order = hostState.pickOrder || [];
+  const picked = hostState.pickedCards || {};
+  const nextId = order.find(id => picked[id] === undefined);
+  if (!nextId) return;
+  const info = await sGet('cardpick:' + nextId);
+  if (!info) return;
+  if (picked[nextId] !== undefined) return;         // already resolved (race guard)
+  if (info.forRound !== hostState.roundId) return;   // stale leftover from an earlier game
+  const idx = info.cardIndex;
+  const takenIdxs = Object.values(picked);
+  if (typeof idx !== 'number' || idx < 0 || idx > 2 || takenIdxs.includes(idx)) return;
+  hostState.pickedCards[nextId] = idx;
+  await sDel('cardpick:' + nextId);
+  if (Object.keys(hostState.pickedCards).length >= order.length) hostState.awardsStage = 'done';
+  await sSet('game:state', hostState);
+  renderHostAwards();
+}
+/* Fallback for a phone that's gone quiet mid-ceremony — assign a random remaining card. */
+async function hostForcePick(){
+  const order = hostState.pickOrder || [];
+  const currentId = order.find(id => hostState.pickedCards[id] === undefined);
+  if (!currentId) return;
+  const takenIdxs = Object.values(hostState.pickedCards);
+  const remaining = [0,1,2].filter(i => !takenIdxs.includes(i));
+  const idx = remaining[Math.floor(Math.random()*remaining.length)];
+  hostState.pickedCards[currentId] = idx;
+  await sDel('cardpick:' + currentId);
+  if (Object.keys(hostState.pickedCards).length >= order.length) hostState.awardsStage = 'done';
+  await sSet('game:state', hostState);
+  renderHostAwards();
+}
+function finishPicking(){
+  hostState.awardsStage = 'done';
+  sSet('game:state', hostState);
+  renderHostAwardsDone();
+}
+function renderHostAwardsDone(){
+  const top3 = (hostState.topIds||[]).map(id=>[id, hostState.players[id]]).filter(([,p])=>p);
+  const prizes = hostState.prizes || ['','',''];
+  const prizeLine = (i) => prizes[i] ? `<div class="sub" style="font-size:11.5px;margin-top:4px">🎁 ${esc(prizes[i])}</div>` : '';
+  const order = hostState.pickOrder || [];
+  const cards = hostState.wishCards || ['','',''];
+  render(`
+    <div class="shell"><div class="col" style="align-items:center;text-align:center">
+      ${hostNav(true)}
+      ${mascot()}
+      <span class="eyebrow">🎊 頒獎典禮</span>
+      <h1 class="marquee-title">最懂壽星<span class="hl">前三名</span></h1>
+      <div class="podium">
+        ${top3[1]?`<div class="p second">${avatarSpan(top3[1][1].avatar)}<div class="medal">🥈</div><div class="name">${esc(top3[1][1].name)}</div><div class="score num">${top3[1][1].score}</div>${prizeLine(1)}</div>`:''}
+        ${top3[0]?`<div class="p first">${avatarSpan(top3[0][1].avatar)}<div class="medal">🥇</div><div class="name">${esc(top3[0][1].name)}</div><div class="score num">${top3[0][1].score}</div>${prizeLine(0)}</div>`:''}
+        ${top3[2]?`<div class="p third">${avatarSpan(top3[2][1].avatar)}<div class="medal">🥉</div><div class="name">${esc(top3[2][1].name)}</div><div class="score num">${top3[2][1].score}</div>${prizeLine(2)}</div>`:''}
+      </div>
+      ${order.length? `<div class="panel" style="margin-top:10px;width:100%;max-width:520px">
+        <h2>🎁 許願任務</h2>
+        <div class="stack" style="margin-top:10px">
+          ${order.map(id=>{
+            const p = hostState.players[id]; if (!p) return '';
+            const idx = hostState.pickedCards[id];
+            return `<div class="lb-row"><div class="lb-name">${avatarSpan(p.avatar)}${esc(p.name)}</div><div class="sub" style="flex:2;text-align:right">${idx!=null? esc(cards[idx]||'—') : '—'}</div></div>`;
+          }).join('')}
+        </div>
+      </div>` : ''}
+      <div class="btn-row" style="margin-top:14px">
+        <button class="btn secondary" onclick="restartSameGame()">🔄 再玩一輪</button>
+        <button class="btn ghost" onclick="hostNewGame()">🆕 回設定改題目</button>
+      </div>
+    </div></div>
+  `);
+}
+
+/* ============================================================
    PLAYER: name entry
    ============================================================ */
 function renderPlayerNameEntry(){
@@ -1497,10 +1857,21 @@ function renderPlayerNameEntry(){
       <div class="field" style="width:100%;max-width:340px">
         <input id="pname" placeholder="輸入暱稱" maxlength="12" style="text-align:center;font-size:18px;padding:16px">
       </div>
+      <div class="field" style="width:100%;max-width:400px">
+        <label style="text-align:center">選一個可愛頭像</label>
+        <div class="avatar-grid" id="avatar-grid">
+          ${AVATAR_LIST.map(a=>`<button type="button" class="avatar-btn${a===PLAYER_AVATAR?' sel':''}" onclick="selectAvatar('${a}',this)">${a}</button>`).join('')}
+        </div>
+      </div>
       <button class="btn" style="max-width:340px;width:100%" onclick="submitJoin()">✅ 加入猜猜</button>
     </div></div>
   `);
   setTimeout(()=>{ const i=document.getElementById('pname'); if(i) i.focus(); }, 50);
+}
+function selectAvatar(a, btn){
+  PLAYER_AVATAR = a;
+  try{ localStorage.setItem('julia_player_avatar', a); }catch(e){}
+  document.querySelectorAll('.avatar-btn').forEach(b=> b.classList.toggle('sel', b===btn));
 }
 async function submitJoin(){
   const val = document.getElementById('pname').value.trim();
@@ -1515,6 +1886,7 @@ async function postJoin(){
   lastRejoinAt = Date.now();
   await sSet('join:' + PLAYER_ID, {
     name: PLAYER_NAME,
+    avatar: PLAYER_AVATAR,
     requestedAt: Date.now(),     // doubles as the host's "this is new" token
     isShouxing: IS_STAR_LINK
   });
@@ -1553,8 +1925,15 @@ async function playerPollTick(){
     if (state.players && !state.players[PLAYER_ID] && ['lobby','idle'].includes(state.status)){
       await rejoinIfNeeded();
     }
-    renderPlayerView(state);
+    // Don't yank the player out of a self-typed screen (wish cards, answer log)
+    // just because a poll landed — same bug class as the old time-limit-wipes-form one.
+    if (!manualPlayerScreen) renderPlayerView(state);
   } finally { pollBusy = false; }
+}
+/* Leave a manually-opened screen and resume the normal poll-driven view. */
+function exitManualScreen(){
+  manualPlayerScreen = false;
+  if (lastPlayerState) renderPlayerView(lastPlayerState);
 }
 function renderPlayerReconnecting(){
   localSeenQuestionIndex = -1;
@@ -1574,6 +1953,7 @@ function renderPlayerView(state){
   if (state.status === 'question'){ renderPlayerQuestionOrWaiting(state); return; }
   if (state.status === 'reveal'){ renderPlayerReveal(state); return; }
   if (state.status === 'final'){ renderPlayerFinal(state); return; }
+  if (state.status === 'awards'){ renderPlayerAwards(state); return; }
 }
 /* The host went back to the setup screen — keep everyone calm and connected. */
 function renderPlayerParked(state){
@@ -1597,8 +1977,44 @@ function renderPlayerWaiting(state){
       <h1 class="marquee-title" style="font-size:clamp(24px,7vw,38px)">已加入！</h1>
       <p class="sub">${isSx? '等等大家會猜你每題會選什麼喔～' : '等待主持人開始遊戲'}<span class="waiting-dots"><span>.</span><span>.</span><span>.</span></span></p>
       ${count!=null ? `<div class="chip"><span>👥</span><span class="num">${count}</span><span>人已加入</span></div>` : ''}
+      ${isSx ? renderStarWishCardsEntry() : ''}
     </div></div>
   `);
+}
+/* ---------- 壽星: 三張許願卡 ---------- */
+function renderStarWishCardsEntry(){
+  return `<button class="btn secondary" style="margin-top:10px" onclick="renderStarWishCardsEditor()">🎁 填寫／編輯三張許願卡</button>`;
+}
+let _wishDraft = ['', '', ''];
+/* A manual screen (see manualPlayerScreen) — free-typing textareas must not
+   get blown away by the poll loop's re-render every 1.5s. */
+function renderStarWishCardsEditor(){
+  manualPlayerScreen = true;
+  const existing = (lastPlayerState && lastPlayerState.wishCards) || ['', '', ''];
+  _wishDraft = [existing[0]||'', existing[1]||'', existing[2]||''];
+  render(`
+    <div class="shell"><div class="center">
+      <span class="eyebrow">🎁 三張許願卡</span>
+      <h1 class="marquee-title" style="font-size:clamp(22px,6vw,34px)">給最後三名的<span class="hl">任務</span></h1>
+      <p class="sub">結算時，最不懂你的三個人會猜拳決定順序，輪流挑一張卡——選到的內容就是他們要完成的任務！</p>
+      <div class="stack" style="width:100%;max-width:400px">
+        ${[0,1,2].map(i=>`
+          <div class="field"><label>許願卡 ${i+1}</label>
+            <textarea rows="2" style="resize:vertical" oninput="_wishDraft[${i}]=this.value">${esc(_wishDraft[i])}</textarea>
+          </div>
+        `).join('')}
+      </div>
+      <div class="btn-row" style="margin-top:10px">
+        <button class="btn secondary" onclick="exitManualScreen()">← 返回</button>
+        <button class="btn" onclick="saveWishCards()">💾 儲存</button>
+      </div>
+    </div></div>
+  `);
+}
+async function saveWishCards(){
+  await sSet('starcards:' + PLAYER_ID, { text: _wishDraft.slice(), updatedAt: Date.now() });
+  toast('許願卡已儲存！');
+  exitManualScreen();
 }
 function renderPlayerQuestionOrWaiting(state){
   const isNew = state.questionIndex !== localSeenQuestionIndex;
@@ -1699,11 +2115,130 @@ function renderPlayerFinal(state){
         ${ranked.map(([id,p],i)=>`
           <div class="lb-row ${id===PLAYER_ID?'me':''}">
             <div class="lb-rank ${i===0?'top1':i===1?'top2':i===2?'top3':''}">${i+1}</div>
-            <div class="lb-name">${esc(p.name)}</div>
+            <div class="lb-name">${avatarSpan(p.avatar)}${esc(p.name)}</div>
             <div class="lb-score num">${p.score}</div>
           </div>
         `).join('') || '<p class="sub">這場沒有人猜</p>'}
       </div>
+      <div class="btn-row" style="margin-top:12px">
+        ${PLAYER_ID!==sx ? '<button class="btn secondary" onclick="renderPlayerAnswerLog()">📜 查看我的作答紀錄</button>' : ''}
+      </div>
+      ${PLAYER_ID===sx ? renderStarWishCardsEntry() : ''}
+      <p class="sub" style="font-size:12.5px;margin-top:4px">等主持人開始頒獎典禮，這裡會自動接上</p>
+    </div></div>
+  `);
+}
+/* Per-question review of this player's own answers vs. the 壽星's picks.
+   A manual screen — see manualPlayerScreen — so the poll loop doesn't yank
+   them back to the leaderboard mid-read. */
+function renderPlayerAnswerLog(){
+  manualPlayerScreen = true;
+  const me = lastPlayerState && lastPlayerState.players ? lastPlayerState.players[PLAYER_ID] : null;
+  const hist = (me && me.history) || [];
+  render(`
+    <div class="shell"><div class="col">
+      <span class="eyebrow">📜 作答紀錄</span>
+      <h1 class="marquee-title" style="font-size:clamp(22px,6vw,34px)">你的<span class="hl">作答紀錄</span></h1>
+      <div class="stack">
+        ${hist.length ? hist.map((h,i)=>`
+          <div class="panel answerlog-row ${h.correct?'ok':'no'}">
+            <div class="sub" style="font-weight:700">第 ${i+1} 題</div>
+            <div style="font-weight:700;margin:4px 0;white-space:pre-wrap">${esc(h.q)}</div>
+            <div class="sub">你選的：${h.myLabel!=null? esc(h.myLabel) : '（沒作答）'}</div>
+            <div class="sub">壽星選的：${h.shouxingLabel!=null? esc(h.shouxingLabel) : '（壽星沒作答）'}</div>
+            <div style="margin-top:6px">
+              ${h.correct? `<span class="lb-delta">🎯 猜對了！+${h.points}</span>` : '<span class="sub">❌ 猜錯了</span>'}
+            </div>
+          </div>
+        `).join('') : '<p class="sub">還沒有作答紀錄</p>'}
+      </div>
+      <button class="btn secondary" style="margin-top:10px" onclick="exitManualScreen()">← 返回</button>
+    </div></div>
+  `);
+}
+/* ---------- PLAYER: 頒獎典禮 ---------- */
+function renderPlayerAwards(state){
+  const stage = state.awardsStage || 'podium';
+  const sx = state.shouxingId;
+  const isSx = PLAYER_ID === sx;
+  const topIds = state.topIds || [];
+  const myTopRank = topIds.indexOf(PLAYER_ID);
+  const bottomIds = state.bottomIds || [];
+  const amBottom = bottomIds.includes(PLAYER_ID);
+  const cards = state.wishCards || ['','',''];
+  const medal = ['🥇','🥈','🥉'];
+
+  if (stage === 'podium'){
+    render(`
+      <div class="shell"><div class="center">
+        ${mascot()}
+        <div style="font-size:54px">${myTopRank>=0 ? medal[myTopRank] : '🎉'}</div>
+        <h1 class="marquee-title" style="font-size:clamp(24px,7vw,38px)">${myTopRank>=0? '恭喜上台領獎！' : '頒獎典禮進行中'}</h1>
+        <p class="sub">看主畫面揭曉最懂壽星的前三名～</p>
+        ${isSx ? renderStarWishCardsEntry() : ''}
+      </div></div>
+    `);
+    return;
+  }
+  if (stage === 'rps'){
+    render(`
+      <div class="shell"><div class="center">
+        <div style="font-size:54px">✊✋✌️</div>
+        <h1 class="marquee-title" style="font-size:clamp(22px,6vw,32px)">${amBottom? '猜拳決定選卡順序！' : '猜拳決定順序中'}</h1>
+        <p class="sub">${amBottom? '看主畫面，輪到你就會通知你' : '請看主畫面'}</p>
+      </div></div>
+    `);
+    return;
+  }
+  if (stage === 'picking'){
+    const order = state.pickOrder || [];
+    const picked = state.pickedCards || {};
+    const pickedIdxs = Object.values(picked);
+    const currentId = order.find(id => picked[id] === undefined);
+    if (currentId === PLAYER_ID){
+      render(`
+        <div class="shell"><div class="center">
+          <div style="font-size:54px">🎁</div>
+          <h1 class="marquee-title" style="font-size:clamp(22px,6vw,32px)">選一張許願卡！</h1>
+          <p class="sub">選到的內容就是你要完成的任務</p>
+          <div class="stack" style="width:100%;max-width:340px">
+            ${[0,1,2].map(i=> pickedIdxs.includes(i) ? '' : `
+              <button class="opt-card ${OPT_CLASS[i]}" style="text-align:center;justify-content:center" onclick="pickWishCard(${i})">${esc(cards[i] || ('神秘任務 ' + (i+1)))}</button>
+            `).join('')}
+          </div>
+        </div></div>
+      `);
+    } else {
+      const p = currentId ? state.players[currentId] : null;
+      render(`
+        <div class="shell"><div class="center">
+          <div style="font-size:54px">🃏</div>
+          <h1 class="marquee-title" style="font-size:clamp(22px,6vw,32px)">${p? esc(p.name)+' 選卡中…' : '選卡中'}</h1>
+          <p class="sub">看主畫面囉～</p>
+        </div></div>
+      `);
+    }
+    return;
+  }
+  // stage === 'done'
+  const myIdx = (state.pickedCards||{})[PLAYER_ID];
+  render(`
+    <div class="shell"><div class="center">
+      ${mascot()}
+      <span class="eyebrow">🎊 頒獎結束</span>
+      <h1 class="marquee-title" style="font-size:clamp(24px,7vw,38px)">${myTopRank>=0? medal[myTopRank]+' 你最懂壽星！' : (myIdx!=null ? '你的任務來了！' : '謝謝參加！')}</h1>
+      ${myIdx!=null ? `<div class="panel" style="margin-top:8px;max-width:340px"><div class="sub">你抽到的許願任務</div><div style="font-weight:800;margin-top:6px">${esc(cards[myIdx]||'—')}</div></div>` : ''}
+      ${PLAYER_ID!==sx ? '<button class="btn secondary" style="margin-top:12px" onclick="renderPlayerAnswerLog()">📜 查看我的作答紀錄</button>' : ''}
+    </div></div>
+  `);
+}
+async function pickWishCard(i){
+  await sSet('cardpick:' + PLAYER_ID, { cardIndex: i, forRound: lastPlayerState ? lastPlayerState.roundId : null });
+  render(`
+    <div class="shell"><div class="center">
+      <div style="font-size:54px">✅</div>
+      <h1 class="marquee-title" style="font-size:clamp(22px,6vw,32px)">已送出！</h1>
+      <p class="sub">看主畫面公布結果</p>
     </div></div>
   `);
 }
