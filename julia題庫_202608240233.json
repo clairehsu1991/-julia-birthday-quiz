@@ -1,0 +1,130 @@
+{
+  "app": "julia-party-quiz",
+  "version": 1,
+  "exportedAt": 1787509983352,
+  "banks": [
+    {
+      "id": "b_mt65aa7nh6eo",
+      "name": "TEST2",
+      "updatedAt": 1787509972787,
+      "timeLimitSeconds": 15,
+      "questions": [
+        {
+          "text": "如果 Julia 講錯成語，別人糾正她，她最可能：",
+          "type": "text",
+          "headerImg": null,
+          "options": [
+            {
+              "label": "馬上改正",
+              "img": null
+            },
+            {
+              "label": "覺得不好意思",
+              "img": null
+            },
+            {
+              "label": "說「喔～原來是這樣」",
+              "img": null
+            },
+            {
+              "label": "「我知道啊，我只是這樣講比較有創意。」",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "今天是星期五 \nJulia白天被主管臭罵一頓 \n晚上回到家 看到小朱在沙發上看電視\n 蹦啾在地上大了一顆大便 \n請問他會做什麼",
+          "type": "text",
+          "headerImg": null,
+          "options": [
+            {
+              "label": "默默清大便",
+              "img": null
+            },
+            {
+              "label": "叫小朱去清大便",
+              "img": null
+            },
+            {
+              "label": "裝死轉頭出門",
+              "img": null
+            },
+            {
+              "label": "把大便撿起來塞進小朱嘴裡",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "今天 Julia 下班回家，累得要死，\n結果一進門看到小朱躺在沙發上滑手機，問他：「你今天有做家事嗎？」  \n小朱：「有啊。」  \nJulia：「做了什麼？」  \n小朱：「我有……把垃圾放到門口。」  \n請問 Julia 接下來會：",
+          "type": "text",
+          "headerImg": null,
+          "options": [
+            {
+              "label": "覺得至少有做一點",
+              "img": null
+            },
+            {
+              "label": "叫小朱把垃圾拿下去",
+              "img": null
+            },
+            {
+              "label": "面無表情地說：「你真的很棒。」",
+              "img": null
+            },
+            {
+              "label": "把小朱連同垃圾一起丟到門口，並告訴他：「今天你也是垃圾。」",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "Julia 回到家發現蹦啾把衛生紙丟得到處都是，小朱正在旁邊看熱鬧。\nJulia：「你為什麼不阻止他？」\n小朱：「我哪知道他要幹嘛。」",
+          "type": "text",
+          "headerImg": null,
+          "options": [
+            {
+              "label": "自己收拾",
+              "img": null
+            },
+            {
+              "label": "叫小朱一起收",
+              "img": null
+            },
+            {
+              "label": "先罵蹦啾，再罵小朱",
+              "img": null
+            },
+            {
+              "label": "看著滿地衛生紙，突然覺得蹦啾才是這個家最值得尊敬的成員",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "Julia 講錯成語後，小朱通常會：",
+          "type": "text",
+          "headerImg": null,
+          "options": [
+            {
+              "label": "糾正她",
+              "img": null
+            },
+            {
+              "label": "笑她",
+              "img": null
+            },
+            {
+              "label": "問她什麼意思",
+              "img": null
+            },
+            {
+              "label": "默默接受，因為他懶得處理",
+              "img": null
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
