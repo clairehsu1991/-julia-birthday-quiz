@@ -1,0 +1,84 @@
+{
+  "app": "julia-party-quiz",
+  "version": 1,
+  "exportedAt": 1787505297173,
+  "banks": [
+    {
+      "id": "b_mt62h76l7yq4",
+      "name": "TEST1",
+      "updatedAt": 1787505256605,
+      "timeLimitSeconds": 15,
+      "questions": [
+        {
+          "text": "今天是星期五 Julia白天被主管臭罵一頓 晚上回到家 看到小朱在沙發上看電視 蹦啾在地上大了一顆大便 請問他會做什麼",
+          "type": "text",
+          "headerImg": null,
+          "options": [
+            {
+              "label": "默默清大便",
+              "img": null
+            },
+            {
+              "label": "叫小朱去清大便",
+              "img": null
+            },
+            {
+              "label": "裝死轉頭出門",
+              "img": null
+            },
+            {
+              "label": "把大便撿起來塞進小朱嘴裡",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "如果 Julia 講錯成語，別人糾正她，她最可能：",
+          "type": "text",
+          "headerImg": null,
+          "options": [
+            {
+              "label": "馬上改正",
+              "img": null
+            },
+            {
+              "label": "覺得不好意思",
+              "img": null
+            },
+            {
+              "label": "說「喔～原來是這樣」",
+              "img": null
+            },
+            {
+              "label": "「我知道啊，我只是這樣講比較有創意。」",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "今天 Julia 下班回家，累得要死，結果一進門看到小朱躺在沙發上滑手機，問他：「你今天有做家事嗎？」  小朱：「有啊。」  Julia：「做了什麼？」  小朱：「我有……把垃圾放到門口。」  請問 Julia 接下來會：",
+          "type": "text",
+          "headerImg": null,
+          "options": [
+            {
+              "label": "覺得至少有做一點",
+              "img": null
+            },
+            {
+              "label": "叫小朱把垃圾拿下去",
+              "img": null
+            },
+            {
+              "label": "面無表情地說：「你真的很棒。」",
+              "img": null
+            },
+            {
+              "label": "把小朱連同垃圾一起丟到門口，並告訴他：「今天你也是垃圾。」",
+              "img": null
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
