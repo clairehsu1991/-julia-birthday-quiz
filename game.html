@@ -251,11 +251,14 @@
 
   .qlist{ display:flex; flex-direction:column; gap:10px; }
   .qrow{ background:#fff; border:1px solid var(--line); border-radius:14px; padding:12px 14px; display:flex; gap:12px; align-items:flex-start; }
+  .qrow.editing{ border-color:var(--moss); box-shadow:0 0 0 3px rgba(63,92,51,0.14); }
   .qrow .qi{ font-family:'Fredoka',sans-serif; font-size:20px; color:var(--ink-dim); width:26px; flex:none; }
   .qrow .qb{ flex:1; min-width:0; }
   .qrow .qb .qt{ font-weight:700; font-size:14.5px; margin-bottom:6px; white-space:pre-wrap; overflow-wrap:anywhere; }
   .qrow .qb .oo{ font-size:12.5px; color:var(--ink-dim); }
   .qrow .del{ flex:none; background:none; border:none; color:var(--alert); font-size:13px; font-weight:700; padding:4px 8px; }
+  .qrow .edit{ flex:none; background:none; border:none; color:var(--moss); font-size:13px; font-weight:700; padding:4px 8px; }
+  .qrow .qactions{ flex:none; display:flex; flex-direction:column; }
 
   .waiting-dots span{ animation: blink 1.4s infinite; opacity:.25; }
   .waiting-dots span:nth-child(2){ animation-delay:.2s; } .waiting-dots span:nth-child(3){ animation-delay:.4s; }
@@ -357,6 +360,7 @@ let PLAYER_AVATAR = (function(){
    old "changing the time limit wiped the half-typed question" one. */
 let manualPlayerScreen = false;
 let QUESTIONS = [];               // { text, type:'text'|'image', headerImg:null|dataURL, options:[{label,img}] }
+let editingQuestionIndex = null;  // null = 新增題目表單；否則是 QUESTIONS 裡正在編輯的索引
 let TIME_LIMIT_SECONDS = 15;
 let PRIZES = ['', '', ''];        // free-text rewards for 🥇🥈🥉 on the awards podium
 
@@ -955,18 +959,23 @@ function buildPlayList(){
    HOST: SETUP
    ============================================================ */
 function renderHostSetup(){
+  const editQ = (editingQuestionIndex!=null && QUESTIONS[editingQuestionIndex]) ? QUESTIONS[editingQuestionIndex] : null;
+  const formType = editQ ? editQ.type : 'text';
   const rows = QUESTIONS.map((q,i)=>{
     const optsSummary = q.type==='image'
       ? q.options.map(o=> `<img src="${o.img}" style="width:30px;height:30px;object-fit:cover;border-radius:6px;margin-right:4px">`).join('')
       : q.options.map(o=> esc(o.label)).join('　');
     return `
-      <div class="qrow">
+      <div class="qrow${editingQuestionIndex===i?' editing':''}">
         <div class="qi num">${i+1}</div>
         <div class="qb">
           <div class="qt">${q.type==='image'?'🖼️ ':'🔤 '}${esc(q.text)}</div>
           <div class="oo" style="display:flex;align-items:center;flex-wrap:wrap">${optsSummary}</div>
         </div>
-        <button class="del" onclick="deleteQuestion(${i})">刪除</button>
+        <div class="qactions">
+          <button class="edit" onclick="editQuestion(${i})">✏️ 編輯</button>
+          <button class="del" onclick="deleteQuestion(${i})">刪除</button>
+        </div>
       </div>
     `;
   }).join('');
@@ -1009,31 +1018,48 @@ function renderHostSetup(){
       </div>
 
       <div class="panel" id="add-q-panel">
-        <h2>➕ 新增題目</h2>
+        <h2>${editQ ? '✏️ 編輯第 ' + (editingQuestionIndex+1) + ' 題' : '➕ 新增題目'}</h2>
         <div class="stack" style="margin-top:8px">
-          <div class="field"><label>題目文字（可以按 Enter 換行）</label><textarea id="nq-text" rows="3" placeholder="例如：壽星這趟日本行&#10;最喜歡哪張照片？" style="resize:vertical;line-height:1.5"></textarea></div>
-          <div class="field"><label>題目附圖（選填，會顯示在題目上方）</label><input id="nq-header-img" type="file" accept="image/*"></div>
+          <div class="field"><label>題目文字（可以按 Enter 換行）</label><textarea id="nq-text" rows="3" placeholder="例如：壽星這趟日本行&#10;最喜歡哪張照片？" style="resize:vertical;line-height:1.5">${esc(editQ ? editQ.text : '')}</textarea></div>
+          <div class="field">
+            <label>題目附圖（選填，會顯示在題目上方）</label>
+            ${editQ && editQ.headerImg ? `
+              <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+                <img src="${editQ.headerImg}" style="width:56px;height:56px;object-fit:cover;border-radius:8px">
+                <label style="font-size:12.5px;font-weight:400;display:flex;align-items:center;gap:6px">
+                  <input type="checkbox" id="nq-header-img-remove" style="width:16px;height:16px">移除這張附圖
+                </label>
+              </div>
+            ` : ''}
+            <input id="nq-header-img" type="file" accept="image/*">
+            ${editQ && editQ.headerImg ? '<p class="sub" style="font-size:12px">不選新檔案就會保留上面的圖（除非勾選移除）</p>' : ''}
+          </div>
           <div class="field"><label>選項類型</label>
             <select id="nq-type" onchange="onTypeChange()">
-              <option value="text">文字選項</option>
-              <option value="image">圖片選項</option>
+              <option value="text" ${formType==='text'?'selected':''}>文字選項</option>
+              <option value="image" ${formType==='image'?'selected':''}>圖片選項</option>
             </select>
           </div>
-          <div id="nq-text-fields" class="stack">
-            <div class="field"><label>選項 A</label><input id="nq-t-0" placeholder="選項 A"></div>
-            <div class="field"><label>選項 B</label><input id="nq-t-1" placeholder="選項 B"></div>
-            <div class="field"><label>選項 C</label><input id="nq-t-2" placeholder="選項 C"></div>
-            <div class="field"><label>選項 D</label><input id="nq-t-3" placeholder="選項 D"></div>
+          <div id="nq-text-fields" class="stack" style="display:${formType==='text'?'flex':'none'}">
+            ${[0,1,2,3].map(i=>`<div class="field"><label>選項 ${OPT_LABEL[i]}</label><input id="nq-t-${i}" placeholder="選項 ${OPT_LABEL[i]}" value="${esc(formType==='text' && editQ ? editQ.options[i].label : '')}"></div>`).join('')}
           </div>
-          <div id="nq-image-fields" class="stack" style="display:none">
-            ${[0,1,2,3].map(i=>`
+          <div id="nq-image-fields" class="stack" style="display:${formType==='image'?'flex':'none'}">
+            ${[0,1,2,3].map(i=>{
+              const existingOpt = (formType==='image' && editQ) ? editQ.options[i] : null;
+              return `
               <div class="field"><label>圖片選項 ${OPT_LABEL[i]}</label>
+                ${existingOpt && existingOpt.img ? `<img src="${existingOpt.img}" style="width:56px;height:56px;object-fit:cover;border-radius:8px;margin-bottom:6px">` : ''}
                 <input id="nq-img-${i}" type="file" accept="image/*">
-                <input id="nq-cap-${i}" placeholder="小標題（選填）" style="margin-top:6px">
+                ${existingOpt && existingOpt.img ? '<p class="sub" style="font-size:12px;margin:2px 0 0">不選新檔案就會保留上面的圖</p>' : ''}
+                <input id="nq-cap-${i}" placeholder="小標題（選填）" style="margin-top:6px" value="${esc(existingOpt ? (existingOpt.label||'') : '')}">
               </div>
-            `).join('')}
+            `;
+            }).join('')}
           </div>
-          <button class="btn secondary block" id="nq-submit-btn" onclick="addQuestionFromForm()">新增這題</button>
+          <div class="btn-row" style="margin-top:0">
+            <button class="btn secondary${editQ? '' : ' block'}" id="nq-submit-btn" onclick="saveQuestionFromForm()">${editQ ? '💾 儲存這題' : '➕ 新增這題'}</button>
+            ${editQ ? '<button class="btn ghost" onclick="cancelEditQuestion()">取消編輯</button>' : ''}
+          </div>
         </div>
       </div>
 
@@ -1157,43 +1183,74 @@ function setTimeLimit(s){
 function deleteQuestion(i){
   QUESTIONS.splice(i,1);
   if (DRAW_COUNT > QUESTIONS.length) DRAW_COUNT = 0;
+  // Keep the edit form pointed at the right question if the list shifted under it.
+  if (editingQuestionIndex === i) editingQuestionIndex = null;
+  else if (editingQuestionIndex != null && editingQuestionIndex > i) editingQuestionIndex -= 1;
   renderHostSetup();
   saveDraft();
 }
+/* Load an existing question back into the 新增題目 form so it can be edited in
+   place, rather than deleting + retyping it from scratch. */
+function editQuestion(i){
+  editingQuestionIndex = i;
+  renderHostSetup();
+  const panel = document.getElementById('add-q-panel');
+  if (panel) panel.scrollIntoView({ behavior:'smooth', block:'start' });
+}
+function cancelEditQuestion(){
+  editingQuestionIndex = null;
+  renderHostSetup();
+}
 
-async function addQuestionFromForm(){
+/* Adds a new question, or — when editingQuestionIndex is set — saves changes back
+   into that slot in place. A file input left empty while editing keeps whatever
+   image (header or per-option) that question already had; it's only replaced if
+   the host actually chooses a new file. */
+async function saveQuestionFromForm(){
+  const isEdit = editingQuestionIndex != null && QUESTIONS[editingQuestionIndex];
+  const existing = isEdit ? QUESTIONS[editingQuestionIndex] : null;
   const text = document.getElementById('nq-text').value.trim();
   if (!text){ alert('請輸入題目文字'); return; }
   const type = document.getElementById('nq-type').value;
   const btn = document.getElementById('nq-submit-btn');
+  const btnLabel = isEdit ? '💾 儲存這題' : '➕ 新增這題';
   btn.disabled = true; btn.textContent = '處理圖片中…';
   try{
-    let headerImg = null;
+    let headerImg = existing ? existing.headerImg : null;
     const headerFile = document.getElementById('nq-header-img').files[0];
     if (headerFile) headerImg = await fileToCompressedDataUrl(headerFile, 800, 0.7);
+    else {
+      const removeCb = document.getElementById('nq-header-img-remove');
+      if (removeCb && removeCb.checked) headerImg = null;
+    }
 
     let options;
     if (type === 'text'){
       const vals = [0,1,2,3].map(i=> document.getElementById('nq-t-'+i).value.trim());
-      if (vals.some(v=>!v)){ alert('請把四個文字選項都填寫完整'); return; }
+      if (vals.some(v=>!v)){ alert('請把四個文字選項都填寫完整'); btn.disabled=false; btn.textContent=btnLabel; return; }
       options = vals.map(v=> ({ label:v, img:null }));
     } else {
       const files = [0,1,2,3].map(i=> document.getElementById('nq-img-'+i).files[0]);
-      if (files.some(f=>!f)){ alert('請上傳四張圖片'); return; }
+      const existingOpts = (isEdit && existing.type === 'image') ? existing.options : null;
+      if (files.some((f,i)=> !f && !(existingOpts && existingOpts[i] && existingOpts[i].img))){
+        alert('請上傳四張圖片（沒換新圖的維持原本的圖也可以）'); btn.disabled=false; btn.textContent=btnLabel; return;
+      }
       const caps = [0,1,2,3].map(i=> document.getElementById('nq-cap-'+i).value.trim());
       options = [];
       for (let i=0;i<4;i++){
-        const img = await fileToCompressedDataUrl(files[i], 640, 0.68);
+        const img = files[i] ? await fileToCompressedDataUrl(files[i], 640, 0.68) : existingOpts[i].img;
         options.push({ label: caps[i] || '', img });
       }
     }
-    QUESTIONS.push({ text, type, headerImg, options });
+    if (isEdit) QUESTIONS[editingQuestionIndex] = { text, type, headerImg, options };
+    else QUESTIONS.push({ text, type, headerImg, options });
+    editingQuestionIndex = null;
     renderHostSetup();
     saveDraft();
   } catch(e){
     console.error(e);
     alert('圖片處理失敗，請再試一次');
-    btn.disabled = false; btn.textContent = '新增這題';
+    btn.disabled = false; btn.textContent = btnLabel;
   }
 }
 
