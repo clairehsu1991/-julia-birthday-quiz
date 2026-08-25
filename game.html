@@ -156,6 +156,20 @@
   .qtext.xlong{ font-size: clamp(16px, 2.5vw, 21px); line-height:1.5; max-width:28em; }
   .options-grid{ display:grid; grid-template-columns:1fr; gap:14px; width:100%; max-width:1000px; margin:0 auto; }
   @media(min-width:760px){ .options-grid{ grid-template-columns:1fr 1fr; } }
+  /* Long text answers: a half-width 2-col card wraps them awkwardly, so force a
+     single full-width column (top-to-bottom) regardless of screen size — two
+     classes beats the plain .options-grid rule above no matter which comes
+     later in the stylesheet, so this always wins once optionsGridClass() adds it. */
+  .options-grid.stacked{ grid-template-columns:1fr; }
+  /* Image options: on screens wide enough to fit four cards side by side
+     (projector/laptop, not a phone) put all four photos in one row instead of
+     2x2. That frees the vertical space the second row used to take, so
+     .opt-img can grow into it — this is the actual size win, not the row
+     count by itself (see the comment on optionsGridClass()). */
+  @media(min-width:900px){
+    .options-grid.img-row{ grid-template-columns:repeat(4,1fr); gap:12px; max-width:1400px; }
+    .options-grid.img-row .opt-img{ height:clamp(170px, 26vh, 340px); }
+  }
 
   .opt-card{
     position:relative; border:none; border-radius:18px; padding:20px; text-align:left; display:flex; align-items:center; gap:14px;
@@ -542,6 +556,23 @@ function optionCardHtml(opt, i, onclickAttr){
   }
   return `<div class="${cls}">${inner}</div>`;
 }
+/* Picks the layout for the options-grid wrapping four optionCardHtml() cards.
+   - Image options: on wide-enough screens (projector / laptop, not a phone)
+     put all four photos in a single row instead of 2x2. A single row frees up
+     the vertical space the second row used to take, and .options-grid.img-row
+     reinvests exactly that freed space into a taller .opt-img (see CSS), so
+     the photos actually get bigger instead of just rearranging.
+   - Text options: normally stay 2x2 on wide screens same as before. But once
+     an answer is long enough that a half-width 2-col card would wrap it
+     awkwardly, force a single full-width column instead (top-to-bottom) so
+     every answer gets the full row to lay out on as few lines as possible. */
+function optionsGridClass(q){
+  if (!q || !Array.isArray(q.options)) return 'options-grid';
+  if (q.type === 'image') return 'options-grid img-row';
+  const LONG_LABEL_CHARS = 12; // ~ one comfortable line at the largest option font size in a 2-col card
+  const hasLongLabel = q.options.some(o => (o && o.label || '').length > LONG_LABEL_CHARS);
+  return 'options-grid' + (hasLongLabel ? ' stacked' : '');
+}
 function revealRowHtml(opt, i, count, isShouxingPick){
   const thumb = opt.img ? `<img src="${opt.img}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;flex:none">` : '';
   return `
@@ -713,7 +744,7 @@ function renderPreviewQuestion(q, i, mode, timeLimitSeconds){
       `}
       ${q.headerImg? `<img class="q-header-img" src="${q.headerImg}" alt="">` : ''}
       ${qtextHtml(q.text)}
-      <div class="options-grid">
+      <div class="${optionsGridClass(q)}">
         ${q.options.map((o,idx)=> optionCardHtml(o, idx, null)).join('')}
       </div>
     </div></div>
@@ -1624,7 +1655,7 @@ function renderHostQuestion(){
       </div>
       ${q.headerImg? `<img class="q-header-img" src="${q.headerImg}" alt="">` : ''}
       ${qtextHtml(q.text)}
-      <div class="options-grid">
+      <div class="${optionsGridClass(q)}">
         ${q.options.map((o,i)=> optionCardHtml(o, i, null)).join('')}
       </div>
       <div class="progress-wrap">
@@ -2221,7 +2252,7 @@ function renderPlayerQuestionOrWaiting(state){
       <p class="sub" style="text-align:center;font-weight:700">${isSx? '🎂 這題換你決定！大家會猜你的答案' : '🤔 猜猜壽星會選哪一個？'}</p>
       ${q.headerImg? `<img class="q-header-img" src="${q.headerImg}" alt="">` : ''}
       ${qtextHtml(q.text)}
-      <div class="options-grid">
+      <div class="${optionsGridClass(q)}">
         ${q.options.map((o,i)=> optionCardHtml(o, i, `onclick="playerAnswer(${i})"`)).join('')}
       </div>
     </div></div>
