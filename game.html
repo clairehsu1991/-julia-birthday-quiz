@@ -258,6 +258,7 @@
   .qrow .qb .oo{ font-size:12.5px; color:var(--ink-dim); }
   .qrow .del{ flex:none; background:none; border:none; color:var(--alert); font-size:13px; font-weight:700; padding:4px 8px; }
   .qrow .edit{ flex:none; background:none; border:none; color:var(--moss); font-size:13px; font-weight:700; padding:4px 8px; }
+  .qrow .preview{ flex:none; background:none; border:none; color:var(--coral); font-size:13px; font-weight:700; padding:4px 8px; }
   .qrow .qactions{ flex:none; display:flex; flex-direction:column; }
 
   .waiting-dots span{ animation: blink 1.4s infinite; opacity:.25; }
@@ -625,11 +626,22 @@ async function boot(){
   const hashParams = new URLSearchParams(location.hash.replace(/^#/, ''));
   const j = hashParams.get('join');
   const hk = hashParams.get('host');
+  const pv = hashParams.get('preview');
 
   if (j === '1' || j === 'star'){
     ROLE = 'player';
     IS_STAR_LINK = (j === 'star');
     renderPlayerNameEntry();
+    return;
+  }
+
+  // Standalone question preview — opened in an iframe or new tab from the setup
+  // page's 👁 預覽 button. Reads the saved draft straight from storage (already
+  // world-readable, same as banks) so it needs no host-key check of its own; it
+  // never joins the game or starts any polling, just renders the one question.
+  if (pv !== null){
+    ROLE = 'preview';
+    await bootPreview(parseInt(pv, 10), hashParams.get('as') || 'host');
     return;
   }
 
@@ -653,6 +665,56 @@ async function boot(){
     else forgetHostKey();
   }
   renderRoleSelect();
+}
+
+/* ============================================================
+   STANDALONE QUESTION PREVIEW
+   Opened from the setup page's 👁 預覽 button (in a small iframe sized like a
+   phone, and via "開新分頁" for a full-size look on the actual host screen).
+   Reads straight from the saved draft — never touches game:state, never polls,
+   never joins — so it's safe to open as many times as needed without any risk
+   of it counting as a "player" or affecting a game in progress.
+   ============================================================ */
+async function bootPreview(i, mode){
+  render(`<div class="shell"><div class="center"><p class="sub">載入中…</p></div></div>`);
+  let draft = null;
+  try{ draft = await sGet('draft:setup'); } catch(e){}
+  const q = draft && Array.isArray(draft.questions) ? draft.questions[i] : null;
+  if (!q){
+    render(`
+      <div class="shell"><div class="center">
+        <div style="font-size:44px">🧪</div>
+        <h1 class="marquee-title" style="font-size:clamp(20px,5vw,28px)">找不到這一題</h1>
+        <p class="sub">可能還沒存檔，或題目已經被刪除／搬動位置了。回到主持人設定頁重新點一次「👁 預覽」。</p>
+      </div></div>
+    `);
+    return;
+  }
+  const timeLimitSeconds = (draft && draft.timeLimitSeconds) || TIME_LIMIT_SECONDS;
+  renderPreviewQuestion(q, i, mode, timeLimitSeconds);
+}
+function renderPreviewQuestion(q, i, mode, timeLimitSeconds){
+  const isHost = mode !== 'player';
+  render(`
+    <div class="shell"><div class="col">
+      <div class="chip" style="margin:0 auto 4px;background:rgba(232,101,75,0.14);border-color:var(--coral)">🧪 預覽模式・不會送出答案</div>
+      ${isHost ? `
+        <div class="topbar">
+          <div class="chip">第 <span class="num">${i+1}</span> 題</div>
+          <div class="chip shouxing">🎂 猜猜壽星會選什麼</div>
+          <div class="chip timer"><span>⏱</span><span class="num">${timeLimitSeconds}</span></div>
+        </div>
+      ` : `
+        <div class="chip" style="margin:0 auto">第 <span class="num">${i+1}</span> 題</div>
+        <p class="sub" style="text-align:center;font-weight:700">🤔 猜猜壽星會選哪一個？</p>
+      `}
+      ${q.headerImg? `<img class="q-header-img" src="${q.headerImg}" alt="">` : ''}
+      ${qtextHtml(q.text)}
+      <div class="options-grid">
+        ${q.options.map((o,idx)=> optionCardHtml(o, idx, null)).join('')}
+      </div>
+    </div></div>
+  `);
 }
 
 function renderHostDenied(){
@@ -974,6 +1036,7 @@ function renderHostSetup(){
         </div>
         <div class="qactions">
           <button class="edit" onclick="editQuestion(${i})">✏️ 編輯</button>
+          <button class="preview" onclick="openQuestionPreview(${i})">👁 預覽</button>
           <button class="del" onclick="deleteQuestion(${i})">刪除</button>
         </div>
       </div>
@@ -1200,6 +1263,72 @@ function editQuestion(i){
 function cancelEditQuestion(){
   editingQuestionIndex = null;
   renderHostSetup();
+}
+
+/* 👁 題目預覽 — lets the host check what a question actually looks like without
+   needing anyone else online: no lobby, no 壽星, no polling. Built as its own
+   modal (appended straight to <body>, outside the #app render() cycle) so it
+   survives whatever else is happening on the setup page underneath it.
+   The preview itself is a REAL nested page load (an <iframe> pointed at
+   #preview=<i>&as=host|player) rather than a re-implementation of the question
+   markup — that's the only way the phone-sized frame gets the same vw-relative
+   font sizing a real phone would, and it can never silently drift out of sync
+   with how the question actually renders in the live game. */
+function openQuestionPreview(i, mode){
+  mode = mode || 'host';
+  closeQuestionPreview();
+  const el = document.createElement('div');
+  el.className = 'modal-backdrop';
+  el.id = 'preview-modal';
+  el.innerHTML = `
+    <div class="modal-box" style="max-width:640px;width:100%">
+      <h3 style="text-align:center">👁 第 ${i+1} 題預覽</h3>
+      <p class="sub" style="text-align:center;margin-bottom:10px">只是預覽，選項點了不會送出答案</p>
+      <div class="btn-row" id="preview-mode-row" style="margin-bottom:12px">
+        <button class="btn${mode==='host'?'':' secondary'}" data-mode="host" onclick="switchPreviewMode(${i},'host')">🖥️ 主畫面（投影）</button>
+        <button class="btn${mode==='player'?'':' secondary'}" data-mode="player" onclick="switchPreviewMode(${i},'player')">📱 玩家手機</button>
+      </div>
+      <div id="preview-frame-wrap" style="display:flex;justify-content:center"></div>
+      <div class="btn-row" style="margin-top:14px">
+        <button class="btn ghost" onclick="window.open(baseUrl()+'#preview=${i}&as='+currentPreviewMode,'_blank')">🔗 開新分頁看大螢幕</button>
+        <button class="btn secondary" onclick="closeQuestionPreview()">關閉</button>
+      </div>
+    </div>`;
+  el.addEventListener('click', e => { if (e.target === el) closeQuestionPreview(); });
+  document.body.appendChild(el);
+  switchPreviewMode(i, mode);
+}
+let currentPreviewMode = 'host';
+function switchPreviewMode(i, mode){
+  currentPreviewMode = mode;
+  const wrap = document.getElementById('preview-frame-wrap');
+  if (!wrap) return;
+  const iframe = document.createElement('iframe');
+  iframe.src = baseUrl() + '#preview=' + i + '&as=' + mode;
+  iframe.style.border = '1px solid var(--line)';
+  iframe.style.borderRadius = '18px';
+  iframe.style.background = '#fff';
+  if (mode === 'player'){
+    iframe.style.width = '360px';
+    iframe.style.height = '680px';
+    iframe.style.maxWidth = '100%';
+  } else {
+    iframe.style.width = '100%';
+    iframe.style.maxWidth = '580px';
+    iframe.style.height = '440px';
+  }
+  wrap.innerHTML = '';
+  wrap.appendChild(iframe);
+  const row = document.getElementById('preview-mode-row');
+  if (row){
+    row.querySelectorAll('button').forEach(b=>{
+      b.className = 'btn' + (b.dataset.mode === mode ? '' : ' secondary');
+    });
+  }
+}
+function closeQuestionPreview(){
+  const el = document.getElementById('preview-modal');
+  if (el) el.remove();
 }
 
 /* Adds a new question, or — when editingQuestionIndex is set — saves changes back
