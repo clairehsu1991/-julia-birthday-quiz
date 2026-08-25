@@ -80,6 +80,13 @@
   .shell{ flex:1; display:flex; flex-direction:column; align-items:center; padding: clamp(16px,4vw,40px); width:100%; }
   .col{ width:100%; max-width: 920px; margin:0 auto; display:flex; flex-direction:column; gap:16px; flex:1; }
   .center{ display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; flex:1; gap:16px; }
+  /* Wraps the actual question (topbar/text/options) on the host's live question
+     screen, below the pinned hostNav() bar. flex:1 + justify-content:center
+     lets this block claim and center in whatever vertical space hostNav()
+     doesn't use, instead of the whole page hugging the top with a big empty
+     gap underneath — same effect the plain "justify-content:center" inline
+     style gives .col on the screens that have no nav bar to keep pinned. */
+  .q-content{ flex:1; display:flex; flex-direction:column; gap:16px; justify-content:center; width:100%; }
 
   .eyebrow{
     display:inline-flex; align-items:center; gap:8px;
@@ -154,6 +161,12 @@
   /* Long questions step down a size so they still fit on the projector. */
   .qtext.long{ font-size: clamp(18px, 3.1vw, 26px); line-height:1.45; max-width:24em; }
   .qtext.xlong{ font-size: clamp(16px, 2.5vw, 21px); line-height:1.5; max-width:28em; }
+  /* Host opt-in for questions with manual line breaks — centering each line
+     separately (the default) can look ragged once a question spans several
+     lines, so .align-left keeps the block itself centered on the page
+     (max-width + margin-inline:auto, untouched) but wraps its text as one
+     left-aligned paragraph instead. */
+  .qtext.align-left{ text-align:left; }
   .options-grid{ display:grid; grid-template-columns:1fr; gap:14px; width:100%; max-width:1000px; margin:0 auto; }
   @media(min-width:760px){ .options-grid{ grid-template-columns:1fr 1fr; } }
   /* Long text answers: a half-width 2-col card wraps them awkwardly, so force a
@@ -167,8 +180,15 @@
      .opt-img can grow into it — this is the actual size win, not the row
      count by itself (see the comment on optionsGridClass()). */
   @media(min-width:900px){
-    .options-grid.img-row{ grid-template-columns:repeat(4,1fr); gap:12px; max-width:1400px; }
-    .options-grid.img-row .opt-img{ height:clamp(170px, 26vh, 340px); }
+    .options-grid.img-row{ grid-template-columns:repeat(4,1fr); gap:14px; max-width:1500px; }
+    /* Sized off the viewport height (like the QR code is off vmin) so the photo
+       claims most of the room a single row frees up instead of a fixed, timid
+       bump. object-fit:contain on .opt-img still protects very tall portrait
+       photos from ever being cropped — a photo whose own aspect ratio can't
+       use the full height just lets a bit more of the option's colour show
+       through at top/bottom instead of stretching or cropping. */
+    .options-grid.img-row .opt-img{ height:clamp(220px, 44vh, 460px); }
+    .options-grid.img-row .opt-cap{ font-size:16px; }
   }
 
   .opt-card{
@@ -605,10 +625,10 @@ function rankedGuessers(players, shouxingId){
    characters wide at full size — and step the type down only once it would
    start crowding the screen. Counting lines rather than raw characters means a
    question the host split with Enter keeps its big, projector-friendly size. */
-function qtextHtml(text, extraStyle){
+function qtextHtml(text, extraStyle, alignLeft){
   const lines = String(text == null ? '' : text).split('\n');
   const est = lines.reduce((n, line) => n + Math.max(1, Math.ceil(line.length / 20)), 0);
-  const cls = 'qtext' + (est > 5 ? ' xlong' : est > 3 ? ' long' : '');
+  const cls = 'qtext' + (est > 5 ? ' xlong' : est > 3 ? ' long' : '') + (alignLeft ? ' align-left' : '');
   return `<div class="${cls}"${extraStyle ? ` style="${extraStyle}"` : ''}>${esc(text)}</div>`;
 }
 function mascot(caption){
@@ -730,7 +750,7 @@ async function bootPreview(i, mode){
 function renderPreviewQuestion(q, i, mode, timeLimitSeconds){
   const isHost = mode !== 'player';
   render(`
-    <div class="shell"><div class="col">
+    <div class="shell"><div class="col" style="justify-content:center">
       <div class="chip" style="margin:0 auto 4px;background:rgba(232,101,75,0.14);border-color:var(--coral)">🧪 預覽模式・不會送出答案</div>
       ${isHost ? `
         <div class="topbar">
@@ -743,7 +763,7 @@ function renderPreviewQuestion(q, i, mode, timeLimitSeconds){
         <p class="sub" style="text-align:center;font-weight:700">🤔 猜猜壽星會選哪一個？</p>
       `}
       ${q.headerImg? `<img class="q-header-img" src="${q.headerImg}" alt="">` : ''}
-      ${qtextHtml(q.text)}
+      ${qtextHtml(q.text, null, q.alignLeft)}
       <div class="${optionsGridClass(q)}">
         ${q.options.map((o,idx)=> optionCardHtml(o, idx, null)).join('')}
       </div>
@@ -1065,7 +1085,7 @@ function renderHostSetup(){
       <div class="qrow${editingQuestionIndex===i?' editing':''}">
         <div class="qi num">${i+1}</div>
         <div class="qb">
-          <div class="qt">${q.type==='image'?'🖼️ ':'🔤 '}${esc(q.text)}</div>
+          <div class="qt">${q.alignLeft?'⬅️ ':''}${q.type==='image'?'🖼️ ':'🔤 '}${esc(q.text)}</div>
           <div class="oo" style="display:flex;align-items:center;flex-wrap:wrap">${optsSummary}</div>
         </div>
         <div class="qactions">
@@ -1118,6 +1138,12 @@ function renderHostSetup(){
         <h2>${editQ ? '✏️ 編輯第 ' + (editingQuestionIndex+1) + ' 題' : '➕ 新增題目'}</h2>
         <div class="stack" style="margin-top:8px">
           <div class="field"><label>題目文字（可以按 Enter 換行）</label><textarea id="nq-text" rows="3" placeholder="例如：壽星這趟日本行&#10;最喜歡哪張照片？" style="resize:vertical;line-height:1.5">${esc(editQ ? editQ.text : '')}</textarea></div>
+          <div class="field">
+            <label style="font-weight:400;display:flex;align-items:center;gap:6px">
+              <input type="checkbox" id="nq-align-left" style="width:16px;height:16px" ${editQ && editQ.alignLeft ? 'checked' : ''}>
+              題目換行時靠左對齊（預設置中，多行文字改成靠左比較好讀）
+            </label>
+          </div>
           <div class="field">
             <label>題目附圖（選填，會顯示在題目上方）</label>
             ${editQ && editQ.headerImg ? `
@@ -1374,6 +1400,7 @@ async function saveQuestionFromForm(){
   const existing = isEdit ? QUESTIONS[editingQuestionIndex] : null;
   const text = document.getElementById('nq-text').value.trim();
   if (!text){ alert('請輸入題目文字'); return; }
+  const alignLeft = document.getElementById('nq-align-left').checked;
   const type = document.getElementById('nq-type').value;
   const btn = document.getElementById('nq-submit-btn');
   const btnLabel = isEdit ? '💾 儲存這題' : '➕ 新增這題';
@@ -1405,8 +1432,8 @@ async function saveQuestionFromForm(){
         options.push({ label: caps[i] || '', img });
       }
     }
-    if (isEdit) QUESTIONS[editingQuestionIndex] = { text, type, headerImg, options };
-    else QUESTIONS.push({ text, type, headerImg, options });
+    if (isEdit) QUESTIONS[editingQuestionIndex] = { text, type, headerImg, options, alignLeft };
+    else QUESTIONS.push({ text, type, headerImg, options, alignLeft });
     editingQuestionIndex = null;
     renderHostSetup();
     saveDraft();
@@ -1648,21 +1675,23 @@ function renderHostQuestion(){
   render(`
     <div class="shell"><div class="col">
       ${hostNav(true)}
-      <div class="topbar">
-        <div class="chip">第 <span class="num">${hostState.questionIndex+1}</span> / ${hostState.questions.length} 題</div>
-        <div class="chip shouxing">🎂 猜猜 ${esc(shouxingName)} 會選什麼</div>
-        <div class="chip timer" id="host-timer-chip"><span>⏱</span><span class="num">${Math.ceil(hostState.timeLimitMs/1000)}</span></div>
+      <div class="q-content">
+        <div class="topbar">
+          <div class="chip">第 <span class="num">${hostState.questionIndex+1}</span> / ${hostState.questions.length} 題</div>
+          <div class="chip shouxing">🎂 猜猜 ${esc(shouxingName)} 會選什麼</div>
+          <div class="chip timer" id="host-timer-chip"><span>⏱</span><span class="num">${Math.ceil(hostState.timeLimitMs/1000)}</span></div>
+        </div>
+        ${q.headerImg? `<img class="q-header-img" src="${q.headerImg}" alt="">` : ''}
+        ${qtextHtml(q.text, null, q.alignLeft)}
+        <div class="${optionsGridClass(q)}">
+          ${q.options.map((o,i)=> optionCardHtml(o, i, null)).join('')}
+        </div>
+        <div class="progress-wrap">
+          <div class="progress-track"><div class="progress-fill" id="host-answer-bar" style="width:${pct}%"></div></div>
+          <div class="progress-label" id="host-answer-label">已作答 ${answered} / ${total}</div>
+        </div>
+        <div class="btn-row" style="margin-top:6px"><button class="btn secondary" onclick="goToReveal()">提前公布壽星的答案 →</button></div>
       </div>
-      ${q.headerImg? `<img class="q-header-img" src="${q.headerImg}" alt="">` : ''}
-      ${qtextHtml(q.text)}
-      <div class="${optionsGridClass(q)}">
-        ${q.options.map((o,i)=> optionCardHtml(o, i, null)).join('')}
-      </div>
-      <div class="progress-wrap">
-        <div class="progress-track"><div class="progress-fill" id="host-answer-bar" style="width:${pct}%"></div></div>
-        <div class="progress-label" id="host-answer-label">已作答 ${answered} / ${total}</div>
-      </div>
-      <div class="btn-row" style="margin-top:6px"><button class="btn secondary" onclick="goToReveal()">提前公布壽星的答案 →</button></div>
     </div></div>
   `);
 }
@@ -1720,7 +1749,7 @@ function renderHostReveal(){
     <div class="shell"><div class="col">
       ${hostNav(true)}
       <span class="eyebrow">🎂 壽星的選擇</span>
-      ${qtextHtml(q.text, "font-size:clamp(17px,3vw,24px);max-width:30em")}
+      ${qtextHtml(q.text, "font-size:clamp(17px,3vw,24px);max-width:30em", q.alignLeft)}
       ${shouxingChoice==null ? '<p class="sub" style="text-align:center">壽星這題沒來得及作答，這題大家都不計分</p>' : ''}
       <div class="options-grid">
         ${q.options.map((o,i)=> revealRowHtml(o, i, counts[i], i===shouxingChoice)).join('')}
@@ -2247,11 +2276,11 @@ function renderPlayerQuestionOrWaiting(state){
   const q = state.questions[state.questionIndex];
   const isSx = state.shouxingId === PLAYER_ID;
   render(`
-    <div class="shell"><div class="col">
+    <div class="shell"><div class="col" style="justify-content:center">
       <div class="chip" style="margin:0 auto">第 <span class="num">${state.questionIndex+1}</span> / ${state.questions.length} 題</div>
       <p class="sub" style="text-align:center;font-weight:700">${isSx? '🎂 這題換你決定！大家會猜你的答案' : '🤔 猜猜壽星會選哪一個？'}</p>
       ${q.headerImg? `<img class="q-header-img" src="${q.headerImg}" alt="">` : ''}
-      ${qtextHtml(q.text)}
+      ${qtextHtml(q.text, null, q.alignLeft)}
       <div class="${optionsGridClass(q)}">
         ${q.options.map((o,i)=> optionCardHtml(o, i, `onclick="playerAnswer(${i})"`)).join('')}
       </div>
