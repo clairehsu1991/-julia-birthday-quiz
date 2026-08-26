@@ -244,6 +244,7 @@
   .player-pill.is-shouxing{ background:rgba(232,101,75,0.14); border-color:var(--coral); }
   .player-pill .dot{ width:8px; height:8px; border-radius:50%; background:var(--leaf); }
   .badge-shouxing{ display:inline-flex; background:var(--coral); color:#fff; font-size:11px; font-weight:800; padding:3px 8px; border-radius:999px; margin-left:6px; white-space:nowrap; }
+  .test-badge{ display:inline-flex; background:#8a8a8a; color:#fff; font-size:10.5px; font-weight:800; padding:2px 7px; border-radius:999px; margin-left:6px; white-space:nowrap; vertical-align:1px; }
 
   .lb-row{
     display:flex; align-items:center; gap:14px; background:var(--cream); border:1px solid var(--line);
@@ -279,7 +280,17 @@
   .avatar-badge{ display:inline-block; margin-right:6px; font-size:1.1em; }
 
   /* ---------- 猜拳抽籤 ---------- */
-  .rps-hand{ font-size:20px; margin-left:6px; }
+  .rps-hand{ font-size:20px; margin-left:6px; display:inline-block; }
+  /* runRpsDraw() swaps the hand emoji every ~180ms, but a plain text swap alone
+     is easy to miss (especially projected at a distance) — it reads as "nothing
+     is happening" even though the draw is running correctly. While shuffling,
+     wiggle the whole pill and pulse the hand glyph in the same rhythm as the
+     JS ticks, so the draw visibly feels like an animation. */
+  .player-pill.shuffling{ animation: rpsWiggle .3s ease-in-out infinite; }
+  .player-pill.shuffling .rps-hand{ font-size:26px; animation: pulse .18s ease-in-out infinite; }
+  @keyframes rpsWiggle{ 0%,100%{ transform:rotate(0deg) scale(1); } 25%{ transform:rotate(-3deg) scale(1.03); } 75%{ transform:rotate(3deg) scale(1.03); } }
+  /* The winning medal pops into place once the draw lands — same beat as the podium reveal. */
+  .rps-hand.landed{ font-size:26px; animation: pulse .5s ease; }
 
   /* ---------- 作答紀錄 ---------- */
   .answerlog-row{ text-align:left; }
@@ -345,6 +356,7 @@
     .chip.timer.urgent{ animation:none; }
     .confetti-piece{ animation:none; display:none; }
     .btn, .opt-card{ transition:none; }
+    .player-pill.shuffling, .player-pill.shuffling .rps-hand, .rps-hand.landed{ animation:none; }
   }
 </style>
 </head>
@@ -635,6 +647,11 @@ function mascot(caption){
   return `<div class="mascot-row"><div class="mascot-bubble"><img src="${MASCOT_IMG}" alt="quokka"></div>${caption? `<div class="mascot-caption">${esc(caption)}</div>`:''}</div>`;
 }
 function avatarSpan(av){ return `<span class="avatar-badge">${esc(av || '⭐')}</span>`; }
+/* Small "🧪" marker after a test player's name everywhere players are listed —
+   see addTestPlayers(). Bots are stored exactly like real joins (just flagged
+   isTestBot), so without this a host could easily lose track of which "players"
+   are real guests once a mixed lobby has both. */
+function nameTag(p){ return esc(p && p.name) + (p && p.isTestBot ? ' <span class="test-badge">🧪 測試</span>' : ''); }
 
 /* ---------- client-side image compression (for question authoring) ---------- */
 function fileToCompressedDataUrl(file, maxDim, quality){
@@ -1504,7 +1521,7 @@ function renderHostLobby(){
         <div class="players-grid">
           ${players.length ? players.map(([id,p])=>`
             <button class="player-pill ${id===hostState.shouxingId?'is-shouxing':''}" onclick="setShouxing('${id}')">
-              <span class="dot"></span>${avatarSpan(p.avatar)}${esc(p.name)}${id===hostState.shouxingId? '<span class=\"badge-shouxing\">🎂 壽星</span>' : ''}
+              <span class="dot"></span>${avatarSpan(p.avatar)}${nameTag(p)}${id===hostState.shouxingId? '<span class=\"badge-shouxing\">🎂 壽星</span>' : ''}
             </button>
           `).join('') : '<p class="sub">還沒有人加入，請大家掃上面的 QR code</p>'}
         </div>
@@ -1514,8 +1531,11 @@ function renderHostLobby(){
       <div class="btn-row" style="margin-top:8px">
         <button class="btn secondary" onclick="backToSetupFromLobby()">← 回設定</button>
         <button class="btn ghost" onclick="clearAllPlayers()">🧹 清空名單</button>
+        <button class="btn ghost" onclick="addTestPlayers()">🧪 加入測試玩家</button>
         <button class="btn" onclick="nextQuestion()" ${sxReady? '' : 'disabled'}>▶ 開始第一題</button>
       </div>
+      <p class="sub" style="font-size:12px;margin-top:6px">一個人也想測試？「🧪 加入測試玩家」一次補滿 7 位假玩家（1 位當壽星、6 位猜猜的人，湊得出頒獎典禮最後三名猜拳的人數），
+      出題畫面上會多一顆「讓測試玩家作答」讓你自己一個人也能跑完整場、包含頒獎典禮的猜拳畫面。回設定重開一場真的遊戲時會自動清掉，不用另外整理。</p>
     </div></div>
   `);
 }
@@ -1532,6 +1552,80 @@ function setShouxing(id){
   hostState.shouxingId = id;
   sSet('game:state', hostState);
   renderHostLobby();
+}
+
+/* ============================================================
+   HOST: solo-testing helpers ("🧪 加入測試玩家" in the lobby)
+   Lets a host with nobody around to help rehearse a whole game alone —
+   including the awards podium / 最後三名猜拳, which only look right with
+   several players spread across different scores. Bots are plain entries in
+   hostState.players, shaped exactly like a real join (same score/history
+   fields other code already expects), just flagged isTestBot so nameTag()
+   can mark them everywhere a name is shown and nobody mistakes one for a
+   real guest. They never touch join:/answer: storage — there's no phone
+   behind them — so there's nothing for a real player's poll to collide with.
+   Nothing needs cleaning up afterwards either: starting a real game always
+   resets hostState.players to {} (see startLobby()), which drops the bots
+   along with everything else from the test round.
+   ============================================================ */
+// 7, not 6: one bot becomes 壽星, leaving 6 guessers — the minimum needed for
+// the awards podium's top 3 and the 最後三名猜拳's bottom 3 to be two disjoint
+// groups of real (well, fake) people instead of the RPS stage having nobody
+// left to draw with and silently skipping itself (see the "少於三位" branch
+// in renderHostAwardsRps()).
+const TEST_BOT_COUNT = 7;
+function addTestPlayers(){
+  if (!hostState) return;
+  // Captured once, before the loop starts adding to hostState.players below —
+  // otherwise each newly-added bot would inflate this same count on the very
+  // next iteration (it's a live read of hostState.players), making the loop
+  // think the target was reached after only half of TEST_BOT_COUNT were added.
+  const existingBotCount = Object.values(hostState.players).filter(p => p.isTestBot).length;
+  let added = 0;
+  for (let i = 1; i <= TEST_BOT_COUNT; i++){
+    const name = '測試玩家' + i;
+    if (Object.values(hostState.players).some(p => p.isTestBot && p.name === name)) continue;
+    if (existingBotCount + added >= TEST_BOT_COUNT) break;
+    const id = 'bot_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6) + i;
+    hostState.players[id] = {
+      name, avatar: AVATAR_LIST[Math.floor(Math.random() * AVATAR_LIST.length)],
+      score: 0, joinToken: Date.now(), history: [], isTestBot: true
+    };
+    added++;
+  }
+  if (!added){ toast('測試玩家已經在名單裡了'); return; }
+  let sxNote = '';
+  if (!hostState.shouxingId){
+    const firstBot = Object.entries(hostState.players).find(([,p]) => p.isTestBot);
+    if (firstBot){ hostState.shouxingId = firstBot[0]; sxNote = '，其中一位自動指定為壽星（可以點別人的名字換人）'; }
+  }
+  sSet('game:state', hostState);
+  renderHostLobby();
+  toast('已加入 ' + added + ' 位測試玩家' + sxNote);
+}
+/* Instantly gives every not-yet-answered 🧪 test player (including a bot
+   holding the 壽星 badge) a random answer to the current question — the
+   same end state processAnswers() would reach once real answers arrive, just
+   written directly since bots have no phone for the host to poll from. */
+function answerAsTestPlayers(){
+  if (!hostState || hostState.status !== 'question') return;
+  const q = hostState.questions[hostState.questionIndex];
+  if (!q) return;
+  let changed = false;
+  for (const id in hostState.players){
+    const p = hostState.players[id];
+    if (!p || !p.isTestBot) continue;
+    if (hostState.currentAnswers[id]) continue;
+    const optCount = Array.isArray(q.options) ? q.options.length : 4;
+    const choice = Math.floor(Math.random() * optCount);
+    const elapsedMs = 400 + Math.floor(Math.random() * Math.max(200, hostState.timeLimitMs - 400));
+    hostState.currentAnswers[id] = { choice, elapsedMs };
+    changed = true;
+  }
+  if (changed){
+    sSet('game:state', hostState);
+    renderHostQuestion();
+  }
 }
 
 /* ============================================================
@@ -1611,21 +1705,40 @@ async function clearAllPlayers(){
   renderHostLobby();
   toast('已清空，還在線上的人會自動回來');
 }
+/* Every `await` below is a point where the browser can run other code first —
+   including the 200ms countdown tick (auto reveal at 0:00) or the host tapping
+   "提前公布壽星的答案" (goToReveal(), triggered manually). Either can flip
+   hostState.status to 'reveal' *while this function is still mid-flight*,
+   e.g. waiting on the network for one player's answer that arrived right as
+   time ran out. Without the re-checks below, this function would then finish
+   its stale work and stomp on the reveal: it would overwrite that player's
+   already-scored (as "no answer") entry with their late answer, and — worse —
+   call renderHostQuestion(), silently swapping the host's screen back to the
+   question view even though hostState.status is really 'reveal'. That left
+   the "提前公布壽星的答案" button back on screen but functionally dead (the
+   guard in goToReveal() now sees status !== 'question' and no-ops), which is
+   exactly what looked like the game "當機/凍結" — especially likely to hit
+   right as the timer runs out with players still answering, or right after
+   the host taps early-reveal while answers are still trickling in. Bailing
+   out as soon as we notice the round has moved on keeps this function from
+   ever touching hostState or the screen after that point. */
 async function processAnswers(){
   const keys = await sList('answer:');
+  if (hostState.status !== 'question') return;
   let changed = false;
   for (const k of keys){
     const id = k.slice('answer:'.length);
     if (!hostState.players[id]) continue;
     if (hostState.currentAnswers[id]) continue;
     const ans = await sGet(k);
+    if (hostState.status !== 'question') return;
     if (!ans) continue;
     if (ans.roundId !== hostState.roundId) continue;
     if (ans.questionIndex !== hostState.questionIndex) continue;
     hostState.currentAnswers[id] = { choice: ans.choice, elapsedMs: ans.elapsedMs };
     changed = true;
   }
-  if (changed){
+  if (changed && hostState.status === 'question'){
     await sSet('game:state', hostState);
     renderHostQuestion();
   }
@@ -1671,14 +1784,16 @@ function renderHostQuestion(){
   const answered = Object.keys(hostState.currentAnswers).length;
   const total = Object.keys(hostState.players).length || 1;
   const pct = Math.min(100, Math.round(answered/total*100));
-  const shouxingName = hostState.players[hostState.shouxingId] ? hostState.players[hostState.shouxingId].name : '';
+  const shouxingP = hostState.players[hostState.shouxingId];
+  const hasUnansweredBots = Object.entries(hostState.players)
+    .some(([id,p]) => p.isTestBot && !hostState.currentAnswers[id]);
   render(`
     <div class="shell"><div class="col">
       ${hostNav(true)}
       <div class="q-content">
         <div class="topbar">
           <div class="chip">第 <span class="num">${hostState.questionIndex+1}</span> / ${hostState.questions.length} 題</div>
-          <div class="chip shouxing">🎂 猜猜 ${esc(shouxingName)} 會選什麼</div>
+          <div class="chip shouxing">🎂 猜猜 ${shouxingP ? nameTag(shouxingP) : ''} 會選什麼</div>
           <div class="chip timer" id="host-timer-chip"><span>⏱</span><span class="num">${Math.ceil(hostState.timeLimitMs/1000)}</span></div>
         </div>
         ${q.headerImg? `<img class="q-header-img" src="${q.headerImg}" alt="">` : ''}
@@ -1690,7 +1805,10 @@ function renderHostQuestion(){
           <div class="progress-track"><div class="progress-fill" id="host-answer-bar" style="width:${pct}%"></div></div>
           <div class="progress-label" id="host-answer-label">已作答 ${answered} / ${total}</div>
         </div>
-        <div class="btn-row" style="margin-top:6px"><button class="btn secondary" onclick="goToReveal()">提前公布壽星的答案 →</button></div>
+        <div class="btn-row" style="margin-top:6px">
+          ${hasUnansweredBots ? `<button class="btn ghost" onclick="answerAsTestPlayers()">🧪 讓測試玩家作答</button>` : ''}
+          <button class="btn secondary" onclick="goToReveal()">提前公布壽星的答案 →</button>
+        </div>
       </div>
     </div></div>
   `);
@@ -1756,12 +1874,12 @@ function renderHostReveal(){
       </div>
       <div class="panel" style="margin-top:8px">
         <h2>🏆 目前排行榜</h2>
-        ${sxName? `<p class="sub" style="margin-top:2px">🎂 ${esc(sxName)} 是今天的壽星，負責出正解，不列入排名</p>`:''}
+        ${sxName? `<p class="sub" style="margin-top:2px">🎂 ${nameTag(hostState.players[sx])} 是今天的壽星，負責出正解，不列入排名</p>`:''}
         <div class="stack" style="margin-top:10px">
           ${ranked.map(([id,p],i)=>`
             <div class="lb-row">
               <div class="lb-rank ${i===0?'top1':i===1?'top2':i===2?'top3':''}">${i+1}</div>
-              <div class="lb-name">${avatarSpan(p.avatar)}${esc(p.name)}</div>
+              <div class="lb-name">${avatarSpan(p.avatar)}${nameTag(p)}</div>
               ${hostState.currentAnswers[id] && hostState.currentAnswers[id].points>0 ? `<div class="lb-delta">+${hostState.currentAnswers[id].points}</div>` : ''}
               <div class="lb-score num">${p.score}</div>
             </div>
@@ -1797,15 +1915,15 @@ function renderHostFinal(){
       ${mascot()}
       <span class="eyebrow">🎊 遊戲結束</span>
       <h1 class="marquee-title">最終<span class="hl">排行榜</span></h1>
-      ${sxName? `<div class="chip shouxing" style="margin:0 auto">🎂 今天的壽星 ${esc(sxName)}</div>`:''}
+      ${sxName? `<div class="chip shouxing" style="margin:0 auto">🎂 今天的壽星 ${nameTag(hostState.players[sx])}</div>`:''}
       <div class="podium">
-        ${top3[1]?`<div class="p second">${avatarSpan(top3[1][1].avatar)}<div class="medal">🥈</div><div class="name">${esc(top3[1][1].name)}</div><div class="score num">${top3[1][1].score}</div></div>`:''}
-        ${top3[0]?`<div class="p first">${avatarSpan(top3[0][1].avatar)}<div class="medal">🥇</div><div class="name">${esc(top3[0][1].name)}</div><div class="score num">${top3[0][1].score}</div></div>`:''}
-        ${top3[2]?`<div class="p third">${avatarSpan(top3[2][1].avatar)}<div class="medal">🥉</div><div class="name">${esc(top3[2][1].name)}</div><div class="score num">${top3[2][1].score}</div></div>`:''}
+        ${top3[1]?`<div class="p second">${avatarSpan(top3[1][1].avatar)}<div class="medal">🥈</div><div class="name">${nameTag(top3[1][1])}</div><div class="score num">${top3[1][1].score}</div></div>`:''}
+        ${top3[0]?`<div class="p first">${avatarSpan(top3[0][1].avatar)}<div class="medal">🥇</div><div class="name">${nameTag(top3[0][1])}</div><div class="score num">${top3[0][1].score}</div></div>`:''}
+        ${top3[2]?`<div class="p third">${avatarSpan(top3[2][1].avatar)}<div class="medal">🥉</div><div class="name">${nameTag(top3[2][1])}</div><div class="score num">${top3[2][1].score}</div></div>`:''}
       </div>
       ${rest.length? `<div class="stack" style="width:100%;max-width:520px">
         ${rest.map(([id,p],i)=>`
-          <div class="lb-row"><div class="lb-rank">${i+4}</div><div class="lb-name">${avatarSpan(p.avatar)}${esc(p.name)}</div><div class="lb-score num">${p.score}</div></div>
+          <div class="lb-row"><div class="lb-rank">${i+4}</div><div class="lb-name">${avatarSpan(p.avatar)}${nameTag(p)}</div><div class="lb-score num">${p.score}</div></div>
         `).join('')}
       </div>` : ''}
       <div class="btn-row" style="margin-top:14px">
@@ -1895,9 +2013,9 @@ function renderHostAwardsPodium(){
       <span class="eyebrow">🎊 頒獎典禮</span>
       <h1 class="marquee-title">最懂壽星<span class="hl">前三名</span></h1>
       <div class="podium" id="award-podium">
-        ${top3[1]?`<div class="p second reveal" id="ap-2">${avatarSpan(top3[1][1].avatar)}<div class="medal">🥈</div><div class="name">${esc(top3[1][1].name)}</div><div class="score num">${top3[1][1].score}</div>${prizeLine(1)}</div>`:''}
-        ${top3[0]?`<div class="p first reveal" id="ap-1">${avatarSpan(top3[0][1].avatar)}<div class="medal">🥇</div><div class="name">${esc(top3[0][1].name)}</div><div class="score num">${top3[0][1].score}</div>${prizeLine(0)}</div>`:''}
-        ${top3[2]?`<div class="p third reveal" id="ap-3">${avatarSpan(top3[2][1].avatar)}<div class="medal">🥉</div><div class="name">${esc(top3[2][1].name)}</div><div class="score num">${top3[2][1].score}</div>${prizeLine(2)}</div>`:''}
+        ${top3[1]?`<div class="p second reveal" id="ap-2">${avatarSpan(top3[1][1].avatar)}<div class="medal">🥈</div><div class="name">${nameTag(top3[1][1])}</div><div class="score num">${top3[1][1].score}</div>${prizeLine(1)}</div>`:''}
+        ${top3[0]?`<div class="p first reveal" id="ap-1">${avatarSpan(top3[0][1].avatar)}<div class="medal">🥇</div><div class="name">${nameTag(top3[0][1])}</div><div class="score num">${top3[0][1].score}</div>${prizeLine(0)}</div>`:''}
+        ${top3[2]?`<div class="p third reveal" id="ap-3">${avatarSpan(top3[2][1].avatar)}<div class="medal">🥉</div><div class="name">${nameTag(top3[2][1])}</div><div class="score num">${top3[2][1].score}</div>${prizeLine(2)}</div>`:''}
       </div>
       ${top3.length? '' : '<p class="sub">這場沒有人猜，先跳過頒獎</p>'}
       <div class="btn-row" style="margin-top:14px">
@@ -1931,7 +2049,7 @@ function renderHostAwardsRps(){
       <p class="sub">猜拳決定順序，贏的人優先挑一張壽星準備的任務卡</p>
       ${bottom.length ? `
         <div class="players-grid" id="rps-players">
-          ${bottom.map(([id,p])=>`<div class="player-pill" id="rps-p-${id}">${avatarSpan(p.avatar)}${esc(p.name)}<span class="rps-hand" id="rps-hand-${id}">✊</span></div>`).join('')}
+          ${bottom.map(([id,p])=>`<div class="player-pill" id="rps-p-${id}">${avatarSpan(p.avatar)}${nameTag(p)}<span class="rps-hand" id="rps-hand-${id}">✊</span></div>`).join('')}
         </div>
         <div class="btn-row" style="margin-top:10px"><button class="btn" id="rps-btn" onclick="runRpsDraw()">🎲 開始猜拳！</button></div>
       ` : `
@@ -1949,6 +2067,12 @@ function runRpsDraw(){
   if (btn) btn.disabled = true;
   const ids = (hostState.bottomIds||[]).slice();
   const hands = ['✊','✋','✌️'];
+  // Wiggle the whole pill in time with the hand-swap below — see the .shuffling
+  // CSS comment for why the text swap alone didn't read as an animation.
+  ids.forEach(id=>{
+    const pill = document.getElementById('rps-p-' + id);
+    if (pill) pill.classList.add('shuffling');
+  });
   let ticks = 0;
   const handle = setInterval(()=>{
     ticks++;
@@ -1965,9 +2089,13 @@ function runRpsDraw(){
 async function finishRpsDraw(ids){
   const order = shuffled(ids);
   const medal = ['🥇','🥈','🥉'];
+  ids.forEach(id=>{
+    const pill = document.getElementById('rps-p-' + id);
+    if (pill) pill.classList.remove('shuffling');
+  });
   order.forEach((id,i)=>{
     const el = document.getElementById('rps-hand-' + id);
-    if (el) el.textContent = medal[i] || '';
+    if (el){ el.textContent = medal[i] || ''; el.classList.add('landed'); }
   });
   hostState.pickOrder = order;
   hostState.pickedCards = {};
@@ -1996,7 +2124,7 @@ function renderHostAwardsPicking(){
       ${hostNav(true)}
       <span class="eyebrow">🃏 選卡中</span>
       ${currentP ? `
-        <h1 class="marquee-title" style="font-size:clamp(24px,5vw,40px)">輪到 <span class="hl">${esc(currentP.name)}</span> 選卡！</h1>
+        <h1 class="marquee-title" style="font-size:clamp(24px,5vw,40px)">輪到 <span class="hl">${nameTag(currentP)}</span> 選卡！</h1>
         <p class="sub">請她／他看自己的手機，從剩下的許願卡中選一張</p>
       ` : '<h1 class="marquee-title" style="font-size:clamp(24px,5vw,40px)">都選完了！</h1>'}
       <div class="options-grid" style="max-width:760px">
@@ -2011,7 +2139,7 @@ function renderHostAwardsPicking(){
         ${order.map((id,i)=>{
           const p = hostState.players[id]; if (!p) return '';
           const idx = picked[id];
-          return `<div class="lb-row"><div class="lb-rank">${i+1}</div><div class="lb-name">${avatarSpan(p.avatar)}${esc(p.name)}</div><div class="sub">${idx!==undefined ? '拿到：'+esc(cards[idx]||'—') : '等待中…'}</div></div>`;
+          return `<div class="lb-row"><div class="lb-rank">${i+1}</div><div class="lb-name">${avatarSpan(p.avatar)}${nameTag(p)}</div><div class="sub">${idx!==undefined ? '拿到：'+esc(cards[idx]||'—') : '等待中…'}</div></div>`;
         }).join('')}
       </div>
       <div class="btn-row" style="margin-top:10px">
@@ -2071,9 +2199,9 @@ function renderHostAwardsDone(){
       <span class="eyebrow">🎊 頒獎典禮</span>
       <h1 class="marquee-title">最懂壽星<span class="hl">前三名</span></h1>
       <div class="podium">
-        ${top3[1]?`<div class="p second">${avatarSpan(top3[1][1].avatar)}<div class="medal">🥈</div><div class="name">${esc(top3[1][1].name)}</div><div class="score num">${top3[1][1].score}</div>${prizeLine(1)}</div>`:''}
-        ${top3[0]?`<div class="p first">${avatarSpan(top3[0][1].avatar)}<div class="medal">🥇</div><div class="name">${esc(top3[0][1].name)}</div><div class="score num">${top3[0][1].score}</div>${prizeLine(0)}</div>`:''}
-        ${top3[2]?`<div class="p third">${avatarSpan(top3[2][1].avatar)}<div class="medal">🥉</div><div class="name">${esc(top3[2][1].name)}</div><div class="score num">${top3[2][1].score}</div>${prizeLine(2)}</div>`:''}
+        ${top3[1]?`<div class="p second">${avatarSpan(top3[1][1].avatar)}<div class="medal">🥈</div><div class="name">${nameTag(top3[1][1])}</div><div class="score num">${top3[1][1].score}</div>${prizeLine(1)}</div>`:''}
+        ${top3[0]?`<div class="p first">${avatarSpan(top3[0][1].avatar)}<div class="medal">🥇</div><div class="name">${nameTag(top3[0][1])}</div><div class="score num">${top3[0][1].score}</div>${prizeLine(0)}</div>`:''}
+        ${top3[2]?`<div class="p third">${avatarSpan(top3[2][1].avatar)}<div class="medal">🥉</div><div class="name">${nameTag(top3[2][1])}</div><div class="score num">${top3[2][1].score}</div>${prizeLine(2)}</div>`:''}
       </div>
       ${order.length? `<div class="panel" style="margin-top:10px;width:100%;max-width:520px">
         <h2>🎁 許願任務</h2>
@@ -2081,7 +2209,7 @@ function renderHostAwardsDone(){
           ${order.map(id=>{
             const p = hostState.players[id]; if (!p) return '';
             const idx = hostState.pickedCards[id];
-            return `<div class="lb-row"><div class="lb-name">${avatarSpan(p.avatar)}${esc(p.name)}</div><div class="sub" style="flex:2;text-align:right">${idx!=null? esc(cards[idx]||'—') : '—'}</div></div>`;
+            return `<div class="lb-row"><div class="lb-name">${avatarSpan(p.avatar)}${nameTag(p)}</div><div class="sub" style="flex:2;text-align:right">${idx!=null? esc(cards[idx]||'—') : '—'}</div></div>`;
           }).join('')}
         </div>
       </div>` : ''}
@@ -2364,7 +2492,7 @@ function renderPlayerFinal(state){
         ${ranked.map(([id,p],i)=>`
           <div class="lb-row ${id===PLAYER_ID?'me':''}">
             <div class="lb-rank ${i===0?'top1':i===1?'top2':i===2?'top3':''}">${i+1}</div>
-            <div class="lb-name">${avatarSpan(p.avatar)}${esc(p.name)}</div>
+            <div class="lb-name">${avatarSpan(p.avatar)}${nameTag(p)}</div>
             <div class="lb-score num">${p.score}</div>
           </div>
         `).join('') || '<p class="sub">這場沒有人猜</p>'}
@@ -2462,7 +2590,7 @@ function renderPlayerAwards(state){
       render(`
         <div class="shell"><div class="center">
           <div style="font-size:54px">🃏</div>
-          <h1 class="marquee-title" style="font-size:clamp(22px,6vw,32px)">${p? esc(p.name)+' 選卡中…' : '選卡中'}</h1>
+          <h1 class="marquee-title" style="font-size:clamp(22px,6vw,32px)">${p? nameTag(p)+' 選卡中…' : '選卡中'}</h1>
           <p class="sub">看主畫面囉～</p>
         </div></div>
       `);
