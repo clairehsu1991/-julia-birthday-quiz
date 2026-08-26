@@ -1,14 +1,1371 @@
 {
   "app": "julia-party-quiz",
   "version": 1,
-  "exportedAt": 1787765324024,
+  "exportedAt": 1787765740942,
   "banks": [
     {
-      "id": "b_mt92l757ettv",
-      "name": "TEST2",
-      "updatedAt": 1787765318049,
+      "id": "b_mtadjz5tmlsk",
+      "name": "0827題庫",
+      "updatedAt": 1787765726657,
       "timeLimitSeconds": 15,
       "questions": [
+        {
+          "text": "「添油加醋」到了 Julia 嘴裡，最可能變成？",
+          "type": "text",
+          "options": [
+            {
+              "label": "加油添醋",
+              "img": null
+            },
+            {
+              "label": "添加油醋",
+              "img": null
+            },
+            {
+              "label": "油醋分離",
+              "img": null
+            },
+            {
+              "label": "添醋加油",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "Julia 想說「字正腔圓」，結果她說成？",
+          "type": "text",
+          "options": [
+            {
+              "label": "字正方圓",
+              "img": null
+            },
+            {
+              "label": "字正字圓",
+              "img": null
+            },
+            {
+              "label": "正方腔圓",
+              "img": null
+            },
+            {
+              "label": "字大腔圓",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "「旁敲側擊」在 Julia 世界裡叫什麼？",
+          "type": "text",
+          "options": [
+            {
+              "label": "側面攻擊",
+              "img": null
+            },
+            {
+              "label": "側面敲擊",
+              "img": null
+            },
+            {
+              "label": "背面敲門",
+              "img": null
+            },
+            {
+              "label": "敲邊擊角",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "朋友稱讚 Julia 時，她把「過獎了」說成？",
+          "type": "text",
+          "options": [
+            {
+              "label": "妳太客氣了",
+              "img": null
+            },
+            {
+              "label": "妳多講了",
+              "img": null
+            },
+            {
+              "label": "妳少講了",
+              "img": null
+            },
+            {
+              "label": "妳講太滿",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "「且看且走」被 Julia 升級成哪一句？",
+          "type": "text",
+          "options": [
+            {
+              "label": "且走且看",
+              "img": null
+            },
+            {
+              "label": "且幹且走",
+              "img": null
+            },
+            {
+              "label": "且戰且退",
+              "img": null
+            },
+            {
+              "label": "邊走邊幹",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "Julia 說：「我沒有寫錯。」下一句是？",
+          "type": "text",
+          "options": [
+            {
+              "label": "是你看錯了",
+              "img": null
+            },
+            {
+              "label": "只是還沒有寫對",
+              "img": null
+            },
+            {
+              "label": "字典也不一定對",
+              "img": null
+            },
+            {
+              "label": "我只是換一種寫法",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "「無縫接軌」被 Julia 說成？",
+          "type": "text",
+          "options": [
+            {
+              "label": "無縫插軌",
+              "img": null
+            },
+            {
+              "label": "無縫插隊",
+              "img": null
+            },
+            {
+              "label": "無軌接縫",
+              "img": null
+            },
+            {
+              "label": "平行接軌",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "Julia 想表達「我什麼朋友都有」，結果用了哪個詞？",
+          "type": "text",
+          "options": [
+            {
+              "label": "四海一家",
+              "img": null
+            },
+            {
+              "label": "八面玲瓏",
+              "img": null
+            },
+            {
+              "label": "交友滿天下",
+              "img": null
+            },
+            {
+              "label": "左右逢源",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "「得饒人處且饒人」＋「大人不記小人過」，Julia 合成了？",
+          "type": "text",
+          "options": [
+            {
+              "label": "得饒人處大人過",
+              "img": null
+            },
+            {
+              "label": "大人處且饒人",
+              "img": null
+            },
+            {
+              "label": "得饒人處小人過",
+              "img": null
+            },
+            {
+              "label": "小人不記大人過",
+              "img": null
+            }
+          ],
+          "alignLeft": true
+        },
+        {
+          "text": "Julia 對自己的國文評價是？",
+          "type": "text",
+          "options": [
+            {
+              "label": "我國文其實很好",
+              "img": null
+            },
+            {
+              "label": "我國文不差，只是比你們差",
+              "img": null
+            },
+            {
+              "label": "我只是成語比較自由",
+              "img": null
+            },
+            {
+              "label": "國文沒有標準答案",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "同事確診時，Julia 泡維他命 C，說自己要？",
+          "type": "text",
+          "options": [
+            {
+              "label": "未雨綢繆",
+              "img": null
+            },
+            {
+              "label": "亡羊補牢",
+              "img": null
+            },
+            {
+              "label": "防患未然",
+              "img": null
+            },
+            {
+              "label": "狗急跳牆",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "Julia 說同事請假可能是因為？",
+          "type": "text",
+          "options": [
+            {
+              "label": "胃食道逆流",
+              "img": null
+            },
+            {
+              "label": "胃腸道逆流",
+              "img": null
+            },
+            {
+              "label": "腸胃炎",
+              "img": null
+            },
+            {
+              "label": "胃道反流",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "迎娶流程聊到媒人時，Julia 把「媒人」叫成？",
+          "type": "text",
+          "options": [
+            {
+              "label": "媒婆",
+              "img": null
+            },
+            {
+              "label": "媒娘",
+              "img": null
+            },
+            {
+              "label": "媒母",
+              "img": null
+            },
+            {
+              "label": "媒姐",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "大家從「三陽開泰」想接四開頭成語，Julia 接了？",
+          "type": "text",
+          "options": [
+            {
+              "label": "四平八穩",
+              "img": null
+            },
+            {
+              "label": "四通八達",
+              "img": null
+            },
+            {
+              "label": "四平八達",
+              "img": null
+            },
+            {
+              "label": "四面楚歌",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "春酒結束後，Julia 把「最佳演出獎」說成？",
+          "type": "text",
+          "options": [
+            {
+              "label": "最出演佳獎",
+              "img": null
+            },
+            {
+              "label": "最佳出演獎",
+              "img": null
+            },
+            {
+              "label": "演出最佳獎",
+              "img": null
+            },
+            {
+              "label": "最優表演獎",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "以下哪一句是 Julia 的真實名言？",
+          "type": "text",
+          "options": [
+            {
+              "label": "我沒有生氣，我只是沒有在快樂",
+              "img": null
+            },
+            {
+              "label": "我沒有餓，我只是還沒吃飽",
+              "img": null
+            },
+            {
+              "label": "我沒有遲到，我只是比較晚到",
+              "img": null
+            },
+            {
+              "label": "我沒有累，我只是想躺著",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "「寧為雞首，不為牛後」到了 Julia 嘴裡變成？",
+          "type": "text",
+          "options": [
+            {
+              "label": "寧為雞頭，不為牛尾",
+              "img": null
+            },
+            {
+              "label": "寧為雞頭，還是寧為馬頭",
+              "img": null
+            },
+            {
+              "label": "寧做雞頭，不做馬尾",
+              "img": null
+            },
+            {
+              "label": "雞頭牛後都可以",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "Julia 曾認真問：「過午不食」的「午」是不是？",
+          "type": "text",
+          "options": [
+            {
+              "label": "午餐的午",
+              "img": null
+            },
+            {
+              "label": "午時的午",
+              "img": null
+            },
+            {
+              "label": "五點的五",
+              "img": null
+            },
+            {
+              "label": "午夜的午",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "Julia 形容葡萄甜度最高級時，說？",
+          "type": "text",
+          "options": [
+            {
+              "label": "甜到心坎裡",
+              "img": null
+            },
+            {
+              "label": "甜到骨子裡",
+              "img": null
+            },
+            {
+              "label": "甜到深喉嚨",
+              "img": null
+            },
+            {
+              "label": "甜到腦門",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "Julia 說某人「溫溫的但不吞吞」，她大概想表達？",
+          "type": "text",
+          "options": [
+            {
+              "label": "溫和但不吞吞吐吐",
+              "img": null
+            },
+            {
+              "label": "很溫暖又很會吃",
+              "img": null
+            },
+            {
+              "label": "脾氣很好但很慢",
+              "img": null
+            },
+            {
+              "label": "講話聲音很小",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "Kevin 跟以前的朋友重新變好，Julia 說他們可以？",
+          "type": "text",
+          "options": [
+            {
+              "label": "重修舊好",
+              "img": null
+            },
+            {
+              "label": "舊情復燃",
+              "img": null
+            },
+            {
+              "label": "重修舊愛",
+              "img": null
+            },
+            {
+              "label": "破鏡重圓",
+              "img": null
+            }
+          ],
+          "alignLeft": true
+        },
+        {
+          "text": "Julia 想說「工欲善其事」，結果說？",
+          "type": "text",
+          "options": [
+            {
+              "label": "工善欲其事",
+              "img": null
+            },
+            {
+              "label": "工欲善欲事",
+              "img": null
+            },
+            {
+              "label": "善工欲其事",
+              "img": null
+            },
+            {
+              "label": "工其欲善事",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "「暗自主張」最像是哪兩個概念融合？",
+          "type": "text",
+          "options": [
+            {
+              "label": "暗自盤算＋自作主張",
+              "img": null
+            },
+            {
+              "label": "暗渡陳倉＋擅自主張",
+              "img": null
+            },
+            {
+              "label": "暗中觀察＋自主行動",
+              "img": null
+            },
+            {
+              "label": "暗自竊喜＋先斬後奏",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "Julia 說「我只是側面敲擊」，真正想說？",
+          "type": "text",
+          "options": [
+            {
+              "label": "趁虛而入",
+              "img": null
+            },
+            {
+              "label": "旁敲側擊",
+              "img": null
+            },
+            {
+              "label": "敲山震虎",
+              "img": null
+            },
+            {
+              "label": "側面攻擊",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "Julia 說「我已經想不出出陳推新的活動了」，正確成語是？",
+          "type": "text",
+          "options": [
+            {
+              "label": "推陳出新",
+              "img": null
+            },
+            {
+              "label": "除舊布新",
+              "img": null
+            },
+            {
+              "label": "革故鼎新",
+              "img": null
+            },
+            {
+              "label": "標新立異",
+              "img": null
+            }
+          ],
+          "alignLeft": true
+        },
+        {
+          "text": "「雖小但五臟俱全的麻雀」在 Julia 的用法裡，是形容？",
+          "type": "text",
+          "options": [
+            {
+              "label": "個子很小",
+              "img": null
+            },
+            {
+              "label": "胃很小、吃不了多少",
+              "img": null
+            },
+            {
+              "label": "很小但很能幹",
+              "img": null
+            },
+            {
+              "label": "吃得少但長得快",
+              "img": null
+            }
+          ],
+          "alignLeft": true
+        },
+        {
+          "text": "Miles 穿很緊的灰色長袖 Polo，Julia 說看起來像？",
+          "type": "text",
+          "options": [
+            {
+              "label": "健身教練",
+              "img": null
+            },
+            {
+              "label": "灰色香腸",
+              "img": null
+            },
+            {
+              "label": "一個肉棒",
+              "img": null
+            },
+            {
+              "label": "穿太小件",
+              "img": null
+            }
+          ],
+          "alignLeft": true
+        },
+        {
+          "text": "朋友問 Julia 喜歡怎樣的身材，她回答？",
+          "type": "text",
+          "options": [
+            {
+              "label": "高高瘦瘦",
+              "img": null
+            },
+            {
+              "label": "精壯的，不喜歡軟軟的",
+              "img": null
+            },
+            {
+              "label": "壯但有點肉",
+              "img": null
+            },
+            {
+              "label": "都可以，看感覺",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "Julia 說：「下面有個很厲害的東西。」朋友第一反應是？",
+          "type": "text",
+          "options": [
+            {
+              "label": "哪裡？",
+              "img": null
+            },
+            {
+              "label": "誰？",
+              "img": null
+            },
+            {
+              "label": "多大？",
+              "img": null
+            },
+            {
+              "label": "要買嗎？",
+              "img": null
+            }
+          ],
+          "alignLeft": true
+        },
+        {
+          "text": "朋友叫 Julia 跟豪哥講話放輕鬆，她回答？",
+          "type": "text",
+          "options": [
+            {
+              "label": "我真的很鬆，我本人很鬆",
+              "img": null
+            },
+            {
+              "label": "我已經很放鬆了",
+              "img": null
+            },
+            {
+              "label": "我沒有緊張",
+              "img": null
+            },
+            {
+              "label": "我天生很自在",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "朋友說削出來的鉛筆短短很可愛，Julia 堅持？",
+          "type": "text",
+          "options": [
+            {
+              "label": "我要粗粗的",
+              "img": null
+            },
+            {
+              "label": "我要長長的，這樣用比較久",
+              "img": null
+            },
+            {
+              "label": "短的比較方便",
+              "img": null
+            },
+            {
+              "label": "尖一點就好",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "削完鉛筆後朋友問：「夠長了吧，好用嗎？」Julia 回？",
+          "type": "text",
+          "options": [
+            {
+              "label": "可以啦",
+              "img": null
+            },
+            {
+              "label": "還行",
+              "img": null
+            },
+            {
+              "label": "我要用過才知道",
+              "img": null
+            },
+            {
+              "label": "你自己用看看",
+              "img": null
+            }
+          ],
+          "alignLeft": true
+        },
+        {
+          "text": "討論年末活動玩漆彈時，Julia 表示？",
+          "type": "text",
+          "options": [
+            {
+              "label": "我喜歡埋伏",
+              "img": null
+            },
+            {
+              "label": "我喜歡野戰",
+              "img": null
+            },
+            {
+              "label": "我喜歡近戰",
+              "img": null
+            },
+            {
+              "label": "我只想觀戰",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "Julia 拿著很長的保溫瓶，對設計的推測是？",
+          "type": "text",
+          "options": [
+            {
+              "label": "比較好保溫",
+              "img": null
+            },
+            {
+              "label": "怕我沒辦法一手掌握吧",
+              "img": null
+            },
+            {
+              "label": "比較好清洗",
+              "img": null
+            },
+            {
+              "label": "比較不佔空間",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "看到 Mystery Ranch 小包包，被說像 Plain-me 後，Julia 問？",
+          "type": "text",
+          "options": [
+            {
+              "label": "怎麼拼？Play me 的包包？",
+              "img": null
+            },
+            {
+              "label": "Plain 是哪個牌子？",
+              "img": null
+            },
+            {
+              "label": "是不是 Playman？",
+              "img": null
+            },
+            {
+              "label": "那不是日本牌嗎？",
+              "img": null
+            }
+          ],
+          "alignLeft": true
+        },
+        {
+          "text": "聊到國中吹什麼樂器，Julia 被問「妳沒吹過喔？」她回？",
+          "type": "text",
+          "options": [
+            {
+              "label": "我沒學樂器",
+              "img": null
+            },
+            {
+              "label": "我都吹別的",
+              "img": null
+            },
+            {
+              "label": "我只吹直笛",
+              "img": null
+            },
+            {
+              "label": "我忘記了",
+              "img": null
+            }
+          ],
+          "alignLeft": true
+        },
+        {
+          "text": "吃牛肆時朋友說豆瓣醬加薑絲「這樣裝醬很乾」，Julia 回？",
+          "type": "text",
+          "options": [
+            {
+              "label": "加點水啊",
+              "img": null
+            },
+            {
+              "label": "進去就濕了",
+              "img": null
+            },
+            {
+              "label": "乾的比較香",
+              "img": null
+            },
+            {
+              "label": "那不要裝",
+              "img": null
+            }
+          ],
+          "alignLeft": true
+        },
+        {
+          "text": "朋友說「從妳嘴巴講出來，我真的吞不下去」，Julia 回？",
+          "type": "text",
+          "options": [
+            {
+              "label": "那就不要吞",
+              "img": null
+            },
+            {
+              "label": "那就享受就好",
+              "img": null
+            },
+            {
+              "label": "妳想太多了",
+              "img": null
+            },
+            {
+              "label": "喝水配一下",
+              "img": null
+            }
+          ],
+          "alignLeft": true
+        },
+        {
+          "text": "Kevin 說「大頭大頭，下雨不愁，人家有傘，我有大頭」，Julia 接？",
+          "type": "text",
+          "options": [
+            {
+              "label": "那你有小頭嗎",
+              "img": null
+            },
+            {
+              "label": "那你不用傘",
+              "img": null
+            },
+            {
+              "label": "頭大比較好",
+              "img": null
+            },
+            {
+              "label": "大頭也會淋濕",
+              "img": null
+            }
+          ],
+          "alignLeft": true
+        },
+        {
+          "text": "Kevin 說自己是「櫻桃小嘴」，Julia 改成？",
+          "type": "text",
+          "options": [
+            {
+              "label": "葡萄小嘴",
+              "img": null
+            },
+            {
+              "label": "菊花小嘴",
+              "img": null
+            },
+            {
+              "label": "芝麻小嘴",
+              "img": null
+            },
+            {
+              "label": "小鳥嘴",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "Julia 想說「見縫插針」，結果先說？",
+          "type": "text",
+          "options": [
+            {
+              "label": "妳不要趁縫射進來",
+              "img": null
+            },
+            {
+              "label": "妳不要見洞就鑽",
+              "img": null
+            },
+            {
+              "label": "妳不要趁機插話",
+              "img": null
+            },
+            {
+              "label": "妳不要無縫接軌",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "Julia 解釋為什麼不用「見縫插針」：因為？",
+          "type": "text",
+          "options": [
+            {
+              "label": "太文言",
+              "img": null
+            },
+            {
+              "label": "太 old school",
+              "img": null
+            },
+            {
+              "label": "太 tiny",
+              "img": null
+            },
+            {
+              "label": "太直接",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "Luke 站著使用升降桌，後來坐下，Julia 說？",
+          "type": "text",
+          "options": [
+            {
+              "label": "他累了",
+              "img": null
+            },
+            {
+              "label": "因為他不持久",
+              "img": null
+            },
+            {
+              "label": "站太久傷身",
+              "img": null
+            },
+            {
+              "label": "椅子比較舒服",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "朋友問按摩師會不會加強力道，Julia 接著問？",
+          "type": "text",
+          "options": [
+            {
+              "label": "那他會按哪裡？",
+              "img": null
+            },
+            {
+              "label": "你的點在哪裡？",
+              "img": null
+            },
+            {
+              "label": "要不要換按摩師？",
+              "img": null
+            },
+            {
+              "label": "有按到穴道嗎？",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "Julia 說自己被朋友亂寫黃色語錄，指控朋友？",
+          "type": "text",
+          "options": [
+            {
+              "label": "妳都在添加油醋",
+              "img": null
+            },
+            {
+              "label": "妳斷章取義",
+              "img": null
+            },
+            {
+              "label": "妳故意亂寫",
+              "img": null
+            },
+            {
+              "label": "妳在顛倒是非",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "Julia 覺得語錄要收版稅時，說？",
+          "type": "text",
+          "options": [
+            {
+              "label": "嘴巴也是智慧財產",
+              "img": null
+            },
+            {
+              "label": "手要錢，嘴巴就不要錢喔？",
+              "img": null
+            },
+            {
+              "label": "寫我的話要付費",
+              "img": null
+            },
+            {
+              "label": "每句都要算錢",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "Julia 想說「群龍無首」，結果說？",
+          "type": "text",
+          "options": [
+            {
+              "label": "群龍舞首",
+              "img": null
+            },
+            {
+              "label": "群龍舞",
+              "img": null
+            },
+            {
+              "label": "一起群龍舞首",
+              "img": null
+            },
+            {
+              "label": "群龍無舞",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "Julia 把「妄情」解釋成？",
+          "type": "text",
+          "options": [
+            {
+              "label": "忘不了的感情",
+              "img": null
+            },
+            {
+              "label": "狂妄的情愫",
+              "img": null
+            },
+            {
+              "label": "忘情於山水",
+              "img": null
+            },
+            {
+              "label": "太深的感情",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "有人問「老嫗」的老男人版本叫什麼，Julia 發明？",
+          "type": "text",
+          "options": [
+            {
+              "label": "老翁",
+              "img": null
+            },
+            {
+              "label": "老棒",
+              "img": null
+            },
+            {
+              "label": "老蚌",
+              "img": null
+            },
+            {
+              "label": "老叟",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "Julia 說「老棒」的「棒」是哪個棒？",
+          "type": "text",
+          "options": [
+            {
+              "label": "木棒的棒",
+              "img": null
+            },
+            {
+              "label": "很棒的棒",
+              "img": null
+            },
+            {
+              "label": "鷸蚌相爭的蚌",
+              "img": null
+            },
+            {
+              "label": "棒球的棒",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "Julia 說「又要馬兒吃草，又要馬兒愛吃草」，原本想講？",
+          "type": "text",
+          "options": [
+            {
+              "label": "又要馬兒好，又要馬兒不吃草",
+              "img": null
+            },
+            {
+              "label": "又要馬兒跑，又要馬兒不吃草",
+              "img": null
+            },
+            {
+              "label": "又要馬兒吃草，又要馬兒跑",
+              "img": null
+            },
+            {
+              "label": "馬兒要吃草才會跑",
+              "img": null
+            }
+          ],
+          "alignLeft": true
+        },
+        {
+          "text": "朋友問請客有沒有預算上限，Julia 說「是沒有，但……」",
+          "type": "text",
+          "options": [
+            {
+              "label": "吃人嘴軟",
+              "img": null
+            },
+            {
+              "label": "吃人手軟",
+              "img": null
+            },
+            {
+              "label": "拿人嘴短",
+              "img": null
+            },
+            {
+              "label": "吃飽手軟",
+              "img": null
+            }
+          ],
+          "alignLeft": true
+        },
+        {
+          "text": "Julia 被虧年紀大時，想反擊卻說成？",
+          "type": "text",
+          "options": [
+            {
+              "label": "妳不要一竿子打翻一條船",
+              "img": null
+            },
+            {
+              "label": "妳不要一鍋粥打翻一船人",
+              "img": null
+            },
+            {
+              "label": "妳不要一顆老鼠屎打翻一鍋粥",
+              "img": null
+            },
+            {
+              "label": "妳不要一船人壞了一鍋粥",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "朋友把「癡癡地看」轉述成「癡呆地看」，Julia 的反應？",
+          "type": "text",
+          "options": [
+            {
+              "label": "大笑",
+              "img": null
+            },
+            {
+              "label": "作勢要打人",
+              "img": null
+            },
+            {
+              "label": "認真解釋",
+              "img": null
+            },
+            {
+              "label": "完全沒聽懂",
+              "img": null
+            }
+          ],
+          "alignLeft": true
+        },
+        {
+          "text": "Julia 覺得自己被分到國文 C 班時，說？",
+          "type": "text",
+          "options": [
+            {
+              "label": "寧為雞頭，還是寧為馬頭",
+              "img": null
+            },
+            {
+              "label": "寧為雞首，不為牛後",
+              "img": null
+            },
+            {
+              "label": "雞頭也比牛尾好",
+              "img": null
+            },
+            {
+              "label": "我寧願當雞頭",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "Julia 把「幾隻小貓」說成？",
+          "type": "text",
+          "options": [
+            {
+              "label": "三貓小隻",
+              "img": null
+            },
+            {
+              "label": "幾貓小隻",
+              "img": null
+            },
+            {
+              "label": "小隻幾貓",
+              "img": null
+            },
+            {
+              "label": "小貓三兩",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "2024 的番外篇，Julia 又把同類說法講成？",
+          "type": "text",
+          "options": [
+            {
+              "label": "幾隻小貓",
+              "img": null
+            },
+            {
+              "label": "小貓幾隻",
+              "img": null
+            },
+            {
+              "label": "三兩小貓",
+              "img": null
+            },
+            {
+              "label": "幾貓小隻",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "朋友問 Julia 為什麼不知道附近有藥局，她回答？",
+          "type": "text",
+          "options": [
+            {
+              "label": "我真的不知道",
+              "img": null
+            },
+            {
+              "label": "我不是不知道，只是沒有注意到",
+              "img": null
+            },
+            {
+              "label": "我忘記了",
+              "img": null
+            },
+            {
+              "label": "我根本沒看過",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "Julia 認為抽菸可能導致什麼誇張後果？",
+          "type": "text",
+          "options": [
+            {
+              "label": "一輩子洗肺",
+              "img": null
+            },
+            {
+              "label": "一輩子洗胃",
+              "img": null
+            },
+            {
+              "label": "每天洗腎",
+              "img": null
+            },
+            {
+              "label": "一輩子吃藥",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "朋友叫 Julia 不要在那邊 543，她回？",
+          "type": "text",
+          "options": [
+            {
+              "label": "妳才不要 321",
+              "img": null
+            },
+            {
+              "label": "那妳不要 678",
+              "img": null
+            },
+            {
+              "label": "我哪有 543",
+              "img": null
+            },
+            {
+              "label": "妳才 987",
+              "img": null
+            }
+          ]
+        },
+        {
+          "text": "大家都穿條紋衣服時，Julia 說？",
+          "type": "text",
+          "options": [
+            {
+              "label": "今天大家都穿線條衣服",
+              "img": null
+            },
+            {
+              "label": "今天大家都穿長條圖衣服",
+              "img": null
+            },
+            {
+              "label": "今天是條紋日",
+              "img": null
+            },
+            {
+              "label": "今天像 Excel 圖表",
+              "img": null
+            }
+          ]
+        },
         {
           "text": "以下哪個人會是Julia的理想型",
           "type": "image",
