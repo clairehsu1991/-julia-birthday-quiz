@@ -249,24 +249,49 @@
   .lb-row{
     display:flex; align-items:center; gap:14px; background:var(--cream); border:1px solid var(--line);
     border-radius:16px; padding:14px 18px;
+    /* renderHostReveal()'s leaderboard reorders + counts up scores every question —
+       see animateRevealLeaderboard(). This transition is what makes a row sliding
+       to its new rank look like it's gliding rather than teleporting. */
+    transition: transform .6s cubic-bezier(.34,1.2,.4,1);
   }
   .lb-row.me{ border-color: var(--coral); background: rgba(232,101,75,0.08); }
-  .lb-rank{ font-family:'Fredoka',sans-serif; font-size:24px; width:34px; text-align:center; color:var(--ink-dim); }
+  .lb-rank{ font-family:'Fredoka',sans-serif; font-size:24px; width:34px; text-align:center; color:var(--ink-dim); transition:color .3s ease; }
   .lb-rank.top1{ color:var(--gold); font-size:30px; } .lb-rank.top2{ color:#9a9a9a; font-size:27px; } .lb-rank.top3{ color:var(--terracotta); font-size:27px; }
   .lb-name{ flex:1; font-weight:800; font-size:16px; display:flex; align-items:center; flex-wrap:wrap; }
   .lb-score{ font-family:'Fredoka',sans-serif; font-size:26px; color:var(--moss); }
-  .lb-delta{ font-size:12px; color:var(--leaf); font-weight:700; background:rgba(127,178,122,0.18); padding:2px 8px; border-radius:999px; }
+  .lb-delta{ font-size:12px; color:var(--leaf); font-weight:700; background:rgba(127,178,122,0.18); padding:2px 8px; border-radius:999px; opacity:0; transition:opacity .35s ease; }
+  .lb-delta.show{ opacity:1; }
 
+  /* ---------- 頒獎台／最終結果：真的有高低落差的凸台，人物站在台面上方 ---------- */
   .podium{ display:flex; align-items:flex-end; gap:12px; justify-content:center; width:100%; max-width:640px; margin:10px auto; }
-  .podium .p{ flex:1; background:var(--cream); border:1px solid var(--line); border-radius:16px 16px 0 0; padding:14px 8px 16px; text-align:center; }
-  .podium .p.first{ order:2; padding-top:26px; border-top:3px solid var(--gold); }
-  .podium .p.second{ order:1; border-top:3px solid #b9b9b9; }
-  .podium .p.third{ order:3; border-top:3px solid var(--terracotta); }
+  .podium .p{
+    position:relative; overflow:hidden; flex:1; background:linear-gradient(180deg, var(--cream), var(--sand-2));
+    border:1px solid var(--line); border-radius:16px 16px 0 0; padding:14px 8px 16px; text-align:center;
+    box-shadow: inset 0 2px 0 rgba(255,255,255,0.6), 0 6px 0 rgba(46,36,24,0.10);
+  }
+  /* Three different pedestal heights is what actually reads as "a podium" instead
+     of three identical cards — 1st noticeably taller than 2nd, 2nd taller than 3rd. */
+  .podium .p.first{ order:2; padding-top:26px; border-top:3px solid var(--gold); min-height:clamp(148px,24vh,232px); }
+  .podium .p.second{ order:1; border-top:3px solid #b9b9b9; min-height:clamp(110px,17vh,172px); }
+  .podium .p.third{ order:3; border-top:3px solid var(--terracotta); min-height:clamp(88px,13vh,138px); }
+  /* Giant translucent rank numeral "carved" into the pedestal face. */
+  .podium .p::before{
+    position:absolute; left:0; right:0; bottom:2px; text-align:center; font-family:'Fredoka',sans-serif;
+    font-weight:800; color:rgba(46,36,24,0.10); line-height:1; z-index:0; pointer-events:none;
+    font-size:clamp(46px,9vh,86px);
+  }
+  .podium .p.first::before{ content:'1'; } .podium .p.second::before{ content:'2'; } .podium .p.third::before{ content:'3'; }
+  .podium .avatar-badge, .podium .medal, .podium .name, .podium .score, .podium .sub{ position:relative; z-index:1; }
+  /* Pull the (enlarged) avatar up so the character visually stands ON TOP of the
+     pedestal rather than sitting inside it. */
+  .podium .avatar-badge{ display:block; font-size:2.5em; margin:-30px auto 2px; filter:drop-shadow(0 5px 6px rgba(46,36,24,0.28)); }
   .podium .medal{ font-size:30px; }
   .podium .name{ font-weight:800; font-size:14px; margin-top:4px; }
   .podium .score{ font-family:'Fredoka',sans-serif; font-size:24px; color:var(--moss); }
-  /* Awards podium: each rank fades/rises into place in sequence (3rd, 2nd, 1st)
-     instead of the whole board just appearing at once. */
+  /* Suspense count-up target used by countUpNumber() — see renderHostFinal(). */
+  .podium .score.counting{ color:var(--coral); }
+  /* Awards podium / final results: each rank fades/rises into place in sequence
+     (3rd, 2nd, 1st) instead of the whole board just appearing at once. */
   .podium .p.reveal{ opacity:0; transform:translateY(26px) scale(.94); transition:opacity .5s ease, transform .5s ease; }
   .podium .p.reveal.show{ opacity:1; transform:translateY(0) scale(1); }
 
@@ -291,6 +316,24 @@
   @keyframes rpsWiggle{ 0%,100%{ transform:rotate(0deg) scale(1); } 25%{ transform:rotate(-3deg) scale(1.03); } 75%{ transform:rotate(3deg) scale(1.03); } }
   /* The winning medal pops into place once the draw lands — same beat as the podium reveal. */
   .rps-hand.landed{ font-size:26px; animation: pulse .5s ease; }
+  /* A player already placed by a solo win/loss (see evaluateRpsRound()) sits out
+     the next throw — dim their pill so it's visually clear they're done. */
+  .player-pill.rps-placed{ opacity:.55; }
+
+  /* ---------- 玩家自己按停的猜拳畫面 ---------- */
+  .my-rps-hand{ font-size:clamp(70px,22vw,110px); margin:10px 0; line-height:1; }
+
+  /* ---------- 許願卡「洗牌」發牌動畫 ---------- */
+  @keyframes cardDeal{
+    0%{ opacity:0; transform:translateY(-36px) rotate(var(--deal-rot,0deg)) scale(.72); }
+    65%{ opacity:1; transform:translateY(5px) rotate(0deg) scale(1.04); }
+    100%{ opacity:1; transform:translateY(0) rotate(0deg) scale(1); }
+  }
+  .opt-card.card-deal{ animation: cardDeal .5s cubic-bezier(.34,1.56,.64,1) both; }
+
+  /* ---------- 壽星答案揭曉：先賣關子再翻牌 ---------- */
+  @keyframes revealPop{ 0%{ transform:scale(.9); } 55%{ transform:scale(1.05); } 100%{ transform:scale(1); } }
+  .opt-card.reveal-pop{ animation: revealPop .5s cubic-bezier(.34,1.56,.64,1); }
 
   /* ---------- 作答紀錄 ---------- */
   .answerlog-row{ text-align:left; }
@@ -357,6 +400,8 @@
     .confetti-piece{ animation:none; display:none; }
     .btn, .opt-card{ transition:none; }
     .player-pill.shuffling, .player-pill.shuffling .rps-hand, .rps-hand.landed{ animation:none; }
+    .lb-row{ transition:none; }
+    .opt-card.card-deal, .opt-card.reveal-pop{ animation:none; }
   }
 </style>
 </head>
@@ -605,10 +650,10 @@ function optionsGridClass(q){
   const hasLongLabel = q.options.some(o => (o && o.label || '').length > LONG_LABEL_CHARS);
   return 'options-grid' + (hasLongLabel ? ' stacked' : '');
 }
-function revealRowHtml(opt, i, count, isShouxingPick){
+function revealRowHtml(opt, i, count, isShouxingPick, rowId){
   const thumb = opt.img ? `<img src="${opt.img}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;flex:none">` : '';
   return `
-    <div class="opt-card ${OPT_CLASS[i]} ${isShouxingPick?'shouxing-glow':'dim'}" style="flex-direction:row;align-items:center">
+    <div class="opt-card ${OPT_CLASS[i]} ${isShouxingPick?'shouxing-glow':'dim'}"${rowId?` id="${rowId}"`:''} style="flex-direction:row;align-items:center">
       <span class="tag">${OPT_LABEL[i]}</span>
       ${thumb}
       <span style="flex:1">${esc(opt.label||'')}</span>
@@ -867,6 +912,7 @@ function stopHostTimers(){
   if (hostPollHandle) clearInterval(hostPollHandle);
   hostCountdownHandle = null;
   hostPollHandle = null;
+  stopHostRpsSpin();
 }
 /* Park the game so players' phones fall back to a friendly "host stepped away" screen
    instead of freezing on whatever they were last shown. */
@@ -1493,7 +1539,15 @@ async function startLobby(){
     topIds: [],
     bottomIds: [],
     pickOrder: [],
-    pickedCards: {}
+    pickedCards: {},
+    rpsActive: [],
+    rpsPicks: {},
+    rpsRoundToken: null,
+    rpsThrowSeq: 0,
+    rpsSolo: null,
+    rpsFinalOrder: null,
+    rpsRoundMsg: '',
+    rpsMedalOrder: null
   };
   await sSet('game:state', hostState);
   renderHostLobby();
@@ -1642,6 +1696,7 @@ async function hostPollTick(){
     if (['lobby','question','reveal'].includes(hostState.status)) await processJoins();
     if (hostState.status === 'question') await processAnswers();
     if (['lobby','question','reveal','final'].includes(hostState.status)) await processStarCards();
+    if (hostState.status === 'awards' && hostState.awardsStage === 'rps') await processRpsThrows();
     if (hostState.status === 'awards' && hostState.awardsStage === 'picking') await processCardPicks();
   } finally { pollBusy = false; }
 }
@@ -1854,12 +1909,22 @@ function renderHostReveal(){
   const q = hostState.questions[hostState.questionIndex];
   const sx = hostState.shouxingId;
   const shouxingChoice = hostState.currentAnswers[sx] ? hostState.currentAnswers[sx].choice : null;
+  const shouxingLabel = shouxingChoice!=null && q.options[shouxingChoice] ? q.options[shouxingChoice].label : '';
   const counts = [0,0,0,0];
   Object.values(hostState.currentAnswers).forEach(a=>{ if (a.choice!=null) counts[a.choice]++; });
   // The 壽星 sets the answer rather than guessing it, so they never score —
   // leaving them in the table just parked them at the bottom on 0. They get
   // their own line above the board instead.
-  const ranked = rankedGuessers(hostState.players, sx);
+  // The leaderboard below animates FROM where everyone stood before this
+  // question's points landed TO the freshly-updated ranking (see
+  // animateRevealLeaderboard()). goToReveal() already added the points to
+  // hostState.players[id].score by the time we get here, so back them back out
+  // just to compute the starting frame — the authoritative score is untouched.
+  const prevRanked = Object.entries(hostState.players)
+    .filter(([id]) => id !== sx)
+    .map(([id, p]) => [id, p, p.score - ((hostState.currentAnswers[id] && hostState.currentAnswers[id].points) || 0)])
+    .sort((a, b) => b[2] - a[2]);
+  const newRanked = rankedGuessers(hostState.players, sx);
   const sxName = hostState.players[sx] ? hostState.players[sx].name : '';
   const isLast = hostState.questionIndex >= hostState.questions.length - 1;
 
@@ -1868,22 +1933,26 @@ function renderHostReveal(){
       ${hostNav(true)}
       <span class="eyebrow">🎂 壽星的選擇</span>
       ${qtextHtml(q.text, "font-size:clamp(17px,3vw,24px);max-width:30em", q.alignLeft)}
-      ${shouxingChoice==null ? '<p class="sub" style="text-align:center">壽星這題沒來得及作答，這題大家都不計分</p>' : ''}
+      ${shouxingChoice==null
+        ? '<p class="sub" style="text-align:center">壽星這題沒來得及作答，這題大家都不計分</p>'
+        : `<p class="sub" id="reveal-suspense" style="text-align:center;font-weight:700">🤔 壽星選的是<span class="waiting-dots"><span>.</span><span>.</span><span>.</span></span></p>`}
       <div class="options-grid">
-        ${q.options.map((o,i)=> revealRowHtml(o, i, counts[i], i===shouxingChoice)).join('')}
+        ${q.options.map((o,i)=> revealRowHtml(o, i, counts[i], false, 'reveal-opt-' + i)).join('')}
       </div>
       <div class="panel" style="margin-top:8px">
         <h2>🏆 目前排行榜</h2>
         ${sxName? `<p class="sub" style="margin-top:2px">🎂 ${nameTag(hostState.players[sx])} 是今天的壽星，負責出正解，不列入排名</p>`:''}
-        <div class="stack" style="margin-top:10px">
-          ${ranked.map(([id,p],i)=>`
-            <div class="lb-row">
+        <div class="stack" style="margin-top:10px" id="reveal-leaderboard">
+          ${prevRanked.map(([id,p,prevScore],i)=>{
+            const points = (hostState.currentAnswers[id] && hostState.currentAnswers[id].points) || 0;
+            return `
+            <div class="lb-row" data-pid="${id}">
               <div class="lb-rank ${i===0?'top1':i===1?'top2':i===2?'top3':''}">${i+1}</div>
               <div class="lb-name">${avatarSpan(p.avatar)}${nameTag(p)}</div>
-              ${hostState.currentAnswers[id] && hostState.currentAnswers[id].points>0 ? `<div class="lb-delta">+${hostState.currentAnswers[id].points}</div>` : ''}
-              <div class="lb-score num">${p.score}</div>
+              ${points>0 ? `<div class="lb-delta">+${points}</div>` : ''}
+              <div class="lb-score num">${prevScore}</div>
             </div>
-          `).join('') || '<p class="sub">還沒有人猜</p>'}
+          `;}).join('') || '<p class="sub">還沒有人猜</p>'}
         </div>
       </div>
       <div class="btn-row" style="margin-top:6px">
@@ -1891,6 +1960,73 @@ function renderHostReveal(){
       </div>
     </div></div>
   `);
+
+  // Suspense: hold the highlight back for a beat, THEN pop it in — a flat
+  // instant highlight read as "nothing happened" in the same way the old
+  // text-only RPS hand swap did (see the .shuffling CSS comment).
+  if (shouxingChoice != null){
+    setTimeout(()=>{
+      const el = document.getElementById('reveal-opt-' + shouxingChoice);
+      if (el){ el.classList.remove('dim'); el.classList.add('shouxing-glow', 'reveal-pop'); }
+      const banner = document.getElementById('reveal-suspense');
+      if (banner) banner.innerHTML = `🎂 壽星選的是「${esc(shouxingLabel)}」！`;
+    }, 900);
+  }
+  setTimeout(()=> animateRevealLeaderboard(newRanked), shouxingChoice!=null ? 1900 : 500);
+}
+/* Hand-rolled FLIP (First-Last-Invert-Play): the leaderboard rows already sit in
+   the DOM in their PRE-question order/scores (see prevRanked above); reorder the
+   real elements to the new ranking, then animate each one back from where it used
+   to be via a transform, while the score number counts up in step. No framework —
+   `render()` nukes and rebuilds #app on every screen change, so this only works
+   because we deliberately render the "before" frame first and animate in place
+   afterward instead of re-rendering. */
+function animateRevealLeaderboard(newRanked){
+  const container = document.getElementById('reveal-leaderboard');
+  if (!container) return;
+  const firstTops = {};
+  container.querySelectorAll('.lb-row').forEach(r => { firstTops[r.dataset.pid] = r.getBoundingClientRect().top; });
+  newRanked.forEach(([id]) => {
+    const el = container.querySelector('.lb-row[data-pid="' + id + '"]');
+    if (el) container.appendChild(el); // reorders to the new rank order
+  });
+  newRanked.forEach(([id, p], i) => {
+    const el = container.querySelector('.lb-row[data-pid="' + id + '"]');
+    if (!el) return;
+    const lastTop = el.getBoundingClientRect().top;
+    const delta = (firstTops[id] != null ? firstTops[id] : lastTop) - lastTop;
+    if (delta){
+      el.style.transition = 'none';
+      el.style.transform = 'translateY(' + delta + 'px)';
+      el.getBoundingClientRect(); // force reflow so the next assignment animates (the "Invert-Play" step)
+      el.style.transition = '';
+      el.style.transform = '';
+    }
+    const rankEl = el.querySelector('.lb-rank');
+    if (rankEl){
+      rankEl.textContent = i + 1;
+      rankEl.className = 'lb-rank' + (i===0?' top1':i===1?' top2':i===2?' top3':'');
+    }
+    const scoreEl = el.querySelector('.lb-score');
+    if (scoreEl) countUpNumber(scoreEl, Number(scoreEl.textContent) || 0, p.score, 750);
+    const deltaEl = el.querySelector('.lb-delta');
+    if (deltaEl) setTimeout(()=> deltaEl.classList.add('show'), 150);
+  });
+}
+/* Simple eased count-up used by the reveal leaderboard and the final results
+   podium. Reads the DOM element's own current text as the starting number so
+   callers never have to track "what was on screen before" separately. */
+function countUpNumber(el, from, to, duration){
+  if (!el) return;
+  if (from === to){ el.textContent = to; return; }
+  const start = Date.now();
+  const step = () => {
+    const t = Math.min(1, (Date.now() - start) / duration);
+    const eased = 1 - Math.pow(1 - t, 3);
+    el.textContent = Math.round(from + (to - from) * eased);
+    if (t < 1) requestAnimationFrame(step); else el.textContent = to;
+  };
+  requestAnimationFrame(step);
 }
 
 /* ============================================================
@@ -1901,7 +2037,8 @@ function goFinal(){
   hostState.status = 'final';
   sSet('game:state', hostState);
   renderHostFinal();
-  spawnConfetti();
+  // Confetti now fires when 1st place actually reveals (see
+  // animateFinalPodiumReveal), not the instant this screen mounts.
 }
 function renderHostFinal(){
   const sx = hostState.shouxingId;
@@ -1917,9 +2054,9 @@ function renderHostFinal(){
       <h1 class="marquee-title">最終<span class="hl">排行榜</span></h1>
       ${sxName? `<div class="chip shouxing" style="margin:0 auto">🎂 今天的壽星 ${nameTag(hostState.players[sx])}</div>`:''}
       <div class="podium">
-        ${top3[1]?`<div class="p second">${avatarSpan(top3[1][1].avatar)}<div class="medal">🥈</div><div class="name">${nameTag(top3[1][1])}</div><div class="score num">${top3[1][1].score}</div></div>`:''}
-        ${top3[0]?`<div class="p first">${avatarSpan(top3[0][1].avatar)}<div class="medal">🥇</div><div class="name">${nameTag(top3[0][1])}</div><div class="score num">${top3[0][1].score}</div></div>`:''}
-        ${top3[2]?`<div class="p third">${avatarSpan(top3[2][1].avatar)}<div class="medal">🥉</div><div class="name">${nameTag(top3[2][1])}</div><div class="score num">${top3[2][1].score}</div></div>`:''}
+        ${top3[1]?`<div class="p second reveal" id="fp-2">${avatarSpan(top3[1][1].avatar)}<div class="medal">🥈</div><div class="name">${nameTag(top3[1][1])}</div><div class="score num" id="fp-2-score">0</div></div>`:''}
+        ${top3[0]?`<div class="p first reveal" id="fp-1">${avatarSpan(top3[0][1].avatar)}<div class="medal">🥇</div><div class="name">${nameTag(top3[0][1])}</div><div class="score num" id="fp-1-score">0</div></div>`:''}
+        ${top3[2]?`<div class="p third reveal" id="fp-3">${avatarSpan(top3[2][1].avatar)}<div class="medal">🥉</div><div class="name">${nameTag(top3[2][1])}</div><div class="score num" id="fp-3-score">0</div></div>`:''}
       </div>
       ${rest.length? `<div class="stack" style="width:100%;max-width:520px">
         ${rest.map(([id,p],i)=>`
@@ -1933,6 +2070,28 @@ function renderHostFinal(){
       </div>
     </div></div>
   `);
+  animateFinalPodiumReveal(top3);
+}
+/* Suspense reveal for the final results: 3rd, then 2nd, then 1st (confetti fires
+   on 1st), each one's score counting up from 0 instead of just appearing —
+   same "build to the big moment" shape as animatePodiumReveal() for the awards
+   ceremony below, just with a number animating alongside the fade/rise. */
+function animateFinalPodiumReveal(top3){
+  const seq = [
+    [top3[2], 'fp-3', 'fp-3-score', 0],
+    [top3[1], 'fp-2', 'fp-2-score', 900],
+    [top3[0], 'fp-1', 'fp-1-score', 1800]
+  ];
+  seq.forEach(([entry, elId, scoreId, delay]) => {
+    if (!entry) return;
+    setTimeout(()=>{
+      const el = document.getElementById(elId);
+      if (el) el.classList.add('show');
+      const scoreEl = document.getElementById(scoreId);
+      if (scoreEl) countUpNumber(scoreEl, 0, entry[1].score, 800);
+      if (elId === 'fp-1') spawnConfetti();
+    }, delay);
+  });
 }
 /* The round is already over, so this needs no confirmation. */
 async function hostNewGame(){
@@ -1956,6 +2115,15 @@ function restartSameGame(){
   hostState.bottomIds = [];
   hostState.pickOrder = [];
   hostState.pickedCards = {};
+  hostState.rpsActive = [];
+  hostState.rpsPicks = {};
+  hostState.rpsRoundToken = null;
+  hostState.rpsThrowSeq = 0;
+  hostState.rpsSolo = null;
+  hostState.rpsFinalOrder = null;
+  hostState.rpsRoundMsg = '';
+  hostState.rpsMedalOrder = null;
+  _lastPickingAnimId = null;
   // Re-roll so a second round isn't a repeat of the first.
   if (RANDOM_ORDER || RANDOM_OPTIONS || DRAW_COUNT) hostState.questions = buildPlayList();
   sSet('game:state', hostState);
@@ -2034,84 +2202,264 @@ function animatePodiumReveal(){
     }, delay);
   });
 }
+/* ---------- 最後三名的真猜拳（每人自己手機按停決定手勢） ----------
+   Each real player in hostState.rpsActive spins their own hand on their own
+   phone and taps "出拳" to lock it in (renderPlayerRpsThrow/submitPlayerRpsHand,
+   below in the PLAYER section) — writing it to rpsthrow:<id>. The host polls for
+   those (processRpsThrows) and, once everyone active has thrown, evaluates the
+   round with ordinary roshambo rules:
+     - 2 players: differing hands → winner/loser; same hand → tie, re-throw.
+     - 3 players, all same OR all three different (rock/paper/scissors, a 3-way
+       cycle with no winner) → tie, re-throw all three.
+     - 3 players, exactly 2 distinct hands → the winning hand's side wins. If
+       only 1 player holds the winning hand, THEY are the sole winner and go
+       straight to the front of the final order; the other two re-throw for the
+       remaining two spots. If 2 players hold the winning hand, the lone loser
+       goes straight to the back of the final order; the other two re-throw for
+       the remaining two spots.
+   This can only ever produce at most one "solo" placement before the field is
+   down to 2 (3 → 2 removes exactly one), so hostState.rpsSolo only ever needs
+   to hold a single {id, place} — see finalize() inside evaluateRpsRound(). */
+const HAND_EMOJI = { rock:'✊', paper:'✋', scissors:'✌️' };
+function rpsBeats(a, b){ return (a==='rock'&&b==='scissors') || (a==='scissors'&&b==='paper') || (a==='paper'&&b==='rock'); }
+let hostRpsSpinHandle = null;
+function stopHostRpsSpin(){
+  if (hostRpsSpinHandle){ clearInterval(hostRpsSpinHandle); hostRpsSpinHandle = null; }
+}
+/* Purely cosmetic — cycles the emoji on any pill that's active and hasn't
+   locked in yet, so the projector shows the same "still deciding" energy the
+   old host-only draw had. It never touches hostState; the real result only
+   ever comes from processRpsThrows()/hostForceRps(). */
+function startHostRpsSpin(){
+  stopHostRpsSpin();
+  const hands = ['✊','✋','✌️'];
+  hostRpsSpinHandle = setInterval(()=>{
+    const active = (hostState && hostState.rpsActive) || [];
+    const picks = (hostState && hostState.rpsPicks) || {};
+    active.forEach(id=>{
+      if (picks[id]) return;
+      const el = document.getElementById('rps-hand-' + id);
+      if (el) el.textContent = hands[Math.floor(Math.random()*3)];
+    });
+  }, 150);
+}
 function goAwardsRps(){
+  const bottom = (hostState.bottomIds||[]).filter(id=>hostState.players[id]);
   hostState.awardsStage = 'rps';
+  hostState.rpsRoundMsg = '';
+  hostState.rpsMedalOrder = null;
+  if (bottom.length >= 2){
+    hostState.rpsActive = bottom.slice();
+    hostState.rpsSolo = null;
+    hostState.rpsFinalOrder = null;
+    hostState.rpsThrowSeq = 0;
+    startRpsThrow();
+  } else {
+    // 0 or 1 people in "最後三名" — nothing to compare, nothing to draw.
+    hostState.rpsActive = [];
+    hostState.rpsFinalOrder = bottom.slice();
+    hostState.pickOrder = bottom.slice();
+    sSet('game:state', hostState);
+    renderHostAwardsRps();
+  }
+}
+function startRpsThrow(){
+  hostState.rpsThrowSeq = (hostState.rpsThrowSeq||0) + 1;
+  hostState.rpsRoundToken = hostState.roundId + '_rps' + hostState.rpsThrowSeq;
+  hostState.rpsPicks = {};
+  hostState.rpsRoundMsg = '';
   sSet('game:state', hostState);
   renderHostAwardsRps();
+  startHostRpsSpin();
 }
 function renderHostAwardsRps(){
   const bottom = (hostState.bottomIds||[]).map(id=>[id, hostState.players[id]]).filter(([,p])=>p);
+  if (!bottom.length){
+    render(`
+      <div class="shell"><div class="col" style="align-items:center;text-align:center">
+        ${hostNav(true)}
+        <span class="eyebrow">🃏 最後三名 & 許願卡</span>
+        <h1 class="marquee-title" style="font-size:clamp(26px,5vw,42px)">誰先選<span class="hl">許願卡</span>？</h1>
+        <p class="sub">這場人數不到三位猜猜的人，這次先跳過猜拳環節。</p>
+        <div class="btn-row" style="margin-top:10px"><button class="btn" onclick="finishAwardsNoBottom()">下一步 →</button></div>
+      </div></div>
+    `);
+    return;
+  }
+  if (bottom.length === 1){
+    render(`
+      <div class="shell"><div class="col" style="align-items:center;text-align:center">
+        ${hostNav(true)}
+        <span class="eyebrow">🃏 最後三名 & 許願卡</span>
+        <h1 class="marquee-title" style="font-size:clamp(26px,5vw,42px)">誰先選<span class="hl">許願卡</span>？</h1>
+        <p class="sub">這場只有一位最後一名，不用猜拳，直接選卡！</p>
+        <div class="players-grid">${avatarSpan(bottom[0][1].avatar)}${nameTag(bottom[0][1])}</div>
+        <div class="btn-row" style="margin-top:10px"><button class="btn" onclick="proceedToPickingFromRps()">下一步 →</button></div>
+      </div></div>
+    `);
+    return;
+  }
+  const active = hostState.rpsActive || [];
+  const picks = hostState.rpsPicks || {};
+  const medal = ['🥇','🥈','🥉'];
+  const medalOrder = hostState.rpsMedalOrder || [];
+  const defaultMsg = active.length === 3
+    ? '三人猜拳！三人同手勢或三人各出一種都算重來；兩人同手勢、一人不同，看那個不同手勢的輸贏決定他排最前面還是排最後面。'
+    : '最後兩人猜拳，贏的排前面！';
   render(`
     <div class="shell"><div class="col" style="align-items:center;text-align:center">
       ${hostNav(true)}
       <span class="eyebrow">🃏 最後三名 & 許願卡</span>
-      <h1 class="marquee-title" style="font-size:clamp(26px,5vw,42px)">誰先選<span class="hl">許願卡</span>？</h1>
-      <p class="sub">猜拳決定順序，贏的人優先挑一張壽星準備的任務卡</p>
-      ${bottom.length ? `
-        <div class="players-grid" id="rps-players">
-          ${bottom.map(([id,p])=>`<div class="player-pill" id="rps-p-${id}">${avatarSpan(p.avatar)}${nameTag(p)}<span class="rps-hand" id="rps-hand-${id}">✊</span></div>`).join('')}
-        </div>
-        <div class="btn-row" style="margin-top:10px"><button class="btn" id="rps-btn" onclick="runRpsDraw()">🎲 開始猜拳！</button></div>
-      ` : `
-        <p class="sub">這場人數不到三位猜猜的人，這次先跳過猜拳環節。</p>
-        <div class="btn-row" style="margin-top:10px"><button class="btn" onclick="finishAwardsNoBottom()">下一步 →</button></div>
-      `}
+      <h1 class="marquee-title" style="font-size:clamp(26px,5vw,42px)">猜拳決定<span class="hl">選卡順序</span></h1>
+      <p class="sub" id="rps-status-msg">${esc(hostState.rpsRoundMsg || defaultMsg)}</p>
+      <div class="players-grid" id="rps-players">
+        ${bottom.map(([id,p])=>{
+          const isActive = active.includes(id);
+          const thrown = !!picks[id];
+          const solo = hostState.rpsSolo && hostState.rpsSolo.id===id ? hostState.rpsSolo.place : null;
+          const medalIdx = medalOrder.indexOf(id);
+          let hand;
+          if (medalIdx >= 0) hand = medal[medalIdx] || '';
+          else if (thrown) hand = HAND_EMOJI[picks[id]];
+          else if (isActive) hand = '✊';
+          else hand = solo === 'front' ? '⏫' : solo === 'back' ? '⏬' : '—';
+          return `<div class="player-pill ${isActive && !thrown ? 'shuffling' : ''} ${solo?'rps-placed':''}" id="rps-p-${id}">
+            ${avatarSpan(p.avatar)}${nameTag(p)}
+            <span class="rps-hand ${thrown||medalIdx>=0?'landed':''}" id="rps-hand-${id}">${hand}</span>
+          </div>`;
+        }).join('')}
+      </div>
+      <div class="btn-row" style="margin-top:10px">
+        <button class="btn ghost" onclick="hostForceRps()">⏭ 還有人沒出拳？幫他們隨機出拳</button>
+      </div>
     </div></div>
   `);
 }
-/* Not a real synced 3-way rock-paper-scissors (phones drift, ties are common) —
-   just a fun animated draw that LOOKS like everyone's throwing hands, then lands
-   on a genuinely random pick order. */
-function runRpsDraw(){
-  const btn = document.getElementById('rps-btn');
-  if (btn) btn.disabled = true;
-  const ids = (hostState.bottomIds||[]).slice();
-  const hands = ['✊','✋','✌️'];
-  // Wiggle the whole pill in time with the hand-swap below — see the .shuffling
-  // CSS comment for why the text swap alone didn't read as an animation.
-  ids.forEach(id=>{
-    const pill = document.getElementById('rps-p-' + id);
-    if (pill) pill.classList.add('shuffling');
+/* Fallback for a phone that's gone quiet (or a solo test player with no phone
+   at all) — force a random hand for every active player who hasn't thrown yet
+   this round, then evaluate immediately if that completes the round. */
+function hostForceRps(){
+  const active = hostState.rpsActive || [];
+  const shapes = ['rock','paper','scissors'];
+  let changed = false;
+  active.forEach(id=>{
+    if (hostState.rpsPicks[id]) return;
+    hostState.rpsPicks[id] = shapes[Math.floor(Math.random()*3)];
+    changed = true;
   });
-  let ticks = 0;
-  const handle = setInterval(()=>{
-    ticks++;
-    ids.forEach(id=>{
-      const el = document.getElementById('rps-hand-' + id);
-      if (el) el.textContent = hands[Math.floor(Math.random()*3)];
-    });
-    if (ticks >= 10){
-      clearInterval(handle);
-      finishRpsDraw(ids);
-    }
-  }, 180);
+  if (!changed) return;
+  sSet('game:state', hostState);
+  renderHostAwardsRps();
+  if (active.every(id => hostState.rpsPicks[id])) evaluateRpsRound();
 }
-async function finishRpsDraw(ids){
-  const order = shuffled(ids);
-  const medal = ['🥇','🥈','🥉'];
-  ids.forEach(id=>{
-    const pill = document.getElementById('rps-p-' + id);
-    if (pill) pill.classList.remove('shuffling');
-  });
-  order.forEach((id,i)=>{
-    const el = document.getElementById('rps-hand-' + id);
-    if (el){ el.textContent = medal[i] || ''; el.classList.add('landed'); }
-  });
-  hostState.pickOrder = order;
-  hostState.pickedCards = {};
-  for (const id of order) await sDel('cardpick:' + id);
-  await sSet('game:state', hostState);
-  setTimeout(()=>{
-    hostState.awardsStage = 'picking';
+/* Purely synchronous — like goToReveal(), nothing here awaits, so nothing can
+   interleave and see a half-updated hostState. The async bits (persisting,
+   and moving on after a short suspense pause) happen in the scheduled
+   continuations below, each re-checking rpsRoundToken/awardsStage first in
+   case the host force-filled the rest of a round that a real submission was
+   also mid-flight for — same discipline as processAnswers(). */
+function evaluateRpsRound(){
+  const token = hostState.rpsRoundToken;
+  const active = hostState.rpsActive.slice();
+  const picks = hostState.rpsPicks;
+  const stillCurrent = () => hostState.rpsRoundToken === token && hostState.awardsStage === 'rps';
+
+  const restart = (msg) => {
+    hostState.rpsRoundMsg = msg;
     sSet('game:state', hostState);
-    renderHostAwardsPicking();
-  }, 1300);
+    renderHostAwardsRps();
+    setTimeout(()=>{ if (stillCurrent()) startRpsThrow(); }, 1700);
+  };
+  const finalize = (order) => {
+    hostState.rpsFinalOrder = order;
+    hostState.pickOrder = order;
+    hostState.rpsMedalOrder = order;
+    hostState.rpsActive = [];
+    hostState.rpsRoundMsg = '🏆 順序決定了！';
+    sSet('game:state', hostState);
+    renderHostAwardsRps();
+    setTimeout(()=>{ if (stillCurrent()) proceedToPickingFromRps(); }, 1700);
+  };
+  const advanceSolo = (soloId, place, nextActive) => {
+    const name = hostState.players[soloId] ? hostState.players[soloId].name : '';
+    hostState.rpsSolo = { id: soloId, place };
+    hostState.rpsActive = nextActive;
+    hostState.rpsRoundMsg = place === 'front'
+      ? ('🎉 ' + name + ' 手氣最好，直接排最前面！剩下兩人再猜一輪')
+      : ('😅 ' + name + ' 手氣最背，直接墊底！剩下兩人再猜一輪');
+    sSet('game:state', hostState);
+    renderHostAwardsRps();
+    setTimeout(()=>{ if (stillCurrent()) startRpsThrow(); }, 1900);
+  };
+
+  if (active.length === 2){
+    const [a, b] = active;
+    if (picks[a] === picks[b]){ restart('🤝 平手！重新猜拳一次'); return; }
+    const aWins = rpsBeats(picks[a], picks[b]);
+    const winner = aWins ? a : b, loser = aWins ? b : a;
+    let order;
+    if (hostState.rpsSolo && hostState.rpsSolo.place === 'front') order = [hostState.rpsSolo.id, winner, loser];
+    else if (hostState.rpsSolo && hostState.rpsSolo.place === 'back') order = [winner, loser, hostState.rpsSolo.id];
+    else order = [winner, loser];
+    finalize(order);
+    return;
+  }
+  // active.length === 3
+  const [a, b, c] = active;
+  const uniqShapes = [...new Set([picks[a], picks[b], picks[c]])];
+  if (uniqShapes.length === 1 || uniqShapes.length === 3){ restart('🤝 平手！三人重新猜拳'); return; }
+  const [s1, s2] = uniqShapes;
+  const winningShape = rpsBeats(s1, s2) ? s1 : s2;
+  const winners = active.filter(id => picks[id] === winningShape);
+  const losers = active.filter(id => picks[id] !== winningShape);
+  if (winners.length === 1) advanceSolo(winners[0], 'front', losers);
+  else advanceSolo(losers[0], 'back', winners);
+}
+/* Poll-driven pickup of real players' rpsthrow:<id> submissions for the
+   CURRENT round token — same "recheck before acting" shape as processAnswers(),
+   since evaluateRpsRound()/startRpsThrow() (triggered by the host tapping the
+   force button) can run in between two awaits here. */
+async function processRpsThrows(){
+  const token = hostState.rpsRoundToken;
+  const active = hostState.rpsActive || [];
+  let changed = false;
+  for (const id of active){
+    if (hostState.rpsRoundToken !== token || hostState.awardsStage !== 'rps') return;
+    if (hostState.rpsPicks[id]) continue;
+    const info = await sGet('rpsthrow:' + id);
+    if (hostState.rpsRoundToken !== token || hostState.awardsStage !== 'rps') return;
+    if (hostState.rpsPicks[id]) continue;               // race guard
+    if (!info || info.token !== token) continue;         // stale or not-yet-submitted
+    if (!['rock','paper','scissors'].includes(info.hand)) continue;
+    hostState.rpsPicks[id] = info.hand;
+    changed = true;
+  }
+  if (hostState.rpsRoundToken !== token || hostState.awardsStage !== 'rps') return;
+  if (changed){
+    await sSet('game:state', hostState);
+    renderHostAwardsRps();
+  }
+  if (active.length && active.every(id => hostState.rpsPicks[id])) evaluateRpsRound();
+}
+function proceedToPickingFromRps(){
+  stopHostRpsSpin();
+  hostState.awardsStage = 'picking';
+  hostState.pickedCards = {};
+  const order = hostState.pickOrder || [];
+  order.forEach(id => { sDel('rpsthrow:' + id); sDel('cardpick:' + id); });
+  sSet('game:state', hostState);
+  renderHostAwardsPicking();
 }
 function finishAwardsNoBottom(){
   hostState.awardsStage = 'done';
   sSet('game:state', hostState);
   renderHostAwardsDone();
 }
+/* Tracks whose turn we last played the card-shuffle entrance animation for, so
+   a poll re-render mid-turn (e.g. another player's stray write, or just the
+   1.8s tick) doesn't replay the shuffle on every render — only a genuinely new
+   turn (a fresh currentId) deals the cards back in. */
+let _lastPickingAnimId = null;
 function renderHostAwardsPicking(){
   const order = hostState.pickOrder || [];
   const cards = hostState.wishCards || ['','',''];
@@ -2119,6 +2467,9 @@ function renderHostAwardsPicking(){
   const pickedIdxs = Object.values(picked);
   const currentId = order.find(id => picked[id] === undefined);
   const currentP = currentId ? hostState.players[currentId] : null;
+  const dealCards = currentId !== _lastPickingAnimId;
+  _lastPickingAnimId = currentId;
+  const dealRot = [-9, 7, -5];
   render(`
     <div class="shell"><div class="col" style="align-items:center;text-align:center">
       ${hostNav(true)}
@@ -2129,7 +2480,7 @@ function renderHostAwardsPicking(){
       ` : '<h1 class="marquee-title" style="font-size:clamp(24px,5vw,40px)">都選完了！</h1>'}
       <div class="options-grid" style="max-width:760px">
         ${[0,1,2].map(i=> `
-          <div class="opt-card ${OPT_CLASS[i]} ${pickedIdxs.includes(i)?'dim':''}">
+          <div class="opt-card ${OPT_CLASS[i]} ${pickedIdxs.includes(i)?'dim':''} ${dealCards?'card-deal':''}"${dealCards?` style="animation-delay:${i*120}ms;--deal-rot:${dealRot[i]}deg"`:''}>
             <span class="tag">${i+1}</span>
             <span>${pickedIdxs.includes(i) ? '（已被選走）' : (cards[i] ? esc(cards[i]) : '（壽星還沒填這張卡）')}</span>
           </div>
@@ -2534,6 +2885,60 @@ function renderPlayerAnswerLog(){
   `);
 }
 /* ---------- PLAYER: 頒獎典禮 ---------- */
+/* rpsThrownToken remembers which rpsRoundToken THIS phone has already thrown
+   for. As long as it matches the state's current token, we've submitted and
+   should show the "waiting" view; the moment the host starts a new throw
+   (a tie re-do, or the follow-up 2-person round) the token changes and this
+   phone automatically falls back into the spin/stop screen on the next poll —
+   no special "round changed" handling needed beyond this one comparison.
+   _lastPlayerPickAnimId is the picking-stage equivalent for the card-deal
+   entrance animation (see renderPlayerAwards' 'picking' branch). */
+let rpsThrownToken = null;
+let rpsSpinHandle = null;
+let _lastPlayerPickAnimId = null;
+/* A manual screen (see manualPlayerScreen) so the poll loop's ~1.5s re-render
+   can't rip out the running spin interval mid-throw — same reasoning as the
+   wish-card editor. The background poll (playerPollTick) keeps refreshing
+   lastPlayerState the whole time, so once we submit and drop back out of
+   manual mode, everything is already in sync. */
+function renderPlayerRpsThrow(state){
+  manualPlayerScreen = true;
+  const hands = ['✊', '✋', '✌️'];
+  let idx = 0;
+  render(`
+    <div class="shell"><div class="center">
+      <span class="eyebrow">🃏 猜拳決定順序</span>
+      <h1 class="marquee-title" style="font-size:clamp(24px,7vw,36px)">剪刀石頭布！</h1>
+      <p class="sub">按下面的按鈕，停在哪個手勢就出那個</p>
+      <div class="my-rps-hand" id="my-rps-hand">✊</div>
+      <button class="btn" style="max-width:280px;width:100%" onclick="submitPlayerRpsHand()">✋ 出拳！</button>
+    </div></div>
+  `);
+  if (rpsSpinHandle) clearInterval(rpsSpinHandle);
+  rpsSpinHandle = setInterval(()=>{
+    const el = document.getElementById('my-rps-hand');
+    if (!el){ clearInterval(rpsSpinHandle); rpsSpinHandle = null; return; }
+    idx = (idx + 1) % 3;
+    el.textContent = hands[idx];
+  }, 110);
+}
+/* forceHand lets tests drive a specific outcome deterministically instead of
+   racing real spin timing — see test10.js. Real taps always go through the
+   no-arg path and read whatever hand is currently on screen. */
+async function submitPlayerRpsHand(forceHand){
+  const emojiToHand = { '✊':'rock', '✋':'paper', '✌️':'scissors' };
+  let hand = forceHand;
+  if (!hand){
+    const el = document.getElementById('my-rps-hand');
+    hand = emojiToHand[el ? el.textContent : '✊'] || 'rock';
+  }
+  if (rpsSpinHandle){ clearInterval(rpsSpinHandle); rpsSpinHandle = null; }
+  const token = lastPlayerState ? lastPlayerState.rpsRoundToken : null;
+  rpsThrownToken = token;
+  await sSet('rpsthrow:' + PLAYER_ID, { hand, token });
+  manualPlayerScreen = false;
+  renderPlayerAwards(lastPlayerState || { awardsStage:'rps', rpsActive:[] });
+}
 function renderPlayerAwards(state){
   const stage = state.awardsStage || 'podium';
   const sx = state.shouxingId;
@@ -2558,11 +2963,29 @@ function renderPlayerAwards(state){
     return;
   }
   if (stage === 'rps'){
+    const active = state.rpsActive || [];
+    const amActive = active.includes(PLAYER_ID);
+    if (amActive && rpsThrownToken !== state.rpsRoundToken){
+      renderPlayerRpsThrow(state);
+      return;
+    }
+    const solo = state.rpsSolo;
+    let title = '猜拳決定順序中', sub = '請看主畫面';
+    if (amBottom){
+      if (amActive){ title = '已出拳！等待其他人…'; sub = '看主畫面公布結果'; }
+      else if (solo && solo.id === PLAYER_ID){
+        title = solo.place === 'front' ? '🎉 手氣最好，直接排最前面！' : '😅 手氣最背，直接墊底！';
+        sub = '等其他兩人猜完，馬上輪到選卡';
+      } else {
+        title = '猜拳決定選卡順序！';
+        sub = '看主畫面，輪到你出拳就會通知你';
+      }
+    }
     render(`
       <div class="shell"><div class="center">
         <div style="font-size:54px">✊✋✌️</div>
-        <h1 class="marquee-title" style="font-size:clamp(22px,6vw,32px)">${amBottom? '猜拳決定選卡順序！' : '猜拳決定順序中'}</h1>
-        <p class="sub">${amBottom? '看主畫面，輪到你就會通知你' : '請看主畫面'}</p>
+        <h1 class="marquee-title" style="font-size:clamp(22px,6vw,32px)">${title}</h1>
+        <p class="sub">${sub}</p>
       </div></div>
     `);
     return;
@@ -2573,6 +2996,9 @@ function renderPlayerAwards(state){
     const pickedIdxs = Object.values(picked);
     const currentId = order.find(id => picked[id] === undefined);
     if (currentId === PLAYER_ID){
+      const dealCards = _lastPlayerPickAnimId !== currentId;
+      _lastPlayerPickAnimId = currentId;
+      const dealRot = [-9, 7, -5];
       render(`
         <div class="shell"><div class="center">
           <div style="font-size:54px">🎁</div>
@@ -2580,12 +3006,13 @@ function renderPlayerAwards(state){
           <p class="sub">選到的內容就是你要完成的任務</p>
           <div class="stack" style="width:100%;max-width:340px">
             ${[0,1,2].map(i=> pickedIdxs.includes(i) ? '' : `
-              <button class="opt-card ${OPT_CLASS[i]}" style="text-align:center;justify-content:center" onclick="pickWishCard(${i})">${esc(cards[i] || ('神秘任務 ' + (i+1)))}</button>
+              <button class="opt-card ${OPT_CLASS[i]} ${dealCards?'card-deal':''}" style="text-align:center;justify-content:center${dealCards?`;animation-delay:${i*120}ms;--deal-rot:${dealRot[i]}deg`:''}" onclick="pickWishCard(${i})">${esc(cards[i] || ('神秘任務 ' + (i+1)))}</button>
             `).join('')}
           </div>
         </div></div>
       `);
     } else {
+      _lastPlayerPickAnimId = null; // not our turn — reset so the deal replays once it becomes our turn
       const p = currentId ? state.players[currentId] : null;
       render(`
         <div class="shell"><div class="center">
