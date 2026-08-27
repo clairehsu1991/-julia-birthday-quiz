@@ -501,8 +501,11 @@ let hostState = null;             // authoritative game object, host is sole wri
 let hostCountdownHandle = null;
 let hostPollHandle = null;
 let hostQuestionStartLocal = 0;
+let hostGraceStartLocal = 0;      // when the post-timeout 5s grace window for 壽星 started
+let hostPickForShouxingMode = false; // host is tapping an option on 壽星's behalf right now
 
 let playerPollHandle = null;
+let playerCountdownHandle = null; // drives the live per-player timer chip between polls
 let localSeenQuestionIndex = -1;
 let localQuestionSeenAt = 0;
 let hasAnsweredCurrent = false;
@@ -2043,15 +2046,41 @@ function nextQuestion(){
   hostState.status = 'question';
   hostState.currentAnswers = {};
   hostQuestionStartLocal = Date.now();
+  hostState.questionStartAt = hostQuestionStartLocal; // synced so player screens can run their own live countdown
+  hostState.graceActive = false;
+  hostState.graceStartAt = null;
+  hostPickForShouxingMode = false;
   sSet('game:state', hostState);
   renderHostQuestion();
   if (hostCountdownHandle) clearInterval(hostCountdownHandle);
   hostCountdownHandle = setInterval(hostCountdownTick, 200);
 }
+/* Time's up is no longer an automatic void-the-round event for 壽星: if 壽星
+   hasn't answered yet, we give one extra 5-second "grace" window (synced via
+   graceActive/graceStartAt so every phone can show the same countdown +
+   an urgent reminder) before finally asking the host to tap an answer on
+   壽星's behalf, so the round can still be scored instead of nobody scoring. */
 function hostCountdownTick(){
   const remainMs = hostState.timeLimitMs - (Date.now() - hostQuestionStartLocal);
-  if (remainMs <= 0){ clearInterval(hostCountdownHandle); goToReveal(); return; }
-  updateHostTimerUI(remainMs);
+  if (remainMs > 0){ updateHostTimerUI(remainMs); return; }
+  const sx = hostState.shouxingId;
+  const sxAnswered = !!(sx && hostState.currentAnswers[sx]);
+  if (sxAnswered){ clearInterval(hostCountdownHandle); goToReveal(); return; }
+  if (!hostState.graceActive){
+    hostState.graceActive = true;
+    hostGraceStartLocal = Date.now();
+    hostState.graceStartAt = hostGraceStartLocal;
+    sSet('game:state', hostState);
+    renderHostQuestion();
+    return;
+  }
+  const graceRemainMs = 5000 - (Date.now() - hostGraceStartLocal);
+  if (graceRemainMs > 0){ updateHostTimerUI(graceRemainMs); return; }
+  // Grace window also ran out — stop waiting and switch the host screen into
+  // "tap an option for 壽星" mode instead of silently voiding the round.
+  clearInterval(hostCountdownHandle);
+  hostPickForShouxingMode = true;
+  renderHostQuestion();
 }
 function updateHostTimerUI(remainMs){
   const chip = document.getElementById('host-timer-chip');
@@ -2069,6 +2098,28 @@ function updateHostTimerUI(remainMs){
     if (lbl) lbl.textContent = '已作答 ' + answered + ' / ' + total;
   }
 }
+/* Manually opt into "tap an option for 壽星" mode before the timer forces it
+   — e.g. 壽星 says out loud "you just pick for me". Only meaningful while
+   壽星 genuinely hasn't answered yet. */
+function enterPickForShouxingMode(){
+  if (hostState.status !== 'question') return;
+  const sx = hostState.shouxingId;
+  if (!sx || hostState.currentAnswers[sx]) return;
+  hostPickForShouxingMode = true;
+  renderHostQuestion();
+}
+/* idx is the option the host tapped on 壽星's behalf. Locks it in as 壽星's
+   answer (flagged pickedByHost so it's visible later if anyone reviews the
+   history) and immediately reveals — same "this round is now decided"
+   semantics as the pre-existing "提前公布壽星的答案" button. */
+function hostPickForShouxing(idx){
+  if (hostState.status !== 'question') return;
+  const sx = hostState.shouxingId;
+  if (!sx || hostState.currentAnswers[sx]) return;
+  hostState.currentAnswers[sx] = { choice: idx, elapsedMs: hostState.timeLimitMs, pickedByHost: true };
+  hostPickForShouxingMode = false;
+  goToReveal();
+}
 function renderHostQuestion(){
   const q = hostState.questions[hostState.questionIndex];
   const answered = Object.keys(hostState.currentAnswers).length;
@@ -2077,6 +2128,12 @@ function renderHostQuestion(){
   const shouxingP = hostState.players[hostState.shouxingId];
   const hasUnansweredBots = Object.entries(hostState.players)
     .some(([id,p]) => p.isTestBot && !hostState.currentAnswers[id]);
+  const sx = hostState.shouxingId;
+  const sxAnswered = !!(sx && hostState.currentAnswers[sx]);
+  const showPickBanner = hostPickForShouxingMode && !sxAnswered;
+  const timerSecs = hostState.graceActive
+    ? Math.max(0, Math.ceil((5000 - (Date.now() - hostGraceStartLocal)) / 1000))
+    : Math.ceil(hostState.timeLimitMs / 1000);
   render(`
     <div class="shell"><div class="col">
       ${hostNav(true)}
@@ -2084,12 +2141,17 @@ function renderHostQuestion(){
         <div class="topbar">
           <div class="chip">${questionProgressLabel(hostState.questions, hostState.questionIndex)}</div>
           <div class="chip shouxing">🎂 猜猜 ${shouxingP ? nameTag(shouxingP) : ''} 會選什麼</div>
-          <div class="chip timer" id="host-timer-chip"><span>⏱</span><span class="num">${Math.ceil(hostState.timeLimitMs/1000)}</span></div>
+          <div class="chip timer ${hostState.graceActive?'urgent':''}" id="host-timer-chip"><span>⏱</span><span class="num">${timerSecs}</span></div>
         </div>
+        ${showPickBanner
+          ? `<p class="sub" style="text-align:center;font-weight:700;color:var(--alert)">🎂 ${shouxingP?nameTag(shouxingP):'壽星'}還是沒選，請幫他/她點一個答案 👇</p>`
+          : hostState.graceActive
+            ? `<p class="sub" style="text-align:center;font-weight:700;color:var(--alert)">⏰ ${shouxingP?nameTag(shouxingP):'壽星'}還沒選，加碼 5 秒等他/她！</p>`
+            : ''}
         ${q.headerImg? `<img class="q-header-img" src="${q.headerImg}" alt="">` : ''}
         ${qtextHtml(q.text, null, q.alignLeft)}
         <div class="${optionsGridClass(q)}">
-          ${q.options.map((o,i)=> optionCardHtml(o, i, null)).join('')}
+          ${q.options.map((o,i)=> optionCardHtml(o, i, showPickBanner ? `onclick="hostPickForShouxing(${i})"` : null)).join('')}
         </div>
         <div class="progress-wrap">
           <div class="progress-track"><div class="progress-fill" id="host-answer-bar" style="width:${pct}%"></div></div>
@@ -2097,6 +2159,7 @@ function renderHostQuestion(){
         </div>
         <div class="btn-row" style="margin-top:6px">
           ${hasUnansweredBots ? `<button class="btn ghost" onclick="answerAsTestPlayers()">🧪 讓測試玩家作答</button>` : ''}
+          ${(!sxAnswered && !showPickBanner) ? `<button class="btn ghost" onclick="enterPickForShouxingMode()">🎂 幫壽星代選</button>` : ''}
           <button class="btn secondary" onclick="goToReveal()">提前公布壽星的答案 →</button>
         </div>
       </div>
@@ -2950,6 +3013,7 @@ function renderPlayerReconnecting(){
   `);
 }
 function renderPlayerView(state){
+  clearPlayerCountdown();
   if (state.status === 'idle'){ renderPlayerParked(state); return; }
   if (state.status === 'lobby'){ renderPlayerWaiting(state); return; }
   if (state.status === 'question'){ renderPlayerQuestionOrWaiting(state); return; }
@@ -3035,8 +3099,12 @@ function renderPlayerQuestionOrWaiting(state){
   const isSx = state.shouxingId === PLAYER_ID;
   render(`
     <div class="shell"><div class="col" style="justify-content:center">
-      <div class="chip" style="margin:0 auto">${questionProgressLabel(state.questions, state.questionIndex)}</div>
+      <div class="topbar" style="justify-content:center;gap:8px">
+        <div class="chip">${questionProgressLabel(state.questions, state.questionIndex)}</div>
+        <div class="chip timer" id="player-timer-chip"><span>⏱</span><span class="num">--</span></div>
+      </div>
       <p class="sub" style="text-align:center;font-weight:700">${isSx? '🎂 這題換你決定！大家會猜你的答案' : '🤔 猜猜壽星會選哪一個？'}</p>
+      <p class="sub" id="player-timer-nudge" style="text-align:center;font-weight:700;color:var(--alert);display:none"></p>
       ${q.headerImg? `<img class="q-header-img" src="${q.headerImg}" alt="">` : ''}
       ${qtextHtml(q.text, null, q.alignLeft)}
       <div class="${optionsGridClass(q)}">
@@ -3044,6 +3112,47 @@ function renderPlayerQuestionOrWaiting(state){
       </div>
     </div></div>
   `);
+  // Live countdown between polls: the poll only lands every ~1.5s, so a
+  // fast local tick (against the host-synced questionStartAt/graceStartAt)
+  // is what makes the chip actually count down instead of jumping in steps.
+  updatePlayerTimerUI(state, isSx);
+  if (playerCountdownHandle) clearInterval(playerCountdownHandle);
+  playerCountdownHandle = setInterval(() => updatePlayerTimerUI(lastPlayerState || state, isSx), 200);
+}
+function clearPlayerCountdown(){
+  if (playerCountdownHandle){ clearInterval(playerCountdownHandle); playerCountdownHandle = null; }
+}
+/* Mirrors the host's grace-period logic (see hostCountdownTick) purely from
+   synced fields, so every phone converges on the same countdown without the
+   server needing to push anything extra. 壽星 gets an extra nudge line so
+   they can't miss that everyone's waiting on them specifically. */
+function updatePlayerTimerUI(state, isSx){
+  const chip = document.getElementById('player-timer-chip');
+  const nudge = document.getElementById('player-timer-nudge');
+  if (!chip || !state || !state.questionStartAt) return;
+  const limit = state.timeLimitMs || TIME_LIMIT_SECONDS * 1000;
+  let secs, urgent, nudgeText = '';
+  if (state.graceActive){
+    const graceRemain = Math.max(0, 5000 - (Date.now() - (state.graceStartAt || Date.now())));
+    secs = Math.ceil(graceRemain / 1000);
+    urgent = true;
+    if (graceRemain <= 0){
+      nudgeText = isSx ? '主持人正在幫你選這一題囉～' : '主持人正在幫壽星選這一題的答案…';
+    } else {
+      nudgeText = isSx ? '⏰ 大家在等你選喔，快選一個！' : '⏰ 等壽星選，加碼 5 秒！';
+    }
+  } else {
+    const remain = Math.max(0, limit - (Date.now() - state.questionStartAt));
+    secs = Math.ceil(remain / 1000);
+    urgent = secs <= 5;
+    if (isSx && urgent) nudgeText = '⏰ 大家在等你選喔，快選一個！';
+  }
+  chip.querySelector('.num').textContent = secs;
+  chip.classList.toggle('urgent', urgent);
+  if (nudge){
+    if (nudgeText){ nudge.textContent = nudgeText; nudge.style.display = ''; }
+    else { nudge.style.display = 'none'; }
+  }
 }
 async function playerAnswer(choiceIdx){
   if (hasAnsweredCurrent) return;
