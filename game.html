@@ -266,6 +266,31 @@
   .lb-delta{ font-size:12px; color:var(--leaf); font-weight:700; background:rgba(127,178,122,0.18); padding:2px 8px; border-radius:999px; opacity:0; transition:opacity .35s ease; }
   .lb-delta.show{ opacity:1; }
 
+  /* ---------- 主持人揭曉頁：整頁收緊成一屏塞得下，投影時不用滑鼠往下滑 ----------
+     使用者實測發現公佈答案那頁（問題＋選項長條圖＋前 5 名排行榜＋下一題按鈕全部疊
+     在一起）常常比一般筆電視窗還高，得往下滑才看得到排行榜／按鈕，派對現場沒空一直
+     滑滾輪。這裡不動 .panel/.opt-card/.lb-row/.options-grid 這些全站共用的基礎樣式
+     （其他畫面：設定頁列表、玩家端揭曉頁……都還在用原本的間距），只用 .reveal-tight
+     這個外層 class 局部收緊 renderHostReveal() 自己的間距/字級/留白，讓整頁在常見的
+     筆電/投影機視窗高度（約 700px 以上）內就能完整顯示，不必依賴頁面捲動。 */
+  .shell.tight{ padding: clamp(10px,2.4vh,28px) clamp(16px,4vw,40px); }
+  .col.reveal-tight{ gap: clamp(6px,1.4vh,14px); }
+  .reveal-tight .options-grid{ gap: clamp(6px,1.2vh,14px); }
+  .reveal-tight .opt-card{ padding: clamp(8px,1.6vh,16px) clamp(12px,2vw,18px); font-size:clamp(13.5px,1.7vw,17px); gap:10px; }
+  .reveal-tight .opt-card .tag{ width:26px; height:26px; font-size:14px; border-radius:8px; }
+  .reveal-tight .opt-bar-track{ margin-top:3px; height:7px; }
+  .reveal-tight .panel{ padding: clamp(8px,1.8vh,18px) clamp(12px,2.4vw,20px); }
+  .reveal-tight .panel h2{ font-size:clamp(13px,1.7vw,16px); margin:0; }
+  .reveal-tight .panel .sub{ font-size:12px; margin-top:1px; }
+  .reveal-tight .stack{ gap:clamp(3px,0.7vh,7px); margin-top:clamp(4px,0.8vh,8px); }
+  .reveal-tight .lb-row{ padding: clamp(4px,0.9vh,10px) clamp(8px,1.6vw,14px); gap:8px; border-radius:12px; }
+  .reveal-tight .lb-rank{ font-size:16px; width:22px; }
+  .reveal-tight .lb-rank.top1{ font-size:19px; } .reveal-tight .lb-rank.top2{ font-size:17px; } .reveal-tight .lb-rank.top3{ font-size:17px; }
+  .reveal-tight .lb-name{ font-size:13px; }
+  .reveal-tight .lb-score{ font-size:15px; }
+  .reveal-tight .lb-delta{ font-size:10.5px; padding:1px 6px; }
+  .reveal-tight .btn-row{ margin-top:0; }
+
   /* ---------- 頒獎台／最終結果：使用者提供的手繪凸台插圖，人物「站」在台面上 ---------- */
   /* .podium 本身用 aspect-ratio 鎖定跟 PODIUM_RISER_IMG 一樣的比例（去背裁切後
      是 1000:494），寬度用 --pw 這個自訂屬性決定、其餘全部子元素的大小/位置都用
@@ -433,9 +458,10 @@
      exactly the flat layout it always was. */
   .qgroup-header{
     font-size:12.5px; font-weight:700; color:var(--ink-dim);
-    display:flex; align-items:center; gap:5px; padding:2px 2px 0; margin-top:2px;
+    display:flex; align-items:center; justify-content:space-between; gap:5px; padding:2px 2px 0; margin-top:2px;
   }
   .qgroup-header:first-child{ margin-top:0; }
+  .qgroup-header .minibtn{ padding:4px 9px; font-size:11.5px; }
   .qrow{ background:#fff; border:1px solid var(--line); border-radius:14px; padding:12px 14px; display:flex; gap:12px; align-items:flex-start; }
   .qrow.editing{ border-color:var(--moss); box-shadow:0 0 0 3px rgba(63,92,51,0.14); }
   /* Drag handle for reordering questions (see qDragStart/qDragMove/qDragEnd) —
@@ -453,6 +479,19 @@
      qDragStart) — the actual .qrow becomes position:fixed and floats over
      everything, so this is what visually marks where it'll land. */
   .qrow-placeholder{ border:2px dashed var(--moss); border-radius:14px; background:rgba(63,92,51,0.07); }
+  /* 延伸題（見 toggleExtendsPrev）— 跟前一題綁成同一包，隨機抽題/排序時整包
+     一起移動（見 buildBundles/qDragStart 的整包拖曳）。用縮排＋一個靜態的
+     「↳」取代原本可拖曳的抓取圖示，視覺上清楚表示「這題不能自己搬，跟著
+     上面那題走」，同時也是唯一沒有 onpointerdown 的一種 .qrow，drag 相關的
+     函式只需要處理「主要題目」這一種進入點。 */
+  .qrow[data-extends="1"]{ margin-left:26px; background:rgba(63,92,51,0.035); }
+  .qrow .drag-handle.linked{
+    cursor:default; color:rgba(63,92,51,0.55); font-size:16px;
+  }
+  .bundle-badge{
+    display:inline-flex; align-items:center; gap:3px; font-size:11.5px; font-weight:700;
+    color:var(--moss); background:rgba(63,92,51,0.1); border-radius:999px; padding:2px 8px; margin-left:6px;
+  }
   .qrow .qi{ font-family:'Fredoka',sans-serif; font-size:20px; color:var(--ink-dim); width:26px; flex:none; }
   .qrow .qb{ flex:1; min-width:0; }
   .qrow .qb .qt{ font-weight:700; font-size:14.5px; margin-bottom:6px; white-space:pre-wrap; overflow-wrap:anywhere; }
@@ -460,7 +499,36 @@
   .qrow .del{ flex:none; background:none; border:none; color:var(--alert); font-size:13px; font-weight:700; padding:4px 8px; }
   .qrow .edit{ flex:none; background:none; border:none; color:var(--moss); font-size:13px; font-weight:700; padding:4px 8px; }
   .qrow .preview{ flex:none; background:none; border:none; color:var(--coral); font-size:13px; font-weight:700; padding:4px 8px; }
+  .qrow .link{ flex:none; background:none; border:none; color:var(--ink-dim); font-size:13px; font-weight:700; padding:4px 8px; }
   .qrow .qactions{ flex:none; display:flex; flex-direction:column; }
+
+  /* 章節開場畫面（見 renderHostChapterIntro）—— 只在主持人投影畫面出現，
+     跟使用者確認過的「版本 A・溫馨字卡風」示意圖同一套配色與版面，換成
+     真正的畫面尺寸（填滿扣掉 hostNav() 之後剩下的空間，見 .q-content 用
+     同一招 flex:1 centering 的既有慣例）。 */
+  .chapter-intro{
+    flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    gap:clamp(14px,3vh,26px); padding:6% 6%; position:relative; text-align:center;
+    border-radius:22px; overflow:hidden; background:var(--sand); margin-top:10px;
+  }
+  .chapter-intro::before{
+    content:''; position:absolute; inset:0; pointer-events:none;
+    background:
+      radial-gradient(circle at 15% 20%, rgba(242,193,78,0.35), transparent 42%),
+      radial-gradient(circle at 85% 78%, rgba(127,178,122,0.30), transparent 46%);
+  }
+  .chapter-kicker{
+    position:relative; color:var(--moss); border:1.5px dashed rgba(63,92,51,0.45);
+    border-radius:999px; padding:6px 18px; font-weight:700; font-size:clamp(12px,1.6vw,15px);
+    letter-spacing:.06em; background:rgba(255,255,255,0.5);
+  }
+  .chapter-icon{ position:relative; font-size:clamp(38px,6vw,60px); }
+  .chapter-big{
+    position:relative; font-family:'Fredoka',sans-serif; font-weight:600;
+    font-size:clamp(40px,9vw,90px); color:var(--ink); line-height:1.08; margin:0;
+    text-shadow:0 3px 0 rgba(255,255,255,0.5);
+  }
+  .chapter-prog{ position:relative; color:var(--ink-dim); font-size:clamp(12px,1.5vw,14px); font-weight:700; }
 
   .waiting-dots span{ animation: blink 1.4s infinite; opacity:.25; }
   .waiting-dots span:nth-child(2){ animation-delay:.2s; } .waiting-dots span:nth-child(3){ animation-delay:.4s; }
@@ -617,6 +685,7 @@ let BANKS = [];                   // [{ key, id, name, count, updatedAt }] — s
 let RANDOM_ORDER = false;         // shuffle the question order each round
 let RANDOM_OPTIONS = false;       // shuffle A~D within each question
 let DRAW_COUNT = 0;               // 0 = 全部出；否則從題目裡隨機抽這麼多題
+let CHAPTER_ICONS = {};           // chapter name -> emoji override (see chapterIcon()); auto-guessed when absent
 
 let hostState = null;             // authoritative game object, host is sole writer of 'game:state'
 let hostCountdownHandle = null;
@@ -1084,7 +1153,7 @@ function renderHostDenied(){
 function renderRoleSelect(){
   render(`
     <div class="shell"><div class="center">
-      <span class="eyebrow">🎂 生日快樂</span>
+      <h1 class="marquee-title">Julia壽星<span class="hl">無獎徵答</span></h1>
       <p class="sub">誰最懂壽星？電視／電腦當主畫面，大家用手機猜猜 Julia 每一題會怎麼選</p>
       <div class="role-pick" style="${HOST_UNLOCKED? '' : 'max-width:340px'}">
         ${HOST_UNLOCKED ? `
@@ -1112,11 +1181,53 @@ async function chooseHost(){
       RANDOM_ORDER   = !!draft.randomOrder;
       RANDOM_OPTIONS = !!draft.randomOptions;
       DRAW_COUNT     = Number(draft.drawCount) || 0;
+      if (draft.chapterIcons && typeof draft.chapterIcons === 'object') CHAPTER_ICONS = draft.chapterIcons;
       if (Array.isArray(draft.prizes) && draft.prizes.length===3) PRIZES = draft.prizes;
     }
   } catch(e){ /* no draft yet, start fresh */ }
   await refreshBanks();
+  if (await resumeLiveGameIfAny()) return;
   renderHostSetup();
+}
+/* 主持人網址被重新打開時（電腦睡眠喚醒、瀏覽器不小心整理分頁、wifi 斷線後重新
+   整理……），如果伺服器上已經有一場「還在進行中」的遊戲，直接接回目前那一步的
+   畫面，而不是預設跳回設定頁——設定頁會把整份題目、答案都攤在畫面上，如果投影機
+   當下正接著、主持人網址被迫重開一次，觀眾原本會看到這些內容，是派對現場真實的
+   風險（見開發紀錄）。只有主持人主動按「← 回設定」／「⌂ 回主畫面」離開一場進行中
+   的遊戲時，`parkGame()` 才會把 status 改回 'idle'——所以這裡只要看到不是
+   'idle'，就代表是「非預期中斷」，直接接回去；找不到任何遊戲、或狀態剛好就是
+   'idle'（包含全新伺服器、或主持人已正常離開），才會落回原本「打開就是設定頁」
+   的行為。
+   小提醒：如果某一場遊戲結束後完全沒有按任何返回鍵就直接關閉分頁，伺服器上的
+   game:state 會停在最後一個畫面（例如頒獎結算），不是 'idle'——下次重開主持人
+   網址時會先接回那個畫面，而不是空白的設定頁。這種情況按一下「⌂ 回主畫面」
+   （會清乾淨並回到角色選擇畫面）再重新進「我是主持人」，就會是真正全新的設定頁。 */
+async function resumeLiveGameIfAny(){
+  let state = null;
+  try{ state = await sGet('game:state'); } catch(e){}
+  if (!state || !state.status || state.status === 'idle') return false;
+  hostState = state;
+  startHostPolling();
+  if (hostState.status === 'question'){
+    hostQuestionStartLocal = hostState.questionStartAt || Date.now();
+    if (hostState.graceActive) hostGraceStartLocal = hostState.graceStartAt || Date.now();
+    renderHostQuestion();
+    if (hostCountdownHandle) clearInterval(hostCountdownHandle);
+    hostCountdownHandle = setInterval(hostCountdownTick, 200);
+    hostCountdownTick(); // correct the chip immediately instead of waiting up to 200ms
+    return true;
+  }
+  const renderers = {
+    lobby: renderHostLobby,
+    chapterIntro: renderHostChapterIntro,
+    reveal: renderHostReveal,
+    final: renderHostFinal,
+    awards: renderHostAwards
+  };
+  const fn = renderers[hostState.status];
+  if (!fn) return false; // unrecognised status — safest fallback is the normal setup page
+  fn();
+  return true;
 }
 /* Manual, one-click way to add the 2 example warm-up questions — kept opt-in
    (a button, not something that fires automatically on every setup load) so
@@ -1136,6 +1247,7 @@ async function saveDraft(){
       randomOrder: RANDOM_ORDER,
       randomOptions: RANDOM_OPTIONS,
       drawCount: DRAW_COUNT,
+      chapterIcons: CHAPTER_ICONS,
       prizes: PRIZES
     });
   } catch(e){ console.error('draft save failed', e); }
@@ -1334,6 +1446,85 @@ async function importBanksFile(input){
   toast(added ? ('已匯入 ' + added + ' 個題庫') : '沒有可匯入的題庫');
 }
 
+/* ---------- 章節圖示 ----------
+   章節是主持人自由輸入的文字，沒辦法保證每個章節名稱都對得上一個圖示，
+   所以採「自動用關鍵字猜＋猜錯可以手動換」的兩段式設計（用
+   AskUserQuestion 跟使用者確認過）：CHAPTER_ICONS 只存「手動覆蓋過」的
+   章節，猜到沒被覆蓋的章節則即時用 guessChapterIcon() 算，完全沒被
+   猜中的用 ✨ 當保底。關鍵字清單刻意挑常見的派對益智題主題，猜不到也
+   不影響功能，只是預設圖示比較普通而已。 */
+const CHAPTER_ICON_KEYWORDS = [
+  [['圖片','照片','相片'], '📷'],
+  [['影片','影音','短片'], '🎬'],
+  [['音樂','歌曲','旋律','唱歌'], '🎵'],
+  [['國文','成語','詩詞','文字'], '📖'],
+  [['英文','單字'], '🔤'],
+  [['數學','計算','數字'], '🔢'],
+  [['歷史','古代'], '📜'],
+  [['地理','地圖'], '🗺️'],
+  [['運動','球'], '⚽'],
+  [['美食','食物','料理','甜點','吃'], '🍰'],
+  [['星座','心理測驗','占卜','塔羅'], '🔮'],
+  [['童年','回憶','往事','求學','小時候'], '🧸'],
+  [['感情','戀愛','另一半','老公','老婆','情侶'], '💕'],
+  [['家庭','親子','爸媽','小孩','家人'], '👨‍👩‍👧‍👦'],
+  [['動物','寵物'], '🐾'],
+  [['旅行','旅遊','出國','出遊'], '✈️'],
+  [['工作','職場','公司'], '💼'],
+  [['電影','戲劇','追劇'], '🎥'],
+  [['情境','生活','日常'], '🏠'],
+  [['遊戲','闖關'], '🎮'],
+];
+const CHAPTER_ICON_CHOICES = ['📷','🎬','🎵','📖','🔤','🔢','📜','🗺️','⚽','🍰','🔮','🧸','💕','👨‍👩‍👧‍👦','🐾','✈️','💼','🎥','🏠','🎮','🎂','🎉','⭐','🎯','🃏','✨'];
+function guessChapterIcon(name){
+  for (const [keywords, icon] of CHAPTER_ICON_KEYWORDS){
+    if (keywords.some(kw => name.includes(kw))) return icon;
+  }
+  return '✨';
+}
+function chapterIcon(chapterName){
+  if (!chapterName) return '🗂️';
+  return CHAPTER_ICONS[chapterName] || guessChapterIcon(chapterName);
+}
+/* idx: any QUESTIONS index belonging to that chapter (only used to look the
+   chapter name up safely — see the comment on bankRows above about not
+   putting free-typed text straight into an onclick="..." string). */
+function openChapterIconPicker(idx){
+  const q = QUESTIONS[idx]; if (!q || !q.chapter) return;
+  const current = chapterIcon(q.chapter);
+  const el = document.createElement('div');
+  el.className = 'modal-backdrop';
+  el.id = 'ui-modal';
+  el.innerHTML = `
+    <div class="modal-box" style="max-width:420px">
+      <h3>「${esc(q.chapter)}」要用哪個圖示？</h3>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin:14px 0">
+        ${CHAPTER_ICON_CHOICES.map(ic => `<button class="minibtn" style="font-size:20px;padding:8px 11px;${ic===current?'border-color:var(--moss);background:rgba(63,92,51,0.14)':''}" onclick="setChapterIcon(${idx}, '${ic}')">${ic}</button>`).join('')}
+      </div>
+      <div class="btn-row">
+        <button class="btn ghost" onclick="setChapterIcon(${idx}, null)">↩️ 還原自動猜</button>
+        <button class="btn secondary" onclick="closeModal(false)">關閉</button>
+      </div>
+    </div>`;
+  el.addEventListener('click', e => { if (e.target === el) closeModal(false); });
+  document.body.appendChild(el);
+}
+function setChapterIcon(idx, icon){
+  const q = QUESTIONS[idx]; if (!q || !q.chapter) return;
+  if (icon) CHAPTER_ICONS[q.chapter] = icon;
+  else delete CHAPTER_ICONS[q.chapter];
+  saveDraft();
+  closeModal(false);
+  renderHostSetup();
+}
+/* ---------- 延伸題（跟前一題綁成同一包，見 buildBundles） ---------- */
+function toggleExtendsPrev(i){
+  const q = QUESTIONS[i]; if (!q) return;
+  q.extendsPrev = !q.extendsPrev;
+  saveDraft();
+  renderHostSetup();
+}
+
 /* ---------- 出題方式（隨機設定） ---------- */
 function toggleRandomOrder(el){ RANDOM_ORDER = el.checked; saveDraft(); updateDrawHint(); }
 function toggleRandomOptions(el){ RANDOM_OPTIONS = el.checked; saveDraft(); }
@@ -1346,18 +1537,53 @@ function setDrawCount(el){
   saveDraft();
   updateDrawHint();
 }
+/* ---------- 章節分組／延伸題「綁包」共用邏輯 ----------
+   一個「包」＝一題主題目 + 緊接在它後面、被標成 q.extendsPrev 的延伸題
+   （見設定頁每一列的「🔗 連接上一題」按鈕／toggleExtendsPrev()）。包是
+   隨機抽題／隨機排序時唯一會移動的單位——要嘛整包一起抽到，要嘛整包一起
+   排除，包內部（主題目在前、延伸題緊接在後）的順序永遠不變。
+   「前一題」的定義是「同一章節分組裡、顯示順序上的前一題」，不是
+   QUESTIONS 陣列裡物理上的前一個元素（章節不同的題目可能穿插在原始陣列
+   裡）——所以這裡先依章節分組（沿用跟 renderHostSetup／qDragStart 一致的
+   「未分類最前面，其餘依第一次出現的章節先後排列」規則），再各自往下找
+   連續的 extendsPrev 串成一包，才不會跟設定頁畫面上看到的分組對不起來。 */
+function buildBundles(items){
+  const bundles = [];
+  for (const q of items){
+    if (q.extendsPrev && bundles.length) bundles[bundles.length-1].push(q);
+    else bundles.push([q]);
+  }
+  return bundles;
+}
+function computeScorableBundles(){
+  const scorable = QUESTIONS.filter(q => !q.isWarmup);
+  const chapterOrder = [];
+  const byChapter = { '': [] };
+  scorable.forEach(q => {
+    const key = q.chapter || '';
+    if (key && !byChapter[key]){ byChapter[key] = []; chapterOrder.push(key); }
+    (byChapter[key] || byChapter['']).push(q);
+  });
+  return [''].concat(chapterOrder)
+    .filter(k => byChapter[k] && byChapter[k].length)
+    .map(k => ({ chapter:k, bundles: buildBundles(byChapter[k]) }));
+}
 function drawHintText(){
-  const total = QUESTIONS.length;
-  // 必出的題目一定會被抽到（見 buildPlayList()），所以是實際出題數的下限——
-  // 如果「這一場要出幾題」設定得比必出的題目還少，必出優先，n 就會比設定值大。
-  const requiredCount = QUESTIONS.filter(q => !q.isWarmup && q.mustPick).length;
+  const groups = computeScorableBundles();
+  const allBundles = groups.flatMap(g => g.bundles);
+  const total = allBundles.reduce((s,b)=> s+b.length, 0);
+  // 必出的題目（連同跟它綁在同一包的延伸題）一定會被抽到（見
+  // buildPlayList()），所以是實際出題數的下限——如果「這一場要出幾題」設
+  // 定得比必出的題目還少，必出優先，n 就會比設定值大。
+  const requiredBundles = allBundles.filter(b => b.some(q => q.mustPick));
+  const requiredCount = requiredBundles.reduce((s,b)=> s+b.length, 0);
   let n = (DRAW_COUNT > 0 && DRAW_COUNT < total) ? DRAW_COUNT : total;
   if (n < requiredCount) n = requiredCount;
   if (!total) return '還沒有題目。';
   let s = `這一場會出 ${n} 題`;
   if (n < total) s += `（從 ${total} 題裡隨機抽）`;
   if (requiredCount > 0) s += `，其中 ${requiredCount} 題必出`;
-  if (RANDOM_ORDER) s += '，順序隨機';
+  if (RANDOM_ORDER) s += '，順序隨機（同章節內）';
   if (RANDOM_OPTIONS) s += '，選項也隨機';
   return s + '。';
 }
@@ -1365,36 +1591,59 @@ function updateDrawHint(){
   const el = document.getElementById('draw-hint');
   if (el) el.textContent = drawHintText();
 }
-/* Build the list actually played this round, leaving the master QUESTIONS untouched. */
+/* Build the list actually played this round, leaving the master QUESTIONS
+   untouched. 章節與延伸題「綁包」的規則（見上方共用邏輯的註解）：
+   1. 章節照順序出題——先未分類，再依各章節第一次出現的先後順序，每個章節
+      裡的題目播完才會進下一個章節（見 nextQuestion() 的 startsNewChapter，
+      章節切換時會先插入 renderHostChapterIntro() 那個大字報幕畫面）。
+   2. 「隨機出題」（RANDOM_ORDER）只影響同一個章節「內」的順序，不會把不同
+      章節的題目混在一起，也不會影響章節本身的播放順序。
+   3. 延伸題永遠跟主題目綁成一包一起抽／一起排除／一起被打亂順序（但整包
+      在打亂時整體移動，包裡面的內部順序不變）——這是使用者明確要求、且用
+      AskUserQuestion 確認過的「整包一起算」語意，DRAW_COUNT 也是照包的
+      總題數（而不是包的個數）去湊。 */
 function buildPlayList(){
   // Warm-up questions are practice only: always played in full, always
-  // first, and never touched by the draw-count / random-order settings that
-  // apply to the scored set below — the whole point is a predictable,
-  // low-stakes couple of rounds so players learn how to play before it counts.
+  // first, and never touched by the draw-count / random-order / chapter
+  // settings that apply to the scored set below — the whole point is a
+  // predictable, low-stakes couple of rounds so players learn how to play
+  // before it counts.
   const warmups = QUESTIONS.filter(q => q.isWarmup);
-  const scorable = QUESTIONS.filter(q => !q.isWarmup);
-  const total = scorable.length;
+  const groups = computeScorableBundles(); // [{chapter, bundles:[[q,...],...]}, ...]
+  const allBundles = groups.flatMap(g => g.bundles);
+  const total = allBundles.reduce((s,b)=> s+b.length, 0);
   const drawing = DRAW_COUNT > 0 && DRAW_COUNT < total;
-  let list;
+  let pickedSet = null; // Set of bundle arrays included this round; null = everyone plays
   if (drawing){
-    // 必出（q.mustPick）的題目一定進入播放清單，並且算進「這一場要出幾題」的
-    // 總數裡——DRAW_COUNT=5、2 題必出，代表 2 題保底 + 從其餘題目再隨機抽 3 題。
-    // 必出的題目數量比 DRAW_COUNT 還多時，必出優先，實際出題數會自動比設定值大
-    // （這裡刻意不讓任何必出的題目被擠掉）。
-    const required = scorable.filter(q => q.mustPick);
-    const optional = scorable.filter(q => !q.mustPick);
-    const extraSlots = Math.max(0, DRAW_COUNT - required.length);
-    const pickedOptional = shuffled(optional).slice(0, extraSlots);
-    const picked = required.concat(pickedOptional);
-    // If the host didn't ask for random order, show the drawn subset in its original order.
-    list = RANDOM_ORDER ? shuffled(picked) : scorable.filter(q => picked.includes(q));
-  } else {
-    list = RANDOM_ORDER ? shuffled(scorable) : scorable.slice();
+    // 必出的包一定進入播放清單，並且整包的題數都算進「這一場要出幾題」的
+    // 總數裡；剩下的名額才從其餘（非必出）的包裡隨機抽，抽到湊滿名額為止
+    // （最後一包可能讓實際出題數超過設定值一點點，跟既有的「必出優先，
+    // 實際出題數會自動比設定值大」邏輯是同一種取捨，只是單位從「一題」
+    // 換成「一包」）。
+    const required = allBundles.filter(b => b.some(q => q.mustPick));
+    const optional = allBundles.filter(b => !b.some(q => q.mustPick));
+    const requiredCount = required.reduce((s,b)=> s+b.length, 0);
+    const extraSlots = Math.max(0, DRAW_COUNT - requiredCount);
+    const shuffledOptional = shuffled(optional);
+    const pickedOptional = [];
+    let count = 0;
+    for (const b of shuffledOptional){
+      if (count >= extraSlots) break;
+      pickedOptional.push(b);
+      count += b.length;
+    }
+    pickedSet = new Set(required.concat(pickedOptional));
+  }
+  let orderedList = [];
+  for (const group of groups){
+    let bundles = pickedSet ? group.bundles.filter(b => pickedSet.has(b)) : group.bundles.slice();
+    if (RANDOM_ORDER) bundles = shuffled(bundles); // 只在這個章節內打亂包的順序，包內部順序不變
+    for (const b of bundles) orderedList = orderedList.concat(b);
   }
   if (RANDOM_OPTIONS){
-    list = list.map(q => Object.assign({}, q, { options: shuffled(q.options) }));
+    orderedList = orderedList.map(q => Object.assign({}, q, { options: shuffled(q.options) }));
   }
-  return warmups.concat(list);
+  return warmups.concat(orderedList);
 }
 /* Seed two example warm-up (practice, unscored) questions at the front of
    the draft so the feature shows up ready-made instead of as an empty
@@ -1453,45 +1702,77 @@ function renderHostSetup(){
   // Row markup keys off the question's REAL index in QUESTIONS (i), never its
   // position within a chapter group below — editQuestion()/deleteQuestion()/
   // openQuestionPreview() all splice/read QUESTIONS by that index directly.
-  const qrowHtml = (q,i) => {
+  // prevIdx is the real index of the PREVIOUS question in the same chapter
+  // group (null if this is the first question of its chapter) — it's what
+  // "連接上一題" attaches to (see toggleExtendsPrev()), and it's what decides
+  // whether this row even gets that button at all (nothing to attach to on
+  // the very first row of a chapter).
+  const qrowHtml = (q,i,prevIdx,bundleSize) => {
     const optsSummary = q.type==='image'
       ? q.options.map(o=> `<img src="${o.img}" style="width:30px;height:30px;object-fit:cover;border-radius:6px;margin-right:4px">`).join('')
       : q.options.map(o=> esc(o.label)).join('　');
+    const isExt = !!q.extendsPrev && prevIdx != null;
+    const handleHtml = isExt
+      ? `<div class="drag-handle linked" title="延伸題跟著上一題一起搬動">↳</div>`
+      : `<div class="drag-handle" title="拖曳調整順序" onpointerdown="qDragStart(event)">⠿</div>`;
+    const linkBtn = isExt
+      ? `<button class="link" onclick="toggleExtendsPrev(${i})">🔗 取消連接</button>`
+      : (prevIdx != null ? `<button class="link" onclick="toggleExtendsPrev(${i})">🔗 連接上一題</button>` : '');
+    const bundleBadge = (!isExt && bundleSize > 1) ? `<span class="bundle-badge">🔗 +${bundleSize-1} 延伸題</span>` : '';
     return `
-      <div class="qrow${editingQuestionIndex===i?' editing':''}" data-idx="${i}" data-chapter="${esc(q.chapter||'')}">
-        <div class="drag-handle" title="拖曳調整順序" onpointerdown="qDragStart(event)">⠿</div>
+      <div class="qrow${editingQuestionIndex===i?' editing':''}" data-idx="${i}" data-chapter="${esc(q.chapter||'')}" data-extends="${isExt?'1':'0'}">
+        ${handleHtml}
         <div class="qi num">${i+1}</div>
         <div class="qb">
-          <div class="qt">${q.mustPick?'<span style="color:var(--coral);font-weight:700">⭐ 必出． </span>':''}${q.isWarmup?'<span style="color:var(--gold);font-weight:700">🔥 暖身． </span>':''}${q.alignLeft?'⬅️ ':''}${q.type==='image'?'🖼️ ':'🔤 '}${esc(q.text)}</div>
+          <div class="qt">${q.mustPick?'<span style="color:var(--coral);font-weight:700">⭐ 必出． </span>':''}${q.isWarmup?'<span style="color:var(--gold);font-weight:700">🔥 暖身． </span>':''}${isExt?'<span style="color:var(--moss);font-weight:700">↳ 延伸題． </span>':''}${q.alignLeft?'⬅️ ':''}${q.type==='image'?'🖼️ ':'🔤 '}${esc(q.text)}${bundleBadge}</div>
           <div class="oo" style="display:flex;align-items:center;flex-wrap:wrap">${optsSummary}</div>
         </div>
         <div class="qactions">
           <button class="edit" onclick="editQuestion(${i})">✏️ 編輯</button>
           <button class="preview" onclick="openQuestionPreview(${i})">👁 預覽</button>
+          ${linkBtn}
           <button class="del" onclick="deleteQuestion(${i})">刪除</button>
         </div>
       </div>
     `;
   };
   // Group by q.chapter (free text the host types on each question — see the
-  // 章節 field in the add/edit form below) purely for DISPLAY. Only bother
-  // grouping at all once the host has actually named at least one chapter;
-  // an all-unclassified list (which is every list before this feature, and
-  // every list that never uses it) stays the exact same flat layout it
-  // always was, headers and all.
+  // 章節 field in the add/edit form below) purely for DISPLAY (and, since
+  // （二十二）, for real chapter-ordered play too — see buildPlayList()).
+  // Only bother grouping at all once the host has actually named at least
+  // one chapter; an all-unclassified list (which is every list before this
+  // feature, and every list that never uses it) stays the exact same flat
+  // layout it always was, headers and all. Kept as arrays of REAL indices
+  // (not pre-rendered html) so qrowHtml can be told each row's prevIdx.
   const chapterOrder = []; // chapter names, in order of first appearance
-  const byChapter = { '': [] };
+  const byChapterIdx = { '': [] };
   QUESTIONS.forEach((q,i) => {
     const key = q.chapter || '';
-    if (key && !byChapter[key]){ byChapter[key] = []; chapterOrder.push(key); }
-    (byChapter[key] || byChapter['']).push(qrowHtml(q,i));
+    if (key && !byChapterIdx[key]){ byChapterIdx[key] = []; chapterOrder.push(key); }
+    (byChapterIdx[key] || byChapterIdx['']).push(i);
   });
+  // How many consecutive questions (starting at position `pos` in `idxs`)
+  // are chained together into one 延伸題 bundle — only meaningful when
+  // called on a non-extension row, see the bundleBadge above.
+  const bundleSizeAt = (idxs, pos) => {
+    let n = 1;
+    while (pos+n < idxs.length && QUESTIONS[idxs[pos+n]].extendsPrev) n++;
+    return n;
+  };
+  const renderGroupRows = (idxs) => idxs.map((idx,pos) => {
+    const prevIdx = pos > 0 ? idxs[pos-1] : null;
+    const bundleSize = QUESTIONS[idx].extendsPrev ? 1 : bundleSizeAt(idxs, pos);
+    return qrowHtml(QUESTIONS[idx], idx, prevIdx, bundleSize);
+  }).join('');
   const rows = chapterOrder.length
-    ? [''].concat(chapterOrder).filter(k => byChapter[k] && byChapter[k].length).map(k => `
-        <div class="qgroup-header"${k?'':' style="opacity:.65"'}>🗂️ ${k ? esc(k) : '未分類'}<span style="font-weight:400"> · ${byChapter[k].length} 題</span></div>
-        ${byChapter[k].join('')}
+    ? [''].concat(chapterOrder).filter(k => byChapterIdx[k] && byChapterIdx[k].length).map(k => `
+        <div class="qgroup-header"${k?'':' style="opacity:.65"'}>
+          <span>${k ? chapterIcon(k) + ' ' + esc(k) : '🗂️ 未分類'}<span style="font-weight:400"> · ${byChapterIdx[k].length} 題</span></span>
+          ${k ? `<button class="minibtn" onclick="openChapterIconPicker(${byChapterIdx[k][0]})">🎨 換圖示</button>` : ''}
+        </div>
+        ${renderGroupRows(byChapterIdx[k])}
       `).join('')
-    : byChapter[''].join('');
+    : renderGroupRows(byChapterIdx['']);
   // <datalist> suggestions for the 章節 input below — existing names only,
   // free typing anything else is still fine (that's how a brand-new chapter
   // gets created in the first place).
@@ -1541,7 +1822,7 @@ function renderHostSetup(){
         <div class="stack" style="margin-top:8px">
           <div class="field"><label>題目文字（可以按 Enter 換行）</label><textarea id="nq-text" rows="3" placeholder="例如：壽星這趟日本行&#10;最喜歡哪張照片？" style="resize:vertical;line-height:1.5">${esc(editQ ? editQ.text : '')}</textarea></div>
           <div class="field">
-            <label>章節（選填，例如：圖片題／國文題／情境題——自己打名字，同名的會自動歸在一起）</label>
+            <label>章節（選填，例如：圖片題／國文題／情境題——自己打名字，同名的會自動歸在一起；正式遊戲會依章節順序出題，每個章節開始前主持人畫面會先顯示章節名稱）</label>
             <input id="nq-chapter" list="chapter-options" placeholder="不填就是「未分類」" value="${esc(editQ ? (editQ.chapter||'') : '')}">
             ${chapterDatalist}
           </div>
@@ -1630,7 +1911,7 @@ function renderHostSetup(){
         <div class="stack" style="margin-top:12px">
           <div class="checkbox-row">
             <input type="checkbox" id="rnd-order" ${RANDOM_ORDER?'checked':''} onchange="toggleRandomOrder(this)">
-            <label for="rnd-order">隨機打亂題目順序（同一批人再玩一次也不會膩）</label>
+            <label for="rnd-order">隨機打亂題目順序（同一批人再玩一次也不會膩；有分章節的話只在各章節內打亂，延伸題會整包一起動）</label>
           </div>
           <div class="checkbox-row">
             <input type="checkbox" id="rnd-opts" ${RANDOM_OPTIONS?'checked':''} onchange="toggleRandomOptions(this)">
@@ -1745,22 +2026,39 @@ function cancelEditQuestion(){
 }
 
 /* 拖曳排序題目 — a small hand-rolled sortable list (Pointer Events, not HTML5
-   drag-and-drop, so it works the same on touch as on mouse). The dragged .qrow
-   becomes position:fixed and just visually follows the pointer ("ghost"); a
-   dashed placeholder left in its place is what actually gets moved around the
-   list, compared against the other rows' live positions. Reordering is
-   deliberately scoped to rows sharing the same data-chapter — the list is
-   rendered as one flat DOM sequence with 🗂️ headers sprinkled in (see
-   renderHostSetup's grouping), so nothing stops a row from being dragged
-   across a chapter boundary except that we only ever compare it against, and
-   insert it next to, members of its own chapter. That avoids the confusing
-   alternative of a card silently changing chapter just because it got dropped
-   near someone else's questions.
+   drag-and-drop, so it works the same on touch as on mouse). The dragged
+   row(s) become position:fixed and just visually follow the pointer
+   ("ghost"); a dashed placeholder left in their place is what actually gets
+   moved around the list, compared against the other rows' live positions.
+   Reordering is deliberately scoped to rows sharing the same data-chapter —
+   the list is rendered as one flat DOM sequence with 🗂️ headers sprinkled in
+   (see renderHostSetup's grouping), so nothing stops a row from being
+   dragged across a chapter boundary except that we only ever compare it
+   against, and insert it next to, members of its own chapter. That avoids
+   the confusing alternative of a card silently changing chapter just
+   because it got dropped near someone else's questions.
+   （二十二）延伸題「綁包」— a bundle (main question + any trailing
+   data-extends="1" rows right after it, see qrowHtml) always moves as ONE
+   unit: only a bundle's first row has a drag handle at all (extension rows
+   render a static ↳ instead, see qrowHtml), so qDragStart only ever fires on
+   a bundle's first row; collectBundle() walks the following siblings to
+   pick up the rest. All of the bundle's rows are glued together by a fixed
+   per-row Y offset computed once at drag start, so they visually slide as a
+   single rigid stack, and get reinserted as a contiguous run on drop.
    On release, QUESTIONS is rebuilt from the final DOM order (each .qrow's
    data-idx still points at its ORIGINAL index — nothing in QUESTIONS itself
    has moved yet) and editingQuestionIndex is remapped so an open edit form
    doesn't end up pointing at the wrong question. */
 let qDrag = null;
+function collectBundle(row){
+  const rows = [row];
+  let sib = row.nextElementSibling;
+  while (sib && sib.classList && sib.classList.contains('qrow') && sib.dataset.extends === '1'){
+    rows.push(sib);
+    sib = sib.nextElementSibling;
+  }
+  return rows;
+}
 function qDragStart(e){
   if (e.pointerType === 'mouse' && e.button !== 0) return; // left-click only
   const handle = e.currentTarget;
@@ -1769,21 +2067,45 @@ function qDragStart(e){
   if (!row || !list) return;
   e.preventDefault();
   const chapterKey = row.dataset.chapter || '';
-  const members = [...list.querySelectorAll('.qrow')].filter(el => el !== row && (el.dataset.chapter||'') === chapterKey);
-  const rect = row.getBoundingClientRect();
+  const rows = collectBundle(row); // this bundle's rows — always moved as one unit
+  const rowSet = new Set(rows);
+  // Other bundles in the same chapter, each represented by its own first row
+  // (memberEl) plus the live rect spanning its whole bundle (so dropping
+  // right at the seam between a bundle's main row and its own 延伸題 doesn't
+  // misbehave) — computed once here since none of them move during the drag.
+  const memberMains = [...list.querySelectorAll('.qrow')].filter(el =>
+    !rowSet.has(el) && (el.dataset.chapter||'') === chapterKey && el.dataset.extends !== '1'
+  );
+  const members = memberMains.map(memberEl => {
+    const bundleRows = collectBundle(memberEl);
+    const firstR = bundleRows[0].getBoundingClientRect();
+    const lastR = bundleRows[bundleRows.length-1].getBoundingClientRect();
+    return { el: memberEl, lastEl: bundleRows[bundleRows.length-1], mid: (firstR.top + lastR.bottom) / 2 };
+  });
+  const rects = rows.map(r => r.getBoundingClientRect());
+  const firstRect = rects[0];
+  const lastRect = rects[rects.length-1];
+  const rowOffsets = rects.map(r => r.top - firstRect.top); // fixed relative Y offsets, keeps the stack rigid
   const placeholder = document.createElement('div');
   placeholder.className = 'qrow-placeholder';
-  placeholder.style.height = rect.height + 'px';
+  placeholder.style.height = (lastRect.bottom - firstRect.top) + 'px';
   list.insertBefore(placeholder, row);
-  document.body.appendChild(row); // detach from the flex flow so fixed positioning + z-index behave predictably
-  row.classList.add('dragging');
-  row.style.position = 'fixed';
-  row.style.left = rect.left + 'px';
-  row.style.top = rect.top + 'px';
-  row.style.width = rect.width + 'px';
-  row.style.zIndex = '999';
+  rows.forEach((r,k) => {
+    document.body.appendChild(r); // detach from the flex flow so fixed positioning + z-index behave predictably
+    r.classList.add('dragging');
+    r.style.position = 'fixed';
+    r.style.left = rects[k].left + 'px';
+    r.style.top = rects[k].top + 'px';
+    r.style.width = rects[k].width + 'px';
+    r.style.zIndex = '999';
+  });
   try{ handle.setPointerCapture(e.pointerId); }catch(err){}
-  qDrag = { handle, row, list, placeholder, members, grabOffsetY: e.clientY - rect.top, height: rect.height, pointerId: e.pointerId };
+  qDrag = {
+    handle, rows, list, placeholder, members, rowOffsets,
+    grabOffsetY: e.clientY - firstRect.top,
+    totalHeight: lastRect.bottom - firstRect.top,
+    pointerId: e.pointerId
+  };
   handle.addEventListener('pointermove', qDragMove);
   handle.addEventListener('pointerup', qDragEnd);
   handle.addEventListener('pointercancel', qDragEnd);
@@ -1792,30 +2114,37 @@ function qDragMove(e){
   if (!qDrag) return;
   e.preventDefault();
   const y = e.clientY;
-  qDrag.row.style.top = (y - qDrag.grabOffsetY) + 'px';
+  const top0 = y - qDrag.grabOffsetY;
+  qDrag.rows.forEach((r,k) => { r.style.top = (top0 + qDrag.rowOffsets[k]) + 'px'; });
   const margin = 70;
   if (y < margin) window.scrollBy(0, -14);
   else if (y > window.innerHeight - margin) window.scrollBy(0, 14);
-  const centerY = (y - qDrag.grabOffsetY) + qDrag.height/2;
+  const centerY = top0 + qDrag.totalHeight/2;
   let target = null;
-  for (const el of qDrag.members){
-    const r = el.getBoundingClientRect();
-    if (centerY < r.top + r.height/2){ target = el; break; }
+  for (const m of qDrag.members){
+    if (centerY < m.mid){ target = m; break; }
   }
-  if (target) qDrag.list.insertBefore(qDrag.placeholder, target);
-  else if (qDrag.members.length) qDrag.list.insertBefore(qDrag.placeholder, qDrag.members[qDrag.members.length-1].nextSibling);
+  if (target) qDrag.list.insertBefore(qDrag.placeholder, target.el);
+  else if (qDrag.members.length) qDrag.list.insertBefore(qDrag.placeholder, qDrag.members[qDrag.members.length-1].lastEl.nextSibling);
 }
 function qDragEnd(e){
   if (!qDrag) return;
-  const { handle, row, placeholder, list, pointerId } = qDrag;
+  const { handle, rows, placeholder, list, pointerId } = qDrag;
   try{ handle.releasePointerCapture(pointerId); }catch(err){}
   handle.removeEventListener('pointermove', qDragMove);
   handle.removeEventListener('pointerup', qDragEnd);
   handle.removeEventListener('pointercancel', qDragEnd);
-  placeholder.parentNode.insertBefore(row, placeholder);
+  // Reinsert the whole bundle as one contiguous run, right where the
+  // placeholder ended up (chained insertBefore keeps the bundle's own
+  // internal order intact: main row first, then each 延伸題 right after it).
+  const parent = placeholder.parentNode;
+  parent.insertBefore(rows[0], placeholder);
+  for (let k=1;k<rows.length;k++){ rows[k-1].parentNode.insertBefore(rows[k], rows[k-1].nextSibling); }
   placeholder.remove();
-  row.classList.remove('dragging');
-  row.style.position = ''; row.style.left = ''; row.style.top = ''; row.style.width = ''; row.style.zIndex = '';
+  rows.forEach(r => {
+    r.classList.remove('dragging');
+    r.style.position = ''; r.style.left = ''; r.style.top = ''; r.style.width = ''; r.style.zIndex = '';
+  });
   qDrag = null;
   const newOrder = [...list.querySelectorAll('.qrow')].map(el => Number(el.dataset.idx));
   const reordered = newOrder.map(idx => QUESTIONS[idx]);
@@ -1938,8 +2267,15 @@ async function saveQuestionFromForm(){
         options.push({ label: caps[i] || '', img });
       }
     }
-    if (isEdit) QUESTIONS[editingQuestionIndex] = { text, type, headerImg, options, alignLeft, isWarmup, chapter, mustPick };
-    else QUESTIONS.push({ text, type, headerImg, options, alignLeft, isWarmup, chapter, mustPick });
+    // Changing which chapter a question belongs to breaks whatever "接續上一題"
+    // relationship it had (延伸題 only makes sense relative to the PREVIOUS
+    // question in its own chapter group — see buildBundles()), so a chapter
+    // change quietly resets it rather than silently re-attaching to a
+    // different, unrelated question in the new chapter.
+    const chapterChanged = isEdit && (existing.chapter || '') !== chapter;
+    const extendsPrev = isEdit && !chapterChanged ? !!existing.extendsPrev : false;
+    if (isEdit) QUESTIONS[editingQuestionIndex] = { text, type, headerImg, options, alignLeft, isWarmup, chapter, mustPick, extendsPrev };
+    else QUESTIONS.push({ text, type, headerImg, options, alignLeft, isWarmup, chapter, mustPick, extendsPrev });
     editingQuestionIndex = null;
     renderHostSetup();
     saveDraft();
@@ -2136,9 +2472,9 @@ async function hostPollTick(){
   if (!hostState || pollBusy) return;
   pollBusy = true;
   try{
-    if (['lobby','question','reveal'].includes(hostState.status)) await processJoins();
+    if (['lobby','chapterIntro','question','reveal'].includes(hostState.status)) await processJoins();
     if (hostState.status === 'question') await processAnswers();
-    if (['lobby','question','reveal','final'].includes(hostState.status)) await processStarCards();
+    if (['lobby','chapterIntro','question','reveal','final'].includes(hostState.status)) await processStarCards();
     if (hostState.status === 'awards' && hostState.awardsStage === 'rps') await processRpsThrows();
     if (hostState.status === 'awards' && hostState.awardsStage === 'picking') await processCardPicks();
   } finally { pollBusy = false; }
@@ -2245,9 +2581,58 @@ async function processAnswers(){
 /* ============================================================
    HOST: QUESTION
    ============================================================ */
+/* True when hostState.questions[index] is the FIRST real (non-warmup)
+   question of a new named chapter — i.e. the previous real question
+   (skipping over any warm-ups) belongs to a different chapter, or there
+   isn't one. Unclassified questions (chapter==='') never count as "a new
+   chapter" — they get no intro screen, same as before this feature existed.
+   hostState.questions is already grouped chapter-by-chapter at this point
+   (see buildPlayList()), so a plain adjacent-chapter comparison is enough —
+   nothing here needs to re-derive the grouping itself. */
+function startsNewChapter(questions, index){
+  const q = questions[index];
+  if (q.isWarmup || !q.chapter) return false;
+  let prevChapter = null;
+  for (let i = index - 1; i >= 0; i--){
+    if (!questions[i].isWarmup){ prevChapter = questions[i].chapter || ''; break; }
+  }
+  return prevChapter !== q.chapter;
+}
+/* 1-based position of the CURRENT question's chapter among all named
+   chapters in this round's play order, and how many named chapters there
+   are in total — feeds the "第 2 章・共 4 章" line on renderHostChapterIntro().
+   未分類 questions don't count as a chapter here either, consistent with
+   startsNewChapter() never firing an intro screen for them. */
+function chapterProgressLabel(questions, index){
+  const chapters = [];
+  for (const q of questions){
+    if (q.isWarmup || !q.chapter) continue;
+    if (chapters[chapters.length-1] !== q.chapter) chapters.push(q.chapter);
+  }
+  const chapter = questions[index].chapter;
+  return { pos: chapters.indexOf(chapter) + 1, total: chapters.length };
+}
 function nextQuestion(){
   hostState.questionIndex += 1;
   if (hostState.questionIndex >= hostState.questions.length){ return goFinal(); }
+  if (startsNewChapter(hostState.questions, hostState.questionIndex)){
+    hostState.status = 'chapterIntro';
+    sSet('game:state', hostState);
+    renderHostChapterIntro();
+    return;
+  }
+  beginCurrentQuestion();
+}
+/* Actually starts the question at hostState.questionIndex — either called
+   directly from nextQuestion() (no chapter change), or from the "開始這個
+   章節" button on renderHostChapterIntro(). Always reached synchronously
+   from a host click, which is also why the countdown-beep AudioContext gets
+   armed here (see ensureAudioCtx()) — browsers require a real user gesture
+   before audio is allowed to play. */
+function beginCurrentQuestion(){
+  ensureAudioCtx();
+  _timerAudio.lastBeepAt = 0;
+  _timerAudio.alarmPlayed = false;
   hostState.status = 'question';
   hostState.currentAnswers = {};
   hostQuestionStartLocal = Date.now();
@@ -2259,6 +2644,87 @@ function nextQuestion(){
   renderHostQuestion();
   if (hostCountdownHandle) clearInterval(hostCountdownHandle);
   hostCountdownHandle = setInterval(hostCountdownTick, 200);
+}
+function renderHostChapterIntro(){
+  const q = hostState.questions[hostState.questionIndex];
+  const { pos, total } = chapterProgressLabel(hostState.questions, hostState.questionIndex);
+  render(`
+    <div class="shell"><div class="col">
+      ${hostNav(true)}
+      <div class="chapter-intro">
+        <div class="chapter-kicker">即將進入下一章節</div>
+        <div class="chapter-icon">${chapterIcon(q.chapter)}</div>
+        <h1 class="chapter-big">${esc(q.chapter)}</h1>
+        <div class="chapter-prog">第 ${pos} 章・共 ${total} 章</div>
+        <button class="btn" onclick="beginCurrentQuestion()">開始這個章節 →</button>
+      </div>
+    </div></div>
+  `);
+}
+/* ---------- 倒數計時音效（（二十二）新增，只在主持人畫面播放） ----------
+   純用 Web Audio API 合成的短音效（振盪器 + 音量包絡），不需要任何外部
+   音檔——跟這整個專案「完全不依賴外部函式庫／素材」的既有原則一致。最後
+   5 秒開始「滴、滴」聲，越接近 0 秒滴得越快（beepIntervalMs 分段縮短間
+   隔），時間到（含代答壽星的 5 秒加碼時間也是同一顆倒數計時 chip、同一套
+   邏輯，一併有音效）另外播一個兩音降調的警示音，跟滴滴聲聽起來明顯不同。
+   AudioContext 必須在瀏覽器認可的「使用者手勢」呼叫堆疊裡建立／resume 才
+   會真的發得出聲音——ensureAudioCtx() 固定在 beginCurrentQuestion()（一定
+   是主持人點「開始第一題」／「開始這個章節」／揭曉頁「下一題」之類的點擊
+   直接觸發）裡呼叫，不要在計時器 tick 或其他非使用者手勢的地方第一次建立
+   它，不然大多數瀏覽器會直接靜音擋掉。 */
+let _timerAudio = { ctx:null, lastBeepAt:0, alarmPlayed:false };
+function ensureAudioCtx(){
+  if (!_timerAudio.ctx){
+    try{ _timerAudio.ctx = new (window.AudioContext || window.webkitAudioContext)(); }catch(err){ return null; }
+  }
+  if (_timerAudio.ctx && _timerAudio.ctx.state === 'suspended'){
+    try{ _timerAudio.ctx.resume(); }catch(err){}
+  }
+  return _timerAudio.ctx;
+}
+function playBeep(freq, durMs, vol){
+  const ctx = _timerAudio.ctx; if (!ctx) return;
+  try{
+    const t0 = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, t0);
+    gain.gain.setValueAtTime(0, t0);
+    gain.gain.linearRampToValueAtTime(vol, t0 + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, t0 + durMs/1000);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(t0);
+    osc.stop(t0 + durMs/1000 + 0.03);
+  }catch(err){ /* audio is a nice-to-have — never let it break the countdown itself */ }
+}
+function playCountdownTick(){ playBeep(880, 90, 0.18); }
+function playTimeUpAlarm(){
+  playBeep(660, 220, 0.22);
+  setTimeout(()=> playBeep(440, 320, 0.22), 150);
+}
+/* Beep spacing shrinks in stages as remainMs approaches 0 — that's the
+   "越接近時間到滴得越快" effect the user asked for. Infinity means silent
+   (more than 5 seconds left). */
+function beepIntervalMs(remainMs){
+  if (remainMs > 5000) return Infinity;
+  if (remainMs > 3000) return 900;
+  if (remainMs > 1500) return 500;
+  return 220;
+}
+function tickCountdownSound(remainMs){
+  if (remainMs <= 0){
+    if (!_timerAudio.alarmPlayed){ _timerAudio.alarmPlayed = true; playTimeUpAlarm(); }
+    return;
+  }
+  _timerAudio.alarmPlayed = false; // re-arm so the *next* time this hits 0 also alarms
+  const interval = beepIntervalMs(remainMs);
+  if (interval === Infinity) return;
+  const now = Date.now();
+  if (now - _timerAudio.lastBeepAt >= interval){
+    _timerAudio.lastBeepAt = now;
+    playCountdownTick();
+  }
 }
 /* Time's up is no longer an automatic void-the-round event for 壽星: if 壽星
    hasn't answered yet, we give one extra 5-second "grace" window (synced via
@@ -2295,6 +2761,7 @@ function updateHostTimerUI(remainMs){
     chip.querySelector('.num').textContent = secs;
     chip.classList.toggle('urgent', secs <= 5);
   }
+  tickCountdownSound(remainMs);
   if (bar){
     const answered = Object.keys(hostState.currentAnswers).length;
     const total = Object.keys(hostState.players).length || 1;
@@ -2449,21 +2916,21 @@ function renderHostReveal(){
   const isLast = hostState.questionIndex >= hostState.questions.length - 1;
 
   render(`
-    <div class="shell"><div class="col">
+    <div class="shell tight"><div class="col reveal-tight">
       ${hostNav(true)}
       <span class="eyebrow">🎂 壽星的選擇</span>
       ${isWarmup ? '<p class="sub" style="color:var(--gold);font-weight:700">🔥 暖身題．這題不計分</p>' : ''}
-      ${qtextHtml(q.text, "font-size:clamp(17px,3vw,24px);max-width:30em", q.alignLeft)}
+      ${qtextHtml(q.text, "font-size:clamp(14px,2.1vw,19px);max-width:32em", q.alignLeft)}
       ${shouxingChoice==null
         ? '<p class="sub" style="text-align:center">壽星這題沒來得及作答，這題大家都不計分</p>'
         : `<p class="sub" id="reveal-suspense" style="text-align:center;font-weight:700">🤔 壽星選的是<span class="waiting-dots"><span>.</span><span>.</span><span>.</span></span></p>`}
       <div class="options-grid">
         ${q.options.map((o,i)=> revealRowHtml(o, i, counts[i], false, 'reveal-opt-' + i, totalAnswered)).join('')}
       </div>
-      <div class="panel" style="margin-top:8px">
+      <div class="panel">
         <h2>🏆 目前排行榜（前 5 名）</h2>
         ${sxName? `<p class="sub" style="margin-top:2px">🎂 ${nameTag(hostState.players[sx])} 是今天的壽星，負責出正解，不列入排名</p>`:''}
-        <div class="stack" style="margin-top:10px" id="reveal-leaderboard">
+        <div class="stack" id="reveal-leaderboard">
           ${prevRanked.map(([id,p,prevScore],i)=>{
             const points = (hostState.currentAnswers[id] && hostState.currentAnswers[id].points) || 0;
             return `
@@ -2476,7 +2943,7 @@ function renderHostReveal(){
           `;}).join('') || '<p class="sub">還沒有人猜</p>'}
         </div>
       </div>
-      <div class="btn-row" style="margin-top:6px">
+      <div class="btn-row">
         <button class="btn" onclick="${isLast? 'goFinal()' : 'nextQuestion()'}">${isLast? '🏁 查看最終結果 →' : '下一題 →'}</button>
       </div>
     </div></div>
@@ -3201,7 +3668,6 @@ function renderHostAwardsDone(){
 function renderPlayerNameEntry(){
   render(`
     <div class="shell"><div class="center">
-      ${mascot('嗨，我是今天的吉祥物！')}
       <span class="eyebrow">${IS_STAR_LINK? '🎂 壽星專屬入口' : '📱 加入遊戲'}</span>
       <h1 class="marquee-title" style="font-size:clamp(28px,8vw,48px)">你的<span class="hl">暱稱</span>？</h1>
       ${IS_STAR_LINK? '<p class="sub">這個連結會自動把你標記成今天的壽星 🎂</p>' : ''}
@@ -3302,6 +3768,7 @@ function renderPlayerView(state){
   clearPlayerCountdown();
   if (state.status === 'idle'){ renderPlayerParked(state); return; }
   if (state.status === 'lobby'){ renderPlayerWaiting(state); return; }
+  if (state.status === 'chapterIntro'){ renderPlayerChapterWait(state); return; }
   if (state.status === 'question'){ renderPlayerQuestionOrWaiting(state); return; }
   if (state.status === 'reveal'){ renderPlayerReveal(state); return; }
   if (state.status === 'final'){ renderPlayerFinal(state); return; }
@@ -3335,6 +3802,17 @@ function renderPlayerWaiting(state){
       <p class="sub">${isSx? '等等大家會猜你每題會選什麼喔～' : '等待主持人開始遊戲'}<span class="waiting-dots"><span>.</span><span>.</span><span>.</span></span></p>
       ${count!=null ? `<div class="chip"><span>👥</span><span class="num">${count}</span><span>人已加入</span></div>` : ''}
       ${isSx ? renderStarWishCardsEntry() : ''}
+    </div></div>
+  `);
+}
+/* 章節開場畫面（見 renderHostChapterIntro）只在主持人投影畫面顯示大字報幕
+   ——玩家手機在這段時間單純顯示一個輕量的等待畫面，不需要知道章節名稱。 */
+function renderPlayerChapterWait(state){
+  render(`
+    <div class="shell"><div class="center">
+      <div style="font-size:44px">🎬</div>
+      <h1 class="marquee-title" style="font-size:clamp(22px,6vw,32px)">主持人準備下一關</h1>
+      <p class="sub">稍等一下，馬上開始<span class="waiting-dots"><span>.</span><span>.</span><span>.</span></span></p>
     </div></div>
   `);
 }
