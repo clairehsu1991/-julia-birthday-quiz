@@ -702,6 +702,13 @@ let hasAnsweredCurrent = false;
 let lastPlayerState = null;
 let pollBusy = false;
 
+// ---------- #spectate=<key> read-only projection view (see SPECTATE section) ----------
+let SPECTATE_KEY = null;
+let spectatePollHandle = null;
+let spectateCountdownHandle = null; // drives the live question timer chip between polls, same idea as playerCountdownHandle
+let lastSpectateState = null;
+let _lastSpecRevealKey = null;      // guards animateOptionBars() so the vote bars don't replay their grow-in on every ~1.5s poll
+
 /* ---------- generic helpers ---------- */
 function esc(s){
   return String(s == null ? '' : s)
@@ -1048,6 +1055,7 @@ async function boot(){
   const j = hashParams.get('join');
   const hk = hashParams.get('host');
   const pv = hashParams.get('preview');
+  const sp = hashParams.get('spectate');
 
   if (j === '1' || j === 'star'){
     ROLE = 'player';
@@ -1063,6 +1071,26 @@ async function boot(){
   if (pv !== null){
     ROLE = 'preview';
     await bootPreview(parseInt(pv, 10), hashParams.get('as') || 'host');
+    return;
+  }
+
+  // Read-only projection view for an extended-screen setup — laptop keeps the
+  // interactive host page (this same route family, #host=), projector/TV opens
+  // this one instead. Validated through the same /api/host/check as #host=
+  // purely for URL hygiene (a bad/typo'd link gets the familiar "已失效"
+  // screen instead of silently sitting on a blank poll forever) — game:state
+  // itself was never actually secret, every player phone already reads it
+  // with no key at all. See the SPECTATE section below for the render path.
+  if (sp !== null){
+    ROLE = 'spectate';
+    render(`<div class="shell"><div class="center"><p class="sub">載入中…</p></div></div>`);
+    if (await verifyHostKey(sp)){
+      SPECTATE_KEY = sp;
+      ensureSpectateBadge();
+      startSpectatePolling();
+    } else {
+      renderHostDenied();
+    }
     return;
   }
 
@@ -1260,8 +1288,18 @@ function setPrize(i, val){ PRIZES[i] = val; saveDraft(); }
 function hostNav(inGame){
   return `<div class="host-nav">
     ${inGame ? '<button class="navbtn" onclick="hostBackToSetup()">← 回設定</button>' : ''}
+    <button class="navbtn" onclick="openSpectateWindow()">🖥️ 開投影頁</button>
     <button class="navbtn" onclick="${inGame ? 'hostLeaveToHome()' : 'hostGoHome()'}">⌂ 回主畫面</button>
   </div>`;
+}
+/* Opens the read-only #spectate= projection view in a new window — drag that
+   window onto the projector/TV (extended screen) and keep this control panel
+   on the laptop. Always available, on every host screen (setup or in-game),
+   not just Setup, in case the host only thinks to hook up the projector after
+   the game's already started. */
+function openSpectateWindow(){
+  if (!HOST_KEY){ toast('找不到主持人金鑰，請重新整理這個頁面'); return; }
+  window.open(baseUrl() + '#spectate=' + encodeURIComponent(HOST_KEY), '_blank');
 }
 function stopHostTimers(){
   if (hostCountdownHandle) clearInterval(hostCountdownHandle);
@@ -3660,6 +3698,419 @@ function renderHostAwardsDone(){
     </div></div>
   `);
   animatePodiumReveal('ad');
+}
+
+/* ============================================================
+   SPECTATE — read-only #spectate=<key> projection view (二十四)
+   For an extended-screen setup: the laptop keeps this same page open as
+   #host=<key> (the interactive control panel), and a second window opens
+   #spectate=<key> instead, dragged onto the projector/TV. Every render*
+   function below takes `state` (whatever the latest sGet('game:state') poll
+   returned) as an explicit parameter and builds markup with the SAME shared
+   helpers the host/player screens already use (qrSvgHtml, optionCardHtml,
+   revealRowHtml, podiumSlotHtml, nameTag, avatarSpan, qtextHtml, …) — none of
+   them touch the global `hostState`, so this can run safely alongside (or
+   instead of) a real host tab without any risk of cross-talk.
+   Deliberately NOT reused: the interactive renderHostX() functions themselves
+   (they wire onclick handlers straight to game-mutating/server-writing
+   functions like nextQuestion()/goToReveal() — wiring those up here would let
+   an accidental tap on the projector/TV screen actually advance or mutate a
+   live game) and hostPollTick() (it merges player answers/joins INTO
+   hostState and writes back to the server — exclusively the host tab's job;
+   running it a second time from here risks double-processing races). This
+   view only ever calls sGet('game:state') to read, then paints.
+   Also deliberately silent — no countdown beep/alarm audio (see
+   ensureAudioCtx()/tickCountdownSound(), host-tab-only) and no confetti/
+   suspense-timed reveal animations: the host's own tab already plays sound
+   and both tabs sit in the same room at a party, and a ~1.5s poll loop
+   re-rendering the SAME screen would replay any staggered "reveal" animation
+   every poll, which reads as flicker rather than delight (see
+   animateOptionBars()'s own comment on exactly this trade-off — the vote
+   bars are the one animation kept here, guarded by _lastSpecRevealKey so
+   they still only grow-in once per question, matching that established
+   pattern). Podium/leaderboard scores are simply painted at their current
+   value on every poll instead of counting up or reordering — a session
+   watching this screen already just watched (or will watch) the host's own
+   tab do the full suspense version once; the projector's job here is to stay
+   accurate and legible, not to re-run the big reveal moment a second time.
+   ============================================================ */
+/* Small fixed corner label so the host can tell this window apart from the
+   real control panel at a glance — appended to <body> once (outside #app,
+   which render() fully replaces on every screen change) so it survives every
+   repaint without needing to be threaded through each render*() call below. */
+function ensureSpectateBadge(){
+  if (document.getElementById('spec-badge')) return;
+  const d = document.createElement('div');
+  d.id = 'spec-badge';
+  d.textContent = '🖥️ 投影頁（唯讀）';
+  d.style.cssText = 'position:fixed;top:8px;left:8px;z-index:40;background:rgba(46,36,24,.55);color:#fff;'
+    + 'padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.02em;pointer-events:none';
+  document.body.appendChild(d);
+}
+function startSpectatePolling(){
+  if (spectatePollHandle) clearInterval(spectatePollHandle);
+  spectateTick();
+  spectatePollHandle = setInterval(spectateTick, 1500);
+}
+async function spectateTick(){
+  let state = null;
+  try{ state = await sGet('game:state'); } catch(e){}
+  lastSpectateState = state;
+  renderSpectate(state);
+}
+function clearSpectateCountdown(){
+  if (spectateCountdownHandle){ clearInterval(spectateCountdownHandle); spectateCountdownHandle = null; }
+}
+function renderSpectate(state){
+  if (!state || !state.status || state.status === 'idle'){ renderSpectateIdle(); return; }
+  const renderers = {
+    lobby: renderSpectateLobby,
+    chapterIntro: renderSpectateChapterIntro,
+    question: renderSpectateQuestion,
+    reveal: renderSpectateReveal,
+    final: renderSpectateFinal,
+    awards: renderSpectateAwards
+  };
+  const fn = renderers[state.status];
+  if (fn) fn(state); else renderSpectateIdle();
+}
+function renderSpectateIdle(){
+  clearSpectateCountdown();
+  render(`
+    <div class="shell"><div class="center">
+      ${mascot()}
+      <h1 class="marquee-title">等待主持人<span class="hl">開始遊戲</span></h1>
+      <p class="sub">畫面準備好了，主持人開始後這裡會自動接上</p>
+    </div></div>
+  `);
+}
+function renderSpectateLobby(state){
+  clearSpectateCountdown();
+  const url = joinUrl();
+  const players = Object.entries(state.players || {});
+  const total = (state.questions || []).length;
+  render(`
+    <div class="shell"><div class="col" style="align-items:center;text-align:center">
+      <span class="eyebrow">📶 等待加入</span>
+      <h1 class="marquee-title" style="font-size:clamp(28px,5vw,48px)">掃碼<span class="hl">加入猜猜</span></h1>
+      <div class="qr-card">${qrSvgHtml(url, '')}</div>
+      <div class="join-url">${esc(url)}</div>
+      <p class="sub" style="font-size:13px;margin-top:-4px">本場共 ${total} 題</p>
+      <div style="margin-top:6px;width:100%">
+        <div class="chip" style="margin:0 auto 10px;width:fit-content">
+          <span>👥 已加入</span><span class="num">${players.length}</span><span>人</span>
+        </div>
+        <div class="players-grid">
+          ${players.length ? players.map(([id,p])=>`
+            <div class="player-pill ${id===state.shouxingId?'is-shouxing':''}">
+              <span class="dot"></span>${avatarSpan(p.avatar)}${nameTag(p)}${id===state.shouxingId? '<span class="badge-shouxing">🎂 壽星</span>' : ''}
+            </div>
+          `).join('') : '<p class="sub">還沒有人加入，請大家掃上面的 QR code</p>'}
+        </div>
+      </div>
+    </div></div>
+  `);
+}
+function renderSpectateChapterIntro(state){
+  clearSpectateCountdown();
+  const q = state.questions[state.questionIndex];
+  const { pos, total } = chapterProgressLabel(state.questions, state.questionIndex);
+  render(`
+    <div class="shell"><div class="col">
+      <div class="chapter-intro">
+        <div class="chapter-kicker">即將進入下一章節</div>
+        <div class="chapter-icon">${chapterIcon(q.chapter)}</div>
+        <h1 class="chapter-big">${esc(q.chapter)}</h1>
+        <div class="chapter-prog">第 ${pos} 章・共 ${total} 章</div>
+      </div>
+    </div></div>
+  `);
+}
+function renderSpectateQuestion(state){
+  const q = state.questions[state.questionIndex];
+  const answered = Object.keys(state.currentAnswers || {}).length;
+  const total = Object.keys(state.players || {}).length || 1;
+  const pct = Math.min(100, Math.round(answered/total*100));
+  const shouxingP = state.players[state.shouxingId];
+  render(`
+    <div class="shell"><div class="col">
+      <div class="q-content">
+        <div class="topbar">
+          <div class="chip">${questionProgressLabel(state.questions, state.questionIndex)}</div>
+          <div class="chip shouxing">🎂 猜猜 ${shouxingP ? nameTag(shouxingP) : ''} 會選什麼</div>
+          <div class="chip timer" id="spec-timer-chip"><span>⏱</span><span class="num">--</span></div>
+        </div>
+        ${q.headerImg? `<img class="q-header-img" src="${q.headerImg}" alt="">` : ''}
+        ${qtextHtml(q.text, null, q.alignLeft)}
+        <div class="${optionsGridClass(q)}">
+          ${q.options.map((o,i)=> optionCardHtml(o, i, null)).join('')}
+        </div>
+        <div class="progress-wrap">
+          <div class="progress-track"><div class="progress-fill" id="spec-answer-bar" style="width:${pct}%"></div></div>
+          <div class="progress-label" id="spec-answer-label">已作答 ${answered} / ${total}</div>
+        </div>
+      </div>
+    </div></div>
+  `);
+  updateSpectateTimerUI(state);
+  clearSpectateCountdown();
+  spectateCountdownHandle = setInterval(()=> updateSpectateTimerUI(lastSpectateState || state), 200);
+}
+/* Fast local tick between polls, mirroring updatePlayerTimerUI()'s "derive
+   from the host-synced questionStartAt/graceStartAt timestamps" trick — same
+   reasoning as the player phones: the ~1.5s poll alone would make the chip
+   visibly jump in steps instead of counting down smoothly. Also repaints the
+   answered-count bar every tick from whatever state the last poll landed
+   (mirrors updateHostTimerUI on the host tab) — deliberately does NOT call
+   tickCountdownSound(); see the SPECTATE section doc comment for why this
+   view stays silent. */
+function updateSpectateTimerUI(state){
+  if (!state) return;
+  const chip = document.getElementById('spec-timer-chip');
+  if (chip && state.questionStartAt){
+    const limit = state.timeLimitMs || TIME_LIMIT_SECONDS * 1000;
+    let secs, urgent;
+    if (state.graceActive){
+      const graceRemain = Math.max(0, 5000 - (Date.now() - (state.graceStartAt || Date.now())));
+      secs = Math.ceil(graceRemain / 1000);
+      urgent = true;
+    } else {
+      const remain = Math.max(0, limit - (Date.now() - state.questionStartAt));
+      secs = Math.ceil(remain / 1000);
+      urgent = secs <= 5;
+    }
+    chip.querySelector('.num').textContent = secs;
+    chip.classList.toggle('urgent', urgent);
+  }
+  const bar = document.getElementById('spec-answer-bar');
+  if (bar){
+    const answered = Object.keys(state.currentAnswers || {}).length;
+    const total = Object.keys(state.players || {}).length || 1;
+    bar.style.width = Math.min(100, Math.round(answered/total*100)) + '%';
+    const lbl = document.getElementById('spec-answer-label');
+    if (lbl) lbl.textContent = '已作答 ' + answered + ' / ' + total;
+  }
+}
+function renderSpectateReveal(state){
+  clearSpectateCountdown();
+  const q = state.questions[state.questionIndex];
+  const isWarmup = !!q.isWarmup;
+  const sx = state.shouxingId;
+  const shouxingChoice = state.currentAnswers[sx] ? state.currentAnswers[sx].choice : null;
+  const counts = [0,0,0,0];
+  Object.entries(state.currentAnswers || {}).forEach(([id,a])=>{ if (id!==sx && a.choice!=null) counts[a.choice]++; });
+  const totalAnswered = counts.reduce((a,b)=>a+b, 0);
+  const ranked = rankedGuessers(state.players, sx).slice(0, 5);
+  const sxName = state.players[sx] ? state.players[sx].name : '';
+  const key = (state.roundId||'') + '_q' + state.questionIndex;
+  const isFirstRender = _lastSpecRevealKey !== key;
+  _lastSpecRevealKey = key;
+  render(`
+    <div class="shell tight"><div class="col reveal-tight">
+      <span class="eyebrow">🎂 壽星的選擇</span>
+      ${isWarmup ? '<p class="sub" style="color:var(--gold);font-weight:700">🔥 暖身題．這題不計分</p>' : ''}
+      ${qtextHtml(q.text, "font-size:clamp(14px,2.1vw,19px);max-width:32em", q.alignLeft)}
+      ${shouxingChoice==null
+        ? '<p class="sub" style="text-align:center">壽星這題沒來得及作答，這題大家都不計分</p>'
+        : `<p class="sub" style="text-align:center;font-weight:700">🎂 壽星選的是「${esc(q.options[shouxingChoice] ? q.options[shouxingChoice].label : '')}」！</p>`}
+      <div class="options-grid">
+        ${q.options.map((o,i)=> revealRowHtml(o, i, counts[i], i===shouxingChoice, 'spec-reveal-opt-'+i, totalAnswered)).join('')}
+      </div>
+      <div class="panel">
+        <h2>🏆 目前排行榜（前 5 名）</h2>
+        ${sxName? `<p class="sub" style="margin-top:2px">🎂 ${nameTag(state.players[sx])} 是今天的壽星，負責出正解，不列入排名</p>`:''}
+        <div class="stack">
+          ${ranked.map(([id,p],i)=>`
+            <div class="lb-row">
+              <div class="lb-rank ${i===0?'top1':i===1?'top2':i===2?'top3':''}">${i+1}</div>
+              <div class="lb-name">${avatarSpan(p.avatar)}${nameTag(p)}</div>
+              <div class="lb-score num">${p.score}</div>
+            </div>
+          `).join('') || '<p class="sub">還沒有人猜</p>'}
+        </div>
+      </div>
+    </div></div>
+  `);
+  animateOptionBars(document, 150, !isFirstRender);
+}
+function renderSpectateFinal(state){
+  clearSpectateCountdown();
+  const sx = state.shouxingId;
+  const ranked = rankedGuessers(state.players, sx);
+  const sxName = state.players[sx] ? state.players[sx].name : '';
+  const top3 = ranked.slice(0,3);
+  const rest = ranked.slice(3);
+  render(`
+    <div class="shell"><div class="col" style="align-items:center;text-align:center">
+      ${mascot()}
+      <span class="eyebrow">🎊 遊戲結束</span>
+      <h1 class="marquee-title">最終<span class="hl">排行榜</span></h1>
+      ${sxName? `<div class="chip shouxing" style="margin:0 auto">🎂 今天的壽星 ${nameTag(state.players[sx])}</div>`:''}
+      <div class="podium">
+        <img class="riser-img" src="${PODIUM_RISER_IMG}" alt="頒獎台">
+        ${top3[1]?podiumSlotHtml(2,'spec-fp-2',top3[1][1],String(top3[1][1].score)):''}
+        ${top3[0]?podiumSlotHtml(1,'spec-fp-1',top3[0][1],String(top3[0][1].score)):''}
+        ${top3[2]?podiumSlotHtml(3,'spec-fp-3',top3[2][1],String(top3[2][1].score)):''}
+      </div>
+      ${rest.length? `<div class="stack" style="width:100%;max-width:520px;margin:0 auto">
+        ${rest.map(([id,p],i)=>`
+          <div class="lb-row"><div class="lb-rank">${i+4}</div><div class="lb-name">${avatarSpan(p.avatar)}${nameTag(p)}</div><div class="lb-score num">${p.score}</div></div>
+        `).join('')}
+      </div>` : ''}
+    </div></div>
+  `);
+  document.querySelectorAll('.podium .p').forEach(el => el.classList.add('show'));
+}
+function renderSpectateAwards(state){
+  const stage = state.awardsStage;
+  if (stage === 'rps') return renderSpectateAwardsRps(state);
+  if (stage === 'picking') return renderSpectateAwardsPicking(state);
+  if (stage === 'done') return renderSpectateAwardsDone(state);
+  return renderSpectateAwardsPodium(state);
+}
+function renderSpectateAwardsPodium(state){
+  clearSpectateCountdown();
+  const top3 = (state.topIds||[]).map(id=>[id, state.players[id]]).filter(([,p])=>p);
+  const prizes = state.prizes || ['','',''];
+  const prizeLine = (i, elId) => prizes[i] ? `<div class="sub prize-line" id="${elId}">🎁 ${esc(prizes[i])}</div>` : '';
+  render(`
+    <div class="shell"><div class="col" style="align-items:center;text-align:center">
+      ${mascot()}
+      <span class="eyebrow">🎊 頒獎典禮</span>
+      <h1 class="marquee-title">最懂壽星<span class="hl">前三名</span></h1>
+      <div class="podium">
+        <img class="riser-img" src="${PODIUM_RISER_IMG}" alt="頒獎台">
+        ${top3[1]?podiumSlotHtml(2,'spec-ap-2',top3[1][1],String(top3[1][1].score),prizeLine(1,'spec-ap-2-prize')):''}
+        ${top3[0]?podiumSlotHtml(1,'spec-ap-1',top3[0][1],String(top3[0][1].score),prizeLine(0,'spec-ap-1-prize')):''}
+        ${top3[2]?podiumSlotHtml(3,'spec-ap-3',top3[2][1],String(top3[2][1].score),prizeLine(2,'spec-ap-3-prize')):''}
+      </div>
+      ${top3.length? '' : '<p class="sub">這場沒有人猜，先跳過頒獎</p>'}
+    </div></div>
+  `);
+  document.querySelectorAll('.podium .p').forEach(el => el.classList.add('show'));
+  document.querySelectorAll('.prize-line').forEach(el => el.classList.add('show'));
+}
+function renderSpectateAwardsRps(state){
+  clearSpectateCountdown();
+  const bottom = (state.bottomIds||[]).map(id=>[id, state.players[id]]).filter(([,p])=>p);
+  if (!bottom.length){
+    render(`
+      <div class="shell"><div class="col" style="align-items:center;text-align:center">
+        <span class="eyebrow">🃏 最後三名 & 許願卡</span>
+        <h1 class="marquee-title" style="font-size:clamp(26px,5vw,42px)">誰先選<span class="hl">許願卡</span>？</h1>
+        <p class="sub">這場人數不到三位猜猜的人，這次先跳過猜拳環節。</p>
+      </div></div>
+    `);
+    return;
+  }
+  if (bottom.length === 1){
+    render(`
+      <div class="shell"><div class="col" style="align-items:center;text-align:center">
+        <span class="eyebrow">🃏 最後三名 & 許願卡</span>
+        <h1 class="marquee-title" style="font-size:clamp(26px,5vw,42px)">誰先選<span class="hl">許願卡</span>？</h1>
+        <p class="sub">這場只有一位最後一名，不用猜拳，直接選卡！</p>
+        <div class="players-grid">${avatarSpan(bottom[0][1].avatar)}${nameTag(bottom[0][1])}</div>
+      </div></div>
+    `);
+    return;
+  }
+  const active = state.rpsActive || [];
+  const picks = state.rpsPicks || {};
+  const medal = ['🥇','🥈','🥉'];
+  const medalOrder = state.rpsMedalOrder || [];
+  const defaultMsg = active.length === 3
+    ? '三人猜拳！三人同手勢或三人各出一種都算重來；兩人同手勢、一人不同，看那個不同手勢的輸贏決定他排最前面還是排最後面。'
+    : '最後兩人猜拳，贏的排前面！';
+  render(`
+    <div class="shell"><div class="col" style="align-items:center;text-align:center">
+      <span class="eyebrow">🃏 最後三名 & 許願卡</span>
+      <h1 class="marquee-title" style="font-size:clamp(26px,5vw,42px)">猜拳決定<span class="hl">選卡順序</span></h1>
+      <p class="sub">${esc(state.rpsRoundMsg || defaultMsg)}</p>
+      <div class="players-grid">
+        ${bottom.map(([id,p])=>{
+          const isActive = active.includes(id);
+          const thrown = !!picks[id];
+          const solo = state.rpsSolo && state.rpsSolo.id===id ? state.rpsSolo.place : null;
+          const medalIdx = medalOrder.indexOf(id);
+          let hand;
+          if (medalIdx >= 0) hand = medal[medalIdx] || '';
+          else if (thrown) hand = HAND_EMOJI[picks[id]];
+          else if (isActive) hand = '✊';
+          else hand = solo === 'front' ? '⏫' : solo === 'back' ? '⏬' : '—';
+          return `<div class="player-pill ${isActive && !thrown ? 'shuffling' : ''} ${solo?'rps-placed':''}">
+            ${avatarSpan(p.avatar)}${nameTag(p)}
+            <span class="rps-hand ${thrown||medalIdx>=0?'landed':''}">${hand}</span>
+          </div>`;
+        }).join('')}
+      </div>
+    </div></div>
+  `);
+}
+function renderSpectateAwardsPicking(state){
+  clearSpectateCountdown();
+  const order = state.pickOrder || [];
+  const cards = state.wishCards || ['','',''];
+  const picked = state.pickedCards || {};
+  const pickedIdxs = Object.values(picked);
+  const currentId = order.find(id => picked[id] === undefined);
+  const currentP = currentId ? state.players[currentId] : null;
+  render(`
+    <div class="shell"><div class="col" style="align-items:center;text-align:center">
+      <span class="eyebrow">🃏 選卡中</span>
+      ${currentP ? `
+        <h1 class="marquee-title" style="font-size:clamp(24px,5vw,40px)">輪到 <span class="hl">${nameTag(currentP)}</span> 選卡！</h1>
+        <p class="sub">請她／他看自己的手機，從剩下的許願卡中選一張</p>
+      ` : '<h1 class="marquee-title" style="font-size:clamp(24px,5vw,40px)">都選完了！</h1>'}
+      <div class="options-grid" style="max-width:760px">
+        ${[0,1,2].map(i=> `
+          <div class="opt-card ${OPT_CLASS[i]} ${pickedIdxs.includes(i)?'dim':''}">
+            <span class="tag">${i+1}</span>
+            <span>${pickedIdxs.includes(i) ? '（已被選走）' : (cards[i] ? esc(cards[i]) : '（壽星還沒填這張卡）')}</span>
+          </div>
+        `).join('')}
+      </div>
+      <div class="stack" style="width:100%;max-width:420px;margin-top:10px">
+        ${order.map((id,i)=>{
+          const p = state.players[id]; if (!p) return '';
+          const idx = picked[id];
+          return `<div class="lb-row"><div class="lb-rank">${i+1}</div><div class="lb-name">${avatarSpan(p.avatar)}${nameTag(p)}</div><div class="sub">${idx!==undefined ? '拿到：'+esc(cards[idx]||'—') : '等待中…'}</div></div>`;
+        }).join('')}
+      </div>
+    </div></div>
+  `);
+}
+function renderSpectateAwardsDone(state){
+  clearSpectateCountdown();
+  const top3 = (state.topIds||[]).map(id=>[id, state.players[id]]).filter(([,p])=>p);
+  const prizes = state.prizes || ['','',''];
+  const prizeLine = (i, elId) => prizes[i] ? `<div class="sub prize-line" id="${elId}">🎁 ${esc(prizes[i])}</div>` : '';
+  const order = state.pickOrder || [];
+  const cards = state.wishCards || ['','',''];
+  render(`
+    <div class="shell"><div class="col" style="align-items:center;text-align:center">
+      ${mascot()}
+      <span class="eyebrow">🎊 頒獎典禮</span>
+      <h1 class="marquee-title">最懂壽星<span class="hl">前三名</span></h1>
+      <div class="podium">
+        <img class="riser-img" src="${PODIUM_RISER_IMG}" alt="頒獎台">
+        ${top3[1]?podiumSlotHtml(2,'spec-ad-2',top3[1][1],String(top3[1][1].score),prizeLine(1,'spec-ad-2-prize')):''}
+        ${top3[0]?podiumSlotHtml(1,'spec-ad-1',top3[0][1],String(top3[0][1].score),prizeLine(0,'spec-ad-1-prize')):''}
+        ${top3[2]?podiumSlotHtml(3,'spec-ad-3',top3[2][1],String(top3[2][1].score),prizeLine(2,'spec-ad-3-prize')):''}
+      </div>
+      ${order.length? `<div class="panel" style="margin-top:10px;width:100%;max-width:520px">
+        <h2>🎁 許願任務</h2>
+        <div class="stack" style="margin-top:10px">
+          ${order.map(id=>{
+            const p = state.players[id]; if (!p) return '';
+            const idx = state.pickedCards[id];
+            return `<div class="lb-row"><div class="lb-name">${avatarSpan(p.avatar)}${nameTag(p)}</div><div class="sub" style="flex:2;text-align:right">${idx!=null? esc(cards[idx]||'—') : '—'}</div></div>`;
+          }).join('')}
+        </div>
+      </div>` : ''}
+    </div></div>
+  `);
+  document.querySelectorAll('.podium .p').forEach(el => el.classList.add('show'));
+  document.querySelectorAll('.prize-line').forEach(el => el.classList.add('show'));
 }
 
 /* ============================================================
