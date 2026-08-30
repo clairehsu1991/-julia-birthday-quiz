@@ -438,6 +438,21 @@
   .qgroup-header:first-child{ margin-top:0; }
   .qrow{ background:#fff; border:1px solid var(--line); border-radius:14px; padding:12px 14px; display:flex; gap:12px; align-items:flex-start; }
   .qrow.editing{ border-color:var(--moss); box-shadow:0 0 0 3px rgba(63,92,51,0.14); }
+  /* Drag handle for reordering questions (see qDragStart/qDragMove/qDragEnd) —
+     a small grip icon the host presses-and-drags; touch-action:none stops the
+     phone's own page-scroll gesture from stealing the touch before our pointer
+     handlers see it. */
+  .qrow .drag-handle{
+    flex:none; align-self:center; cursor:grab; touch-action:none; -webkit-touch-callout:none;
+    user-select:none; color:var(--ink-dim); font-size:19px; line-height:1; padding:6px 4px;
+    border-radius:8px;
+  }
+  .qrow .drag-handle:active{ cursor:grabbing; }
+  .qrow.dragging{ box-shadow:0 12px 26px rgba(0,0,0,0.2); cursor:grabbing; }
+  /* Dashed slot left behind in the list while a row is being dragged (see
+     qDragStart) — the actual .qrow becomes position:fixed and floats over
+     everything, so this is what visually marks where it'll land. */
+  .qrow-placeholder{ border:2px dashed var(--moss); border-radius:14px; background:rgba(63,92,51,0.07); }
   .qrow .qi{ font-family:'Fredoka',sans-serif; font-size:20px; color:var(--ink-dim); width:26px; flex:none; }
   .qrow .qb{ flex:1; min-width:0; }
   .qrow .qb .qt{ font-weight:700; font-size:14.5px; margin-bottom:6px; white-space:pre-wrap; overflow-wrap:anywhere; }
@@ -1443,7 +1458,8 @@ function renderHostSetup(){
       ? q.options.map(o=> `<img src="${o.img}" style="width:30px;height:30px;object-fit:cover;border-radius:6px;margin-right:4px">`).join('')
       : q.options.map(o=> esc(o.label)).join('　');
     return `
-      <div class="qrow${editingQuestionIndex===i?' editing':''}">
+      <div class="qrow${editingQuestionIndex===i?' editing':''}" data-idx="${i}" data-chapter="${esc(q.chapter||'')}">
+        <div class="drag-handle" title="拖曳調整順序" onpointerdown="qDragStart(event)">⠿</div>
         <div class="qi num">${i+1}</div>
         <div class="qb">
           <div class="qt">${q.mustPick?'<span style="color:var(--coral);font-weight:700">⭐ 必出． </span>':''}${q.isWarmup?'<span style="color:var(--gold);font-weight:700">🔥 暖身． </span>':''}${q.alignLeft?'⬅️ ':''}${q.type==='image'?'🖼️ ':'🔤 '}${esc(q.text)}</div>
@@ -1726,6 +1742,90 @@ function editQuestion(i){
 function cancelEditQuestion(){
   editingQuestionIndex = null;
   renderHostSetup();
+}
+
+/* 拖曳排序題目 — a small hand-rolled sortable list (Pointer Events, not HTML5
+   drag-and-drop, so it works the same on touch as on mouse). The dragged .qrow
+   becomes position:fixed and just visually follows the pointer ("ghost"); a
+   dashed placeholder left in its place is what actually gets moved around the
+   list, compared against the other rows' live positions. Reordering is
+   deliberately scoped to rows sharing the same data-chapter — the list is
+   rendered as one flat DOM sequence with 🗂️ headers sprinkled in (see
+   renderHostSetup's grouping), so nothing stops a row from being dragged
+   across a chapter boundary except that we only ever compare it against, and
+   insert it next to, members of its own chapter. That avoids the confusing
+   alternative of a card silently changing chapter just because it got dropped
+   near someone else's questions.
+   On release, QUESTIONS is rebuilt from the final DOM order (each .qrow's
+   data-idx still points at its ORIGINAL index — nothing in QUESTIONS itself
+   has moved yet) and editingQuestionIndex is remapped so an open edit form
+   doesn't end up pointing at the wrong question. */
+let qDrag = null;
+function qDragStart(e){
+  if (e.pointerType === 'mouse' && e.button !== 0) return; // left-click only
+  const handle = e.currentTarget;
+  const row = handle.closest('.qrow');
+  const list = row && row.closest('.qlist');
+  if (!row || !list) return;
+  e.preventDefault();
+  const chapterKey = row.dataset.chapter || '';
+  const members = [...list.querySelectorAll('.qrow')].filter(el => el !== row && (el.dataset.chapter||'') === chapterKey);
+  const rect = row.getBoundingClientRect();
+  const placeholder = document.createElement('div');
+  placeholder.className = 'qrow-placeholder';
+  placeholder.style.height = rect.height + 'px';
+  list.insertBefore(placeholder, row);
+  document.body.appendChild(row); // detach from the flex flow so fixed positioning + z-index behave predictably
+  row.classList.add('dragging');
+  row.style.position = 'fixed';
+  row.style.left = rect.left + 'px';
+  row.style.top = rect.top + 'px';
+  row.style.width = rect.width + 'px';
+  row.style.zIndex = '999';
+  try{ handle.setPointerCapture(e.pointerId); }catch(err){}
+  qDrag = { handle, row, list, placeholder, members, grabOffsetY: e.clientY - rect.top, height: rect.height, pointerId: e.pointerId };
+  handle.addEventListener('pointermove', qDragMove);
+  handle.addEventListener('pointerup', qDragEnd);
+  handle.addEventListener('pointercancel', qDragEnd);
+}
+function qDragMove(e){
+  if (!qDrag) return;
+  e.preventDefault();
+  const y = e.clientY;
+  qDrag.row.style.top = (y - qDrag.grabOffsetY) + 'px';
+  const margin = 70;
+  if (y < margin) window.scrollBy(0, -14);
+  else if (y > window.innerHeight - margin) window.scrollBy(0, 14);
+  const centerY = (y - qDrag.grabOffsetY) + qDrag.height/2;
+  let target = null;
+  for (const el of qDrag.members){
+    const r = el.getBoundingClientRect();
+    if (centerY < r.top + r.height/2){ target = el; break; }
+  }
+  if (target) qDrag.list.insertBefore(qDrag.placeholder, target);
+  else if (qDrag.members.length) qDrag.list.insertBefore(qDrag.placeholder, qDrag.members[qDrag.members.length-1].nextSibling);
+}
+function qDragEnd(e){
+  if (!qDrag) return;
+  const { handle, row, placeholder, list, pointerId } = qDrag;
+  try{ handle.releasePointerCapture(pointerId); }catch(err){}
+  handle.removeEventListener('pointermove', qDragMove);
+  handle.removeEventListener('pointerup', qDragEnd);
+  handle.removeEventListener('pointercancel', qDragEnd);
+  placeholder.parentNode.insertBefore(row, placeholder);
+  placeholder.remove();
+  row.classList.remove('dragging');
+  row.style.position = ''; row.style.left = ''; row.style.top = ''; row.style.width = ''; row.style.zIndex = '';
+  qDrag = null;
+  const newOrder = [...list.querySelectorAll('.qrow')].map(el => Number(el.dataset.idx));
+  const reordered = newOrder.map(idx => QUESTIONS[idx]);
+  QUESTIONS.splice(0, QUESTIONS.length, ...reordered);
+  if (editingQuestionIndex != null){
+    const pos = newOrder.indexOf(editingQuestionIndex);
+    editingQuestionIndex = pos >= 0 ? pos : null;
+  }
+  renderHostSetup();
+  saveDraft();
 }
 
 /* 👁 題目預覽 — lets the host check what a question actually looks like without
