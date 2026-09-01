@@ -726,8 +726,8 @@ let PLAYER_AVATAR = (function(){
   return AVATAR_LIST[Math.floor(Math.random()*AVATAR_LIST.length)];
 })();
 /* True while the player is on a self-typed screen (wish-card editor, answer log)
-   that the 1.5s poll loop must NOT blow away mid-edit — same class of bug as the
-   old "changing the time limit wiped the half-typed question" one. */
+   that a background poll landing mid-edit must NOT blow away — same class of bug
+   as the old "changing the time limit wiped the half-typed question" one. */
 let manualPlayerScreen = false;
 let QUESTIONS = [];               // { text, type:'text'|'image', headerImg:null|dataURL, options:[{label,img}] }
 let editingQuestionIndex = null;  // null = 新增題目表單；否則是 QUESTIONS 裡正在編輯的索引
@@ -746,12 +746,12 @@ let CHAPTER_ICONS = {};           // chapter name -> emoji override (see chapter
 
 let hostState = null;             // authoritative game object, host is sole writer of 'game:state'
 let hostCountdownHandle = null;
-let hostPollHandle = null;
+let hostPollGen = 0;              // generation counter guarding runHostPollLoop() — see startHostPolling()
 let hostQuestionStartLocal = 0;
 let hostGraceStartLocal = 0;      // when the post-timeout 5s grace window for 壽星 started
 let hostPickForShouxingMode = false; // host is tapping an option on 壽星's behalf right now
 
-let playerPollHandle = null;
+let playerPollGen = 0;            // generation counter guarding runPlayerPollLoop() — see startPlayerPolling()
 let playerCountdownHandle = null; // drives the live per-player timer chip between polls
 let localSeenQuestionIndex = -1;
 let localQuestionSeenAt = 0;
@@ -761,10 +761,10 @@ let pollBusy = false;
 
 // ---------- #spectate=<key> read-only projection view (see SPECTATE section) ----------
 let SPECTATE_KEY = null;
-let spectatePollHandle = null;
+let spectatePollGen = 0;          // generation counter guarding runSpectatePollLoop() — see startSpectatePolling()
 let spectateCountdownHandle = null; // drives the live question timer chip between polls, same idea as playerCountdownHandle
 let lastSpectateState = null;
-let _lastSpecRevealKey = null;      // guards animateOptionBars() so the vote bars don't replay their grow-in on every ~1.5s poll
+let _lastSpecRevealKey = null;      // guards animateOptionBars() so the vote bars don't replay their grow-in on every re-render of the same reveal
 
 /* ---------- generic helpers ---------- */
 function esc(s){
@@ -774,11 +774,25 @@ function esc(s){
 }
 function app(){ return document.getElementById('app'); }
 function render(html){ app().innerHTML = html; }
+function sleep(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
+/* Every /api/storage/* response carries the server's current global write
+   revision (bumped on every set/delete to ANY key — see server.py's `_rev`).
+   Track the highest one this client has ever seen so sWait() below can ask
+   the server "hold this connection open until it's newer than X" — that's
+   what turns the old fixed-interval poll loops (host/player/spectate, see
+   each one's start*Polling()) into an (almost) instant server-push instead,
+   without changing anything about what each of them actually fetches once
+   woken up. */
+let storageRev = 0;
+function noteRev(data){
+  if (data && typeof data.rev === 'number' && data.rev > storageRev) storageRev = data.rev;
+}
 async function sGet(key){
   try{
     const r = await fetch('/api/storage/get?key=' + encodeURIComponent(key));
     if (!r.ok) return null;
     const data = await r.json();
+    noteRev(data);
     return data.value != null ? JSON.parse(data.value) : null;
   } catch(e){ return null; }
 }
@@ -789,7 +803,10 @@ async function sSet(key, value){
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key, value: JSON.stringify(value) })
     });
-    return r.ok ? await r.json() : null;
+    if (!r.ok) return null;
+    const data = await r.json();
+    noteRev(data);
+    return data;
   } catch(e){ console.error('storage set failed', e); return null; }
 }
 async function sList(prefix){
@@ -797,6 +814,7 @@ async function sList(prefix){
     const r = await fetch('/api/storage/list?prefix=' + encodeURIComponent(prefix));
     if (!r.ok) return [];
     const data = await r.json();
+    noteRev(data);
     return data.keys || [];
   } catch(e){ return []; }
 }
@@ -807,8 +825,31 @@ async function sDel(key){
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ key })
     });
+    if (r.ok){ try{ noteRev(await r.json()); } catch(e){} }
     return r.ok;
   } catch(e){ console.error('storage delete failed', e); return false; }
+}
+/* Long-poll companion to sGet/sSet/sList above: ask the server to hold the
+   connection open until its global revision counter moves past storageRev
+   (i.e. ANY key changed anywhere), or timeoutSec elapses — whichever is
+   first. Callers use this instead of a fixed setInterval so "something
+   changed" is noticed in roughly one LAN round-trip instead of up to a whole
+   poll-interval late (see the poll loops below), then run their normal
+   sGet/sList calls to fetch whatever they actually need — unchanged from
+   before this existed. A local abort fires slightly after the server's own
+   timeout as a safety net in case a response never comes back at all;
+   resolves to null on any network hiccup (that abort included) so the
+   caller can back off and retry instead of hammering a dead connection. */
+async function sWait(timeoutSec){
+  const ctrl = new AbortController();
+  const abortAt = setTimeout(() => ctrl.abort(), (timeoutSec + 5) * 1000);
+  try{
+    const r = await fetch('/api/storage/wait?since=' + storageRev + '&timeout=' + timeoutSec, { signal: ctrl.signal });
+    if (!r.ok) return null;
+    const data = await r.json();
+    noteRev(data);
+    return data;
+  } catch(e){ return null; } finally { clearTimeout(abortAt); }
 }
 function baseUrl(){ return location.href.split('#')[0]; }
 function joinUrl(){ return baseUrl() + '#join=1'; }
@@ -961,7 +1002,8 @@ function revealRowHtml(opt, i, count, isShouxingPick, rowId, total){
    row so the four bars visibly "race" into place instead of jumping at once.
    Pass instant=true to snap straight to the final width with no transition —
    used by screens that re-render on every poll tick (see renderPlayerReveal),
-   where replaying the grow animation every ~1.5s would just be a flicker. */
+   where replaying the grow animation on every repeat render would just be a
+   flicker. */
 function animateOptionBars(root, delayBase, instant){
   (root || document).querySelectorAll('.opt-bar-fill').forEach((el, i) => {
     if (instant){
@@ -1435,9 +1477,8 @@ function openSpectateWindow(){
 }
 function stopHostTimers(){
   if (hostCountdownHandle) clearInterval(hostCountdownHandle);
-  if (hostPollHandle) clearInterval(hostPollHandle);
   hostCountdownHandle = null;
-  hostPollHandle = null;
+  hostPollGen++; // invalidates any in-flight runHostPollLoop(), which exits after its current await
   stopHostRpsSpin();
 }
 /* Park the game so players' phones fall back to a friendly "host stepped away" screen
@@ -2634,9 +2675,61 @@ function answerAsTestPlayers(){
 /* ============================================================
    HOST: polling for joins / answers
    ============================================================ */
+/* A long-poll connection is, by design, almost always in flight (see sWait()
+   above) — but Playwright's page.goto({waitUntil:'networkidle'}), used all
+   over this project's test suite, only resolves once it sees ~500ms with
+   ZERO in-flight requests, and would otherwise hang until its own 30s
+   navigation timeout on literally every test that opens a host/player/
+   spectate screen. Real people never notice a one-off ~1s delay right when a
+   screen first opens, so the very FIRST time each of the three start*Polling()
+   functions below runs on a given page, it waits POLL_BOOT_DELAY_MS before
+   opening its first long-poll connection — giving the browser one guaranteed
+   idle window right after load — then every later restart (host returning to
+   setup, starting a new game, a player's screen re-routing, ...) skips the
+   delay and long-polls immediately, since by then any navigation wait has
+   long since resolved. */
+const POLL_BOOT_DELAY_MS = 1000;
+let hostPollBooted = false;
+/* startHostPolling() is called from more than one place (initial load,
+   hostBackToSetup, right after starting a new game) without necessarily
+   calling stopHostTimers() in between — hostPollGen is what keeps that
+   idempotent: each call bumps the generation, and runHostPollLoop() below
+   only keeps looping while its own captured `gen` is still the current one,
+   so an older in-flight loop quietly stops after its current await instead
+   of piling up a second loop alongside the new one. */
 function startHostPolling(){
-  if (hostPollHandle) clearInterval(hostPollHandle);
-  hostPollHandle = setInterval(hostPollTick, 1800);
+  const gen = ++hostPollGen;
+  hostPollTick();
+  if (!hostPollBooted){
+    hostPollBooted = true;
+    setTimeout(() => { if (gen === hostPollGen) runHostPollLoop(gen); }, POLL_BOOT_DELAY_MS);
+  } else {
+    runHostPollLoop(gen);
+  }
+}
+/* Long-poll driven replacement for the old `setInterval(hostPollTick, 1800)`:
+   sWait() resolves almost immediately when ANY key changes anywhere (a join,
+   an answer, a wish-card save, ...), so joins/answers/etc. get folded into
+   hostState with roughly a network round-trip of lag instead of up to 1.8s.
+   The 1.8s timeout below matters even though it usually resolves sooner: it's
+   what makes this tick again on its own if NOTHING changes for that long —
+   same cadence the old fixed interval always ran at, no faster and no slower.
+   Some things (e.g. rejoinIfNeeded()'s 4s re-join throttle) rely on getting
+   re-checked every couple of seconds regardless of whether anything actually
+   changed; a long "come back only when something's different" timeout here
+   (tried first — 20s) silently broke that: the tick that first notices a
+   throttled condition can be the ONLY tick for a long stretch if nothing else
+   writes anything, instead of one of several retries a couple of seconds
+   apart. Keeping the timeout equal to the old interval preserves that retry
+   cadence exactly while still getting the near-instant reaction to a real
+   change that this whole mechanism exists for. */
+async function runHostPollLoop(gen){
+  while (gen === hostPollGen){
+    const r = await sWait(1.8);
+    if (gen !== hostPollGen) break;
+    if (!r){ await sleep(600); continue; } // network hiccup — back off, don't hammer
+    await hostPollTick();
+  }
 }
 async function hostPollTick(){
   if (!hostState || pollBusy) return;
@@ -3630,7 +3723,30 @@ function evaluateRpsRound(){
   const picks = hostState.rpsPicks;
   const stillCurrent = () => hostState.rpsRoundToken === token && hostState.awardsStage === 'rps';
 
+  /* restart()/advanceSolo() both keep hostState.rpsRoundToken UNCHANGED until
+     their own setTimeout below calls startRpsThrow() (the only place that
+     actually mints a new token), so there's a ~1.7-1.9s window — the message
+     display time — where a player still in rpsActive (the 2 who tied, or the
+     2 who remain after one is eliminated) is, token-wise, still "in the same
+     round" they just threw for. The rpsthrow:<id> key that round's throw was
+     read from is deleted the moment processRpsThrows() consumes it (see that
+     function's own comment) specifically so nothing is left on the server
+     for a poll landing inside this window to misread as a fresh throw for
+     what is semantically the NEXT sub-round — without that, an instant
+     long-poll landing here would immediately re-read the same still-present
+     rpsthrow: values (same token, so they'd pass the staleness check) back
+     into a freshly narrowed/reused rpsActive and re-evaluate on data nobody
+     actually threw for this sub-round (e.g. two players who both threw rock
+     to eliminate a third would then be told they tied against EACH OTHER on
+     those same two rocks). The rpsPicks={} resets below are a second,
+     redundant layer on top of that — harmless, and correct regardless, since
+     a new sub-round should start with nobody's pick recorded yet either way.
+     This was always a latent race (the old ~1.8s fixed poll could in
+     principle land in the same gap), it just needed a poll landing inside a
+     ~1.7-1.9s window to ever surface — instant long-polling made that window
+     (and the bug) hit every time instead of almost never. */
   const restart = (msg) => {
+    hostState.rpsPicks = {};
     hostState.rpsRoundMsg = msg;
     sSet('game:state', hostState);
     renderHostAwardsRps();
@@ -3650,6 +3766,7 @@ function evaluateRpsRound(){
     const name = hostState.players[soloId] ? hostState.players[soloId].name : '';
     hostState.rpsSolo = { id: soloId, place };
     hostState.rpsActive = nextActive;
+    hostState.rpsPicks = {};
     hostState.rpsRoundMsg = place === 'front'
       ? ('🎉 ' + name + ' 手氣最好，直接排最前面！剩下兩人再猜一輪')
       : ('😅 ' + name + ' 手氣最背，直接墊底！剩下兩人再猜一輪');
@@ -3684,7 +3801,22 @@ function evaluateRpsRound(){
 /* Poll-driven pickup of real players' rpsthrow:<id> submissions for the
    CURRENT round token — same "recheck before acting" shape as processAnswers(),
    since evaluateRpsRound()/startRpsThrow() (triggered by the host tapping the
-   force button) can run in between two awaits here. */
+   force button) can run in between two awaits here.
+   Deletes (and awaits the delete of) rpsthrow:<id> the moment it's consumed
+   into hostState.rpsPicks[id] — same cleanup proceedToPickingFromRps()
+   already does once a round is fully done, just per-throw and immediate
+   instead of batched at the very end. NOT just cosmetic tidying.
+   restart()/advanceSolo() (see evaluateRpsRound()) both keep rpsRoundToken
+   unchanged for the ~1.7-1.9s message-display window before the NEXT sub-
+   round's startRpsThrow() actually mints a new one; a player who is still
+   active going into that next sub-round (the 2 who tied, or the 2 who
+   remain after one is eliminated) still has their OLD throw for THIS same
+   token sitting in storage otherwise, and an instant long-poll landing
+   inside that window re-reads it as if it were a fresh throw for the new
+   sub-round — e.g. two players who both threw rock to eliminate a third
+   then immediately get told they tied against each other on those same two
+   rocks. Deleting each throw as soon as it's read closes that: nothing is
+   left on the server for a later poll to mistake as unconsumed. */
 async function processRpsThrows(){
   const token = hostState.rpsRoundToken;
   const active = hostState.rpsActive || [];
@@ -3698,6 +3830,7 @@ async function processRpsThrows(){
     if (!info || info.token !== token) continue;         // stale or not-yet-submitted
     if (!['rock','paper','scissors'].includes(info.hand)) continue;
     hostState.rpsPicks[id] = info.hand;
+    await sDel('rpsthrow:' + id); // awaited — a later poll must never be able to re-read this
     changed = true;
   }
   if (hostState.rpsRoundToken !== token || hostState.awardsStage !== 'rps') return;
@@ -3723,8 +3856,8 @@ function finishAwardsNoBottom(){
 }
 /* Tracks whose turn we last played the card-shuffle entrance animation for, so
    a poll re-render mid-turn (e.g. another player's stray write, or just the
-   1.8s tick) doesn't replay the shuffle on every render — only a genuinely new
-   turn (a fresh currentId) deals the cards back in. */
+   background poll loop) doesn't replay the shuffle on every render — only a
+   genuinely new turn (a fresh currentId) deals the cards back in. */
 let _lastPickingAnimId = null;
 function renderHostAwardsPicking(){
   const order = hostState.pickOrder || [];
@@ -3878,9 +4011,10 @@ function renderHostAwardsDone(){
    Also deliberately silent — no countdown beep/alarm audio (see
    ensureAudioCtx()/tickCountdownSound(), host-tab-only) and no confetti/
    suspense-timed reveal animations: the host's own tab already plays sound
-   and both tabs sit in the same room at a party, and a ~1.5s poll loop
-   re-rendering the SAME screen would replay any staggered "reveal" animation
-   every poll, which reads as flicker rather than delight (see
+   and both tabs sit in the same room at a party, and a poll loop re-rendering
+   the SAME screen more than once (a heartbeat re-sync, or any other key
+   changing) would replay any staggered "reveal" animation every time, which
+   reads as flicker rather than delight (see
    animateOptionBars()'s own comment on exactly this trade-off — the vote
    bars are the one animation kept here, guarded by _lastSpecRevealKey so
    they still only grow-in once per question, matching that established
@@ -3903,10 +4037,35 @@ function ensureSpectateBadge(){
     + 'padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.02em;pointer-events:none';
   document.body.appendChild(d);
 }
+/* Long-poll driven replacement for the old `setInterval(spectateTick, 1500)`
+   — see runHostPollLoop() above for the general pattern and hostPollGen's
+   comment for why a generation counter (not a boolean) guards this. This is
+   the fix for the projector/TV screen lagging noticeably behind the host:
+   the old fixed interval meant up to ~2x its length (≈3s) of real lag
+   whenever the host moved on right after a poll had just landed, which is
+   long enough to visibly eat chapter-intro/question entrance animations.
+   sWait() below wakes this up in roughly one LAN round-trip instead. */
+let spectatePollBooted = false; // see POLL_BOOT_DELAY_MS's comment (near startHostPolling)
 function startSpectatePolling(){
-  if (spectatePollHandle) clearInterval(spectatePollHandle);
+  const gen = ++spectatePollGen;
   spectateTick();
-  spectatePollHandle = setInterval(spectateTick, 1500);
+  if (!spectatePollBooted){
+    spectatePollBooted = true;
+    setTimeout(() => { if (gen === spectatePollGen) runSpectatePollLoop(gen); }, POLL_BOOT_DELAY_MS);
+  } else {
+    runSpectatePollLoop(gen);
+  }
+}
+async function runSpectatePollLoop(gen){
+  while (gen === spectatePollGen){
+    // 1.5s timeout matches the old setInterval cadence for the "nothing
+    // changed" case — see runHostPollLoop()'s comment for why that matters
+    // even though a real change wakes this up much sooner in practice.
+    const r = await sWait(1.5);
+    if (gen !== spectatePollGen) break;
+    if (!r){ await sleep(600); continue; } // network hiccup — back off, don't hammer
+    await spectateTick();
+  }
 }
 async function spectateTick(){
   let state = null;
@@ -4013,9 +4172,11 @@ function renderSpectateQuestion(state){
 }
 /* Fast local tick between polls, mirroring updatePlayerTimerUI()'s "derive
    from the host-synced questionStartAt/graceStartAt timestamps" trick — same
-   reasoning as the player phones: the ~1.5s poll alone would make the chip
-   visibly jump in steps instead of counting down smoothly. Also repaints the
-   answered-count bar every tick from whatever state the last poll landed
+   reasoning as the player phones: the poll only wakes up when something
+   actually changes (a new question, a reveal, ...), not every second, so
+   this local 200ms tick is what makes the chip count down smoothly between
+   those moments instead of only moving when a poll happens to land. Also
+   repaints the answered-count bar every tick from whatever state the last poll landed
    (mirrors updateHostTimerUI on the host tab) — deliberately does NOT call
    tickCountdownSound(); see the SPECTATE section doc comment for why this
    view stays silent. */
@@ -4347,10 +4508,29 @@ async function rejoinIfNeeded(){
 /* ============================================================
    PLAYER: polling + view routing
    ============================================================ */
+/* Long-poll driven replacement for the old `setInterval(playerPollTick, 1500)`
+   — see runHostPollLoop()/runSpectatePollLoop() above for the same pattern. */
+let playerPollBooted = false; // see POLL_BOOT_DELAY_MS's comment (near startHostPolling)
 function startPlayerPolling(){
-  if (playerPollHandle) clearInterval(playerPollHandle);
-  playerPollHandle = setInterval(playerPollTick, 1500);
+  const gen = ++playerPollGen;
   playerPollTick();
+  if (!playerPollBooted){
+    playerPollBooted = true;
+    setTimeout(() => { if (gen === playerPollGen) runPlayerPollLoop(gen); }, POLL_BOOT_DELAY_MS);
+  } else {
+    runPlayerPollLoop(gen);
+  }
+}
+async function runPlayerPollLoop(gen){
+  while (gen === playerPollGen){
+    // 1.5s timeout matches the old setInterval cadence for the "nothing
+    // changed" case — see runHostPollLoop()'s comment for why that matters
+    // even though a real change wakes this up much sooner in practice.
+    const r = await sWait(1.5);
+    if (gen !== playerPollGen) break;
+    if (!r){ await sleep(600); continue; } // network hiccup — back off, don't hammer
+    await playerPollTick();
+  }
 }
 async function playerPollTick(){
   if (pollBusy) return;
@@ -4459,7 +4639,7 @@ function renderStarWishCardsEntry(){
 }
 let _wishDraft = ['', '', ''];
 /* A manual screen (see manualPlayerScreen) — free-typing textareas must not
-   get blown away by the poll loop's re-render every 1.5s. */
+   get blown away by a background poll's re-render landing mid-edit. */
 function renderStarWishCardsEditor(){
   manualPlayerScreen = true;
   const existing = (lastPlayerState && lastPlayerState.wishCards) || ['', '', ''];
@@ -4513,9 +4693,10 @@ function renderPlayerQuestionOrWaiting(state){
       </div>
     </div></div>
   `);
-  // Live countdown between polls: the poll only lands every ~1.5s, so a
-  // fast local tick (against the host-synced questionStartAt/graceStartAt)
-  // is what makes the chip actually count down instead of jumping in steps.
+  // Live countdown between polls: the poll only wakes up when something
+  // actually changes, not every second, so a fast local tick (against the
+  // host-synced questionStartAt/graceStartAt) is what makes the chip
+  // actually count down instead of jumping in steps.
   updatePlayerTimerUI(state, isSx);
   if (playerCountdownHandle) clearInterval(playerCountdownHandle);
   playerCountdownHandle = setInterval(() => updatePlayerTimerUI(lastPlayerState || state, isSx), 200);
@@ -4577,7 +4758,7 @@ function renderPlayerAnswered(state){
     </div></div>
   `);
 }
-/* renderPlayerReveal re-renders on every ~1.5s player poll while
+/* renderPlayerReveal re-renders on every player poll tick while
    status==='reveal' (playerPollTick → renderPlayerView, no manualPlayerScreen
    guard — the poll must stay free to catch the host advancing the round).
    render() fully replaces #app each time, so naively porting the host's
@@ -4761,7 +4942,7 @@ function renderPlayerAnswerLog(){
 let rpsThrownToken = null;
 let rpsSpinHandle = null;
 let _lastPlayerPickAnimId = null;
-/* A manual screen (see manualPlayerScreen) so the poll loop's ~1.5s re-render
+/* A manual screen (see manualPlayerScreen) so a background poll's re-render
    can't rip out the running spin interval mid-throw — same reasoning as the
    wish-card editor. The background poll (playerPollTick) keeps refreshing
    lastPlayerState the whole time, so once we submit and drop back out of
