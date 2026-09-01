@@ -2724,10 +2724,30 @@ function startHostPolling(){
    cadence exactly while still getting the near-instant reaction to a real
    change that this whole mechanism exists for. */
 async function runHostPollLoop(gen){
+  let failStreak = 0;
   while (gen === hostPollGen){
     const r = await sWait(1.8);
     if (gen !== hostPollGen) break;
-    if (!r){ await sleep(600); continue; } // network hiccup — back off, don't hammer
+    if (!r){
+      // sWait() keeps failing. Could be a real network hiccup — but it's also
+      // exactly what happens when this new game.html ends up paired with an old
+      // server.py that has no /api/storage/wait endpoint at all (see 「注意事項」:
+      // game.html／server.py 必須成對更新 — e.g. only one of the two got
+      // re-uploaded to GitHub/Render). In that case sWait() 404s forever and this
+      // loop would otherwise retry it forever too, never calling hostPollTick()
+      // again — the host's screen renders once on load and then silently never
+      // updates again, which looks exactly like "畫面不會動了". After a few misses
+      // in a row, stop betting everything on the long-poll coming back and fall
+      // back to plain periodic ticking (the pre-long-polling cadence) so the
+      // screen keeps working — just slower — instead of freezing outright. Still
+      // keeps retrying sWait() every loop, so it silently upgrades back to instant
+      // push the moment the server catches up (no reload needed).
+      failStreak++;
+      await sleep(failStreak >= 3 ? 1800 : 600);
+      if (failStreak >= 3) await hostPollTick();
+      continue;
+    }
+    failStreak = 0;
     await hostPollTick();
   }
 }
@@ -4057,13 +4077,23 @@ function startSpectatePolling(){
   }
 }
 async function runSpectatePollLoop(gen){
+  // 1.5s timeout matches the old setInterval cadence for the "nothing
+  // changed" case — see runHostPollLoop()'s comment for why that matters
+  // even though a real change wakes this up much sooner in practice.
+  let failStreak = 0;
   while (gen === spectatePollGen){
-    // 1.5s timeout matches the old setInterval cadence for the "nothing
-    // changed" case — see runHostPollLoop()'s comment for why that matters
-    // even though a real change wakes this up much sooner in practice.
     const r = await sWait(1.5);
     if (gen !== spectatePollGen) break;
-    if (!r){ await sleep(600); continue; } // network hiccup — back off, don't hammer
+    if (!r){
+      // See runHostPollLoop()'s comment: after a few sWait() misses in a row
+      // (e.g. a mismatched game.html/server.py pair with no /api/storage/wait),
+      // fall back to plain periodic ticking instead of never updating again.
+      failStreak++;
+      await sleep(failStreak >= 3 ? 1500 : 600);
+      if (failStreak >= 3) await spectateTick();
+      continue;
+    }
+    failStreak = 0;
     await spectateTick();
   }
 }
@@ -4522,13 +4552,25 @@ function startPlayerPolling(){
   }
 }
 async function runPlayerPollLoop(gen){
+  // 1.5s timeout matches the old setInterval cadence for the "nothing
+  // changed" case — see runHostPollLoop()'s comment for why that matters
+  // even though a real change wakes this up much sooner in practice.
+  let failStreak = 0;
   while (gen === playerPollGen){
-    // 1.5s timeout matches the old setInterval cadence for the "nothing
-    // changed" case — see runHostPollLoop()'s comment for why that matters
-    // even though a real change wakes this up much sooner in practice.
     const r = await sWait(1.5);
     if (gen !== playerPollGen) break;
-    if (!r){ await sleep(600); continue; } // network hiccup — back off, don't hammer
+    if (!r){
+      // See runHostPollLoop()'s comment: after a few sWait() misses in a row
+      // (e.g. a mismatched game.html/server.py pair with no /api/storage/wait),
+      // fall back to plain periodic ticking instead of never updating again —
+      // this is exactly the failure mode that made a player's "已加入" screen
+      // never advance once the host started the game.
+      failStreak++;
+      await sleep(failStreak >= 3 ? 1500 : 600);
+      if (failStreak >= 3) await playerPollTick();
+      continue;
+    }
+    failStreak = 0;
     await playerPollTick();
   }
 }

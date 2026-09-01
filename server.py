@@ -34,6 +34,7 @@ import os
 import secrets
 import socket
 import threading
+import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
@@ -46,6 +47,20 @@ SEED_BANKS_PATH = os.path.join(HERE, 'seed_banks.json')
 # ---------------- storage backend: in-memory dict, persisted to a json file ----------------
 _lock = threading.Lock()
 _store = {}
+
+# ---------------- change feed: lets clients long-poll instead of fixed-interval poll ----------------
+# _rev is a monotonic counter bumped on every successful write (set/delete) to ANY key.
+# _cond wraps the SAME lock as _lock (Condition(lock) reuses the given lock rather than
+# making its own), so code that only needs mutual exclusion can keep using `with _lock:`
+# unchanged, while the handlers below that need to notify/wait use `with _cond:` instead —
+# both acquire/release the identical underlying lock, so they compose safely with each other.
+# See the /api/storage/wait handler and game.html's sWait() for how this is used: instead of
+# every screen re-fetching game:state on a fixed timer (which meant up to ~2x the interval of
+# real lag before a projector/spectate screen noticed the host had moved on — reported as very
+# visible dropped animations), a client holds one long-poll connection open and the server
+# wakes it the instant anything changes, then the client does its normal sGet/sList calls.
+_rev = 0
+_cond = threading.Condition(_lock)
 
 
 def load_store():
@@ -186,14 +201,43 @@ class Handler(BaseHTTPRequestHandler):
             key = qs.get('key', [None])[0]
             with _lock:
                 if key is not None and key in _store:
-                    self._send_json({'value': _store[key]})
+                    self._send_json({'value': _store[key], 'rev': _rev})
                 else:
-                    self._send_json({'error': 'not_found'}, status=404)
+                    self._send_json({'error': 'not_found', 'rev': _rev}, status=404)
         elif path == '/api/storage/list':
             prefix = qs.get('prefix', [''])[0]
             with _lock:
                 keys = [k for k in _store.keys() if k.startswith(prefix)]
-            self._send_json({'keys': keys})
+                rev = _rev
+            self._send_json({'keys': keys, 'rev': rev})
+        elif path == '/api/storage/wait':
+            # Long-poll: hold the connection open until _rev moves past `since`
+            # (i.e. some client somewhere wrote ANY key), or `timeout` elapses —
+            # whichever comes first. The caller doesn't learn WHAT changed, just
+            # that something did; it then does its normal get/list calls to find
+            # out what, same as it always did on its old fixed timer. Clamped
+            # timeout keeps a single request from blocking its handler thread
+            # (ThreadingHTTPServer gives every connection its own thread, so this
+            # is safe) forever, and stays comfortably under typical reverse-proxy
+            # idle-connection limits if this ever runs behind one.
+            try:
+                since = int(qs.get('since', ['0'])[0])
+            except (TypeError, ValueError):
+                since = 0
+            try:
+                timeout = float(qs.get('timeout', ['25'])[0])
+            except (TypeError, ValueError):
+                timeout = 25.0
+            timeout = max(1.0, min(timeout, 28.0))
+            deadline = time.monotonic() + timeout
+            with _cond:
+                while _rev <= since:
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        break
+                    _cond.wait(remaining)
+                current_rev = _rev
+            self._send_json({'rev': current_rev})
         elif not path.startswith('/api/'):
             # SPA-style fallback: any non-API path (/, /host, /join, ...) serves
             # the same game.html — the page's own JS decides what to show based
@@ -204,6 +248,7 @@ class Handler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def do_POST(self):
+        global _rev
         parsed = urlparse(self.path)
         if parsed.path == '/api/storage/set':
             length = int(self.headers.get('Content-Length', 0))
@@ -215,10 +260,13 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 self._send_json({'error': 'bad_request'}, status=400)
                 return
-            with _lock:
+            with _cond:
                 _store[key] = value
                 save_store()
-            self._send_json({'ok': True})
+                _rev += 1
+                rev = _rev
+                _cond.notify_all()
+            self._send_json({'ok': True, 'rev': rev})
         elif parsed.path == '/api/storage/delete':
             length = int(self.headers.get('Content-Length', 0))
             raw = self.rfile.read(length) if length else b''
@@ -228,11 +276,14 @@ class Handler(BaseHTTPRequestHandler):
             except Exception:
                 self._send_json({'error': 'bad_request'}, status=400)
                 return
-            with _lock:
+            with _cond:
                 existed = _store.pop(key, None) is not None
                 if existed:
                     save_store()
-            self._send_json({'ok': True, 'deleted': existed})
+                    _rev += 1
+                    _cond.notify_all()
+                rev = _rev
+            self._send_json({'ok': True, 'deleted': existed, 'rev': rev})
         else:
             self.send_response(404)
             self.end_headers()
