@@ -171,11 +171,13 @@
      later in the stylesheet, so this always wins once optionsGridClass() adds it. */
   .options-grid.stacked{ grid-template-columns:1fr; }
   /* Image options: on screens wide enough to fit four cards side by side
-     (projector/laptop, not a phone) put all four photos in one row instead of
-     2x2. That frees the vertical space the second row used to take, so
-     .opt-img can grow into it — this is the actual size win, not the row
-     count by itself (see the comment on optionsGridClass()). */
+     (projector/laptop, not a phone), which of the two layouts below applies
+     is decided by optionsGridClass() from the photos' own aspect ratio. */
   @media(min-width:900px){
+    /* Portrait-leaning photos (narrow/tall): one row of 4 narrow columns frees
+       up the vertical space a 2nd row would've taken, so .opt-img can grow
+       into that height instead — a narrow column still fits a tall photo at a
+       good size. */
     .options-grid.img-row{ grid-template-columns:repeat(4,1fr); gap:14px; max-width:1500px; }
     /* Sized off the viewport height (like the QR code is off vmin) so the photo
        claims most of the room a single row frees up instead of a fixed, timid
@@ -185,6 +187,15 @@
        through at top/bottom instead of stretching or cropping. */
     .options-grid.img-row .opt-img{ height:clamp(220px, 44vh, 460px); }
     .options-grid.img-row .opt-cap{ font-size:16px; }
+    /* （二十九）Landscape-leaning photos (wide/short): the opposite problem —
+       squeezed into one of 4 narrow columns, a wide photo is width-capped long
+       before it uses the height budget above, so most of that clamp() range
+       goes to waste. A 2x2 grid gives each photo roughly double the column
+       width instead, which is what a wide photo actually needs to render big;
+       it doesn't need as much height, so the row height stays modest. */
+    .options-grid.img-grid2{ grid-template-columns:repeat(2,1fr); gap:16px; max-width:1100px; }
+    .options-grid.img-grid2 .opt-img{ height:clamp(200px, 30vh, 340px); }
+    .options-grid.img-grid2 .opt-cap{ font-size:16px; }
   }
 
   .opt-card{
@@ -208,6 +219,15 @@
   .opt-cap{ font-size:14px; font-weight:800; text-align:center; }
   .opt-card.dim{ filter:grayscale(.35) brightness(.92); opacity:.7; }
   .opt-card.shouxing-glow{ outline:4px solid var(--coral); box-shadow:0 0 0 6px rgba(232,101,75,0.22); }
+  /* "The option THIS player picked" on their own reveal screen — an additive
+     ring (not outline, which .shouxing-glow already claims) so a row that's
+     both correct AND yours shows both rings stacked instead of one winning. */
+  .opt-card.my-pick{ box-shadow:0 0 0 3px var(--sky), 0 6px 0 rgba(46,36,24,0.16); }
+  .opt-card.my-pick.shouxing-glow{ box-shadow:0 0 0 3px var(--sky), 0 0 0 9px rgba(232,101,75,0.22); }
+  .my-pick-badge{
+    display:inline-block; margin-left:6px; padding:2px 8px; border-radius:999px; font-size:11px; font-weight:800;
+    background:var(--sky); color:#fff; white-space:nowrap; vertical-align:middle;
+  }
   .opt-card:disabled{ cursor:default; }
   /* 揭曉頁的「每個選項幾人選」直方圖動畫：初始寬度 0，animateOptionBars() 之後
      才設成真正的百分比，靠 CSS transition 長出來。 */
@@ -441,8 +461,10 @@
   .podium-label .prize-line.show{ opacity:1; transform:translateY(0); }
 
   /* 凸台（左）＋右側其餘排名面板：並排、垂直置中對齊、整組水平置中；版面
-     不夠寬（手機直式主持人視窗、平板）就自動疊成一欄，面板掉到凸台下面。 */
-  .awards-layout{ display:flex; align-items:center; justify-content:center; gap:clamp(16px,3vw,40px); flex-wrap:wrap; width:100%; margin-top:6px; }
+     不夠寬（手機直式主持人視窗、平板）就自動疊成一欄，面板掉到凸台下面。
+     （二十九）margin-top 加大，讓整組再往下移一點，跟標題之間留出呼吸空間
+     （使用者反饋：頒獎台可以再往下一些）。 */
+  .awards-layout{ display:flex; align-items:center; justify-content:center; gap:clamp(16px,3vw,40px); flex-wrap:wrap; width:100%; margin-top:clamp(14px,3.2vh,40px); }
   .rest-rank-panel{
     flex:none; width:min(88vw,300px); background:var(--cream); border:1px solid var(--line);
     border-radius:18px; padding:14px 16px; text-align:left;
@@ -765,6 +787,11 @@ let spectatePollGen = 0;          // generation counter guarding runSpectatePoll
 let spectateCountdownHandle = null; // drives the live question timer chip between polls, same idea as playerCountdownHandle
 let lastSpectateState = null;
 let _lastSpecRevealKey = null;      // guards animateOptionBars() so the vote bars don't replay their grow-in on every re-render of the same reveal
+// (二十九) 同一套「只在第一次渲染時播動畫」寫法，套用到頒獎台/公布結果的
+// 撒花＋依序跳出，跟公布正解的懸疑停頓——見 renderSpectateAwardsPodium()、
+// renderSpectateAwardsDone()、renderSpectateReveal()。
+let _lastSpecPodiumKey = null;
+let _lastSpecDoneKey = null;
 
 /* ---------- generic helpers ---------- */
 function esc(s){
@@ -962,17 +989,30 @@ function optionCardHtml(opt, i, onclickAttr){
 }
 /* Picks the layout for the options-grid wrapping four optionCardHtml() cards.
    - Image options: on wide-enough screens (projector / laptop, not a phone)
-     put all four photos in a single row instead of 2x2. A single row frees up
-     the vertical space the second row used to take, and .options-grid.img-row
-     reinvests exactly that freed space into a taller .opt-img (see CSS), so
-     the photos actually get bigger instead of just rearranging.
+     the shape of the four photos decides between two layouts — see the
+     （二十九）block below. Either way the point is the same as the original
+     img-row idea: stop cropping the option cards into a shape that fights the
+     photo's own aspect ratio, so .opt-img (object-fit:contain) can actually
+     grow into the freed space instead of just rearranging at the same size.
    - Text options: normally stay 2x2 on wide screens same as before. But once
      an answer is long enough that a half-width 2-col card would wrap it
      awkwardly, force a single full-width column instead (top-to-bottom) so
      every answer gets the full row to lay out on as few lines as possible. */
 function optionsGridClass(q){
   if (!q || !Array.isArray(q.options)) return 'options-grid';
-  if (q.type === 'image') return 'options-grid img-row';
+  if (q.type === 'image'){
+    // （二十九）四張並排一列（img-row）每格窄、靠高度吃滿，適合窄長的直式
+    // 照片；改新增的 2x2 四宮格（img-grid2）每格比較寬、靠寬度吃滿，適合
+    // 寬短的橫式照片——用四張照片「寬 ÷ 高」的平均值決定選哪一種，同一題
+    // 統一套用同一種版面（不然四張選項卡忽高忽寬，看起來會很亂）。
+    // imgW/imgH 是 saveQuestionFromForm() 存圖片時一併記錄的原始尺寸（見
+    // fileToCompressedDataUrl()）；這個功能上線前存的舊題目沒有這兩個欄
+    // 位，比例就當作 1（=<閾值），維持舊題目原本永遠是 img-row 的樣子，不
+    // 會因為這次改動忽然跳版。
+    const ratios = q.options.filter(o => o && o.imgW && o.imgH).map(o => o.imgW / o.imgH);
+    const avgRatio = ratios.length ? ratios.reduce((a,b)=>a+b, 0) / ratios.length : 1;
+    return avgRatio > 1.15 ? 'options-grid img-grid2' : 'options-grid img-row';
+  }
   const LONG_LABEL_CHARS = 12; // ~ one comfortable line at the largest option font size in a 2-col card
   const hasLongLabel = q.options.some(o => (o && o.label || '').length > LONG_LABEL_CHARS);
   return 'options-grid' + (hasLongLabel ? ' stacked' : '');
@@ -983,18 +1023,24 @@ function optionsGridClass(q){
    width:0 and is animated to data-pct by animateOptionBars() after mount, the
    same "render the before-frame first, animate in afterward" trick used by the
    reveal leaderboard's FLIP animation. */
-function revealRowHtml(opt, i, count, isShouxingPick, rowId, total){
+/* isMyPick marks "the option THIS player picked" (player's own reveal screen
+   only — host/spectate have no single identity to highlight). It's a separate
+   flag from isShouxingPick (which marks the correct answer) because the same
+   row can be both at once (you guessed right) or neither — a competing
+   `outline` would only show one, so my-pick is styled as an additive
+   box-shadow ring + badge instead, see .opt-card.my-pick in the CSS. */
+function revealRowHtml(opt, i, count, isShouxingPick, rowId, total, isMyPick){
   const thumb = opt.img ? `<img src="${opt.img}" style="width:44px;height:44px;object-fit:cover;border-radius:8px;flex:none">` : '';
   const pct = total ? Math.round(count / total * 100) : 0;
   return `
-    <div class="opt-card ${OPT_CLASS[i]} ${isShouxingPick?'shouxing-glow':'dim'}"${rowId?` id="${rowId}"`:''} style="flex-direction:row;align-items:center">
+    <div class="opt-card ${OPT_CLASS[i]} ${isShouxingPick?'shouxing-glow':'dim'}${isMyPick?' my-pick':''}"${rowId?` id="${rowId}"`:''} style="flex-direction:row;align-items:center">
       <span class="tag">${OPT_LABEL[i]}</span>
       ${thumb}
       <div style="flex:1;text-align:left;min-width:0">
-        <div style="overflow-wrap:anywhere">${esc(opt.label||'')}</div>
+        <div style="overflow-wrap:anywhere">${esc(opt.label||'')}${isMyPick?' <span class="my-pick-badge">👤 你選的</span>':''}</div>
         ${total ? `<div class="opt-bar-track"><div class="opt-bar-fill" data-pct="${pct}" style="width:0%"></div></div>` : ''}
       </div>
-      <span class="num" style="font-size:15px;white-space:nowrap;flex:none">${total ? pct+'%' : count}</span>
+      <span class="num" style="font-size:15px;white-space:nowrap;flex:none">${total ? count+'人・'+pct+'%' : count}</span>
     </div>
   `;
 }
@@ -1184,7 +1230,12 @@ function startRestRankCycle(){
    are real guests once a mixed lobby has both. */
 function nameTag(p){ return esc(p && p.name) + (p && p.isTestBot ? ' <span class="test-badge">🧪 測試</span>' : ''); }
 
-/* ---------- client-side image compression (for question authoring) ---------- */
+/* ---------- client-side image compression (for question authoring) ----------
+   （二十九）resolve 現在回傳 {url, w, h} 而不是單純的字串——w/h 是壓縮前的原始
+   寬高，讓呼叫端（saveQuestionFromForm()）可以順手把每張照片的直橫比存進題目
+   資料（options[i].imgW/imgH），optionsGridClass() 才能不用再另外非同步量一次
+   圖片尺寸，直接同步讀資料決定版面（見該函式註解）。既有呼叫端（headerImg）
+   只要改成取 .url 就好，行為不變。 */
 function fileToCompressedDataUrl(file, maxDim, quality){
   return new Promise((resolve, reject)=>{
     const reader = new FileReader();
@@ -1197,7 +1248,7 @@ function fileToCompressedDataUrl(file, maxDim, quality){
         const canvas = document.createElement('canvas');
         canvas.width = w; canvas.height = h;
         canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-        resolve(canvas.toDataURL('image/jpeg', quality));
+        resolve({ url: canvas.toDataURL('image/jpeg', quality), w: img.width, h: img.height });
       };
       img.onerror = () => reject(new Error('image decode failed'));
       img.src = e.target.result;
@@ -2454,7 +2505,7 @@ async function saveQuestionFromForm(){
   try{
     let headerImg = existing ? existing.headerImg : null;
     const headerFile = document.getElementById('nq-header-img').files[0];
-    if (headerFile) headerImg = await fileToCompressedDataUrl(headerFile, 800, 0.7);
+    if (headerFile) headerImg = (await fileToCompressedDataUrl(headerFile, 800, 0.7)).url;
     else {
       const removeCb = document.getElementById('nq-header-img-remove');
       if (removeCb && removeCb.checked) headerImg = null;
@@ -2474,8 +2525,20 @@ async function saveQuestionFromForm(){
       const caps = [0,1,2,3].map(i=> document.getElementById('nq-cap-'+i).value.trim());
       options = [];
       for (let i=0;i<4;i++){
-        const img = files[i] ? await fileToCompressedDataUrl(files[i], 640, 0.68) : existingOpts[i].img;
-        options.push({ label: caps[i] || '', img });
+        let img, imgW, imgH;
+        if (files[i]){
+          const res = await fileToCompressedDataUrl(files[i], 640, 0.68);
+          img = res.url; imgW = res.w; imgH = res.h;
+        } else {
+          // Kept the existing photo (no new file chosen this edit) — carry its
+          // already-known width/height along too, so optionsGridClass() still
+          // sees it. Questions saved before this feature existed won't have
+          // imgW/imgH on their options; that's fine, see that function's comment.
+          img = existingOpts[i].img;
+          imgW = existingOpts[i].imgW;
+          imgH = existingOpts[i].imgH;
+        }
+        options.push({ label: caps[i] || '', img, imgW, imgH });
       }
     }
     // Changing which chapter a question belongs to breaks whatever "接續上一題"
@@ -3515,6 +3578,7 @@ function renderHostAwards(){
   if (stage === 'rps') return renderHostAwardsRps();
   if (stage === 'picking') return renderHostAwardsPicking();
   if (stage === 'done') return renderHostAwardsDone();
+  if (stage === 'wishes') return renderHostAwardsWishes();
   return renderHostAwardsPodium();
 }
 /* （二十五）改版：凸台＋角色縮小，並改成跟右側「其餘排名」面板並排的兩欄
@@ -3538,7 +3602,7 @@ function renderHostAwardsPodium(){
       <h1 class="marquee-title">最懂壽星<span class="hl">前三名</span></h1>
       <div class="awards-layout">
         <div class="podium-wrap">
-          <div class="podium" id="award-podium" style="--pw:min(46vw,300px)">
+          <div class="podium" id="award-podium" style="--pw:min(58vw,380px)">
             <img class="riser-img" src="${PODIUM_RISER_IMG}" alt="頒獎台">
             ${top3[1]?podiumCharHtml(2,'ap-2',top3[1][1]):''}
             ${top3[0]?podiumCharHtml(1,'ap-1',top3[0][1]):''}
@@ -3960,14 +4024,21 @@ function finishPicking(){
   sSet('game:state', hostState);
   renderHostAwardsDone();
 }
+/* (二十九) 這頁原本同時擠了凸台圖＋「🎁 許願任務」清單，在小螢幕上常常要
+   捲動才看得完——使用者反饋希望凸台可以再大、不用捲動，所以拆成兩頁：這頁
+   只留凸台（放大＋往下移，見 .awards-layout／--pw），許願任務清單跟「再玩
+   一輪／回設定」按鈕搬到 goAwardsWishes() 進入的 renderHostAwardsWishes()。 */
 function renderHostAwardsDone(){
   const sx = hostState.shouxingId;
   const top3 = (hostState.topIds||[]).map(id=>[id, hostState.players[id]]).filter(([,p])=>p);
   const rest = rankedGuessers(hostState.players, sx).filter(([id])=> !(hostState.topIds||[]).includes(id));
   const prizes = hostState.prizes || ['','',''];
   const prizeLine = (i, elId) => prizes[i] ? `<div class="sub prize-line" id="${elId}">🎁 ${esc(prizes[i])}</div>` : '';
-  const order = hostState.pickOrder || [];
-  const cards = hostState.wishCards || ['','',''];
+  // 少於兩位「最後三名」時（見 goAwardsRps()）整場根本沒有猜拳／選卡流程，
+  // pickOrder 會是空的——這種情況沒有許願任務可以公布，直接跳過「公布許願
+  // 任務」那一頁，維持舊版行為（原本合併畫面在 order.length===0 時也是直接
+  // 不出現許願任務區塊），比多一頁點進去看到「這場沒有人抽許願卡」乾淨。
+  const hasWishes = (hostState.pickOrder || []).length > 0;
   render(`
     <div class="shell"><div class="col" style="align-items:center;text-align:center">
       ${hostNav(true)}
@@ -3975,7 +4046,7 @@ function renderHostAwardsDone(){
       <h1 class="marquee-title">最懂壽星<span class="hl">前三名</span></h1>
       <div class="awards-layout">
         <div class="podium-wrap">
-          <div class="podium" style="--pw:min(46vw,300px)">
+          <div class="podium" style="--pw:min(58vw,380px)">
             <img class="riser-img" src="${PODIUM_RISER_IMG}" alt="頒獎台">
             ${top3[1]?podiumCharHtml(2,'ad-2',top3[1][1]):''}
             ${top3[0]?podiumCharHtml(1,'ad-1',top3[0][1]):''}
@@ -3989,8 +4060,31 @@ function renderHostAwardsDone(){
         </div>
         ${restRankPanelHtml(rest)}
       </div>
+      <div class="btn-row" style="margin-top:14px">
+        ${hasWishes
+          ? `<button class="btn" onclick="goAwardsWishes()">🎁 公布許願任務 →</button>`
+          : `<button class="btn secondary" onclick="restartSameGame()">🔄 再玩一輪</button>
+             <button class="btn ghost" onclick="hostNewGame()">🆕 回設定改題目</button>`}
+      </div>
+    </div></div>
+  `);
+  animatePodiumReveal('ad');
+  startRestRankCycle();
+}
+function goAwardsWishes(){
+  hostState.awardsStage = 'wishes';
+  sSet('game:state', hostState);
+  renderHostAwardsWishes();
+}
+function renderHostAwardsWishes(){
+  const order = hostState.pickOrder || [];
+  const cards = hostState.wishCards || ['','',''];
+  render(`
+    <div class="shell"><div class="col" style="align-items:center;text-align:center">
+      ${hostNav(true)}
+      <span class="eyebrow">🎁 許願任務</span>
+      <h1 class="marquee-title">大家抽到<span class="hl">什麼任務</span>？</h1>
       ${order.length? `<div class="panel" style="margin-top:10px;width:100%;max-width:520px">
-        <h2>🎁 許願任務</h2>
         <div class="stack" style="margin-top:10px">
           ${order.map(id=>{
             const p = hostState.players[id]; if (!p) return '';
@@ -3998,15 +4092,13 @@ function renderHostAwardsDone(){
             return `<div class="lb-row"><div class="lb-name">${avatarSpan(p.avatar)}${nameTag(p)}</div><div class="sub" style="flex:2;text-align:right">${idx!=null? esc(cards[idx]||'—') : '—'}</div></div>`;
           }).join('')}
         </div>
-      </div>` : ''}
+      </div>` : '<p class="sub">這場沒有人抽許願卡</p>'}
       <div class="btn-row" style="margin-top:14px">
         <button class="btn secondary" onclick="restartSameGame()">🔄 再玩一輪</button>
         <button class="btn ghost" onclick="hostNewGame()">🆕 回設定改題目</button>
       </div>
     </div></div>
   `);
-  animatePodiumReveal('ad');
-  startRestRankCycle();
 }
 
 /* ============================================================
@@ -4243,6 +4335,7 @@ function renderSpectateReveal(state){
   const isWarmup = !!q.isWarmup;
   const sx = state.shouxingId;
   const shouxingChoice = state.currentAnswers[sx] ? state.currentAnswers[sx].choice : null;
+  const shouxingLabel = shouxingChoice!=null && q.options[shouxingChoice] ? q.options[shouxingChoice].label : '';
   const counts = [0,0,0,0];
   Object.entries(state.currentAnswers || {}).forEach(([id,a])=>{ if (id!==sx && a.choice!=null) counts[a.choice]++; });
   const totalAnswered = counts.reduce((a,b)=>a+b, 0);
@@ -4251,6 +4344,11 @@ function renderSpectateReveal(state){
   const key = (state.roundId||'') + '_q' + state.questionIndex;
   const isFirstRender = _lastSpecRevealKey !== key;
   _lastSpecRevealKey = key;
+  // (二十九) 跟主持人頁／玩家手機同步：正解先賣關子（壽星選的是...．．．），
+  // 0.9 秒後才亮起正解、換上「壽星選的是「X」！」——只在第一次渲染這題的
+  // 揭曉畫面時播，之後同一題的 poll 重新渲染（例如又有人晚交卷）直接顯示
+  // 已經公布的最終狀態，不重播，同一套判斷方式跟 animateOptionBars() 共用
+  // 的 isFirstRender。
   render(`
     <div class="shell tight"><div class="col reveal-tight">
       <span class="eyebrow">🎂 壽星的選擇</span>
@@ -4258,9 +4356,11 @@ function renderSpectateReveal(state){
       ${qtextHtml(q.text, "font-size:clamp(14px,2.1vw,19px);max-width:32em", q.alignLeft)}
       ${shouxingChoice==null
         ? '<p class="sub" style="text-align:center">壽星這題沒來得及作答，這題大家都不計分</p>'
-        : `<p class="sub" style="text-align:center;font-weight:700">🎂 壽星選的是「${esc(q.options[shouxingChoice] ? q.options[shouxingChoice].label : '')}」！</p>`}
+        : `<p class="sub" id="spec-reveal-suspense" style="text-align:center;font-weight:700">${isFirstRender
+            ? `🤔 壽星選的是<span class="waiting-dots"><span>.</span><span>.</span><span>.</span></span>`
+            : `🎂 壽星選的是「${esc(shouxingLabel)}」！`}</p>`}
       <div class="options-grid">
-        ${q.options.map((o,i)=> revealRowHtml(o, i, counts[i], i===shouxingChoice, 'spec-reveal-opt-'+i, totalAnswered)).join('')}
+        ${q.options.map((o,i)=> revealRowHtml(o, i, counts[i], !isFirstRender && i===shouxingChoice, 'spec-reveal-opt-'+i, totalAnswered)).join('')}
       </div>
       <div class="panel">
         <h2>🏆 目前排行榜（前 5 名）</h2>
@@ -4278,6 +4378,14 @@ function renderSpectateReveal(state){
     </div></div>
   `);
   animateOptionBars(document, 150, !isFirstRender);
+  if (isFirstRender && shouxingChoice != null){
+    setTimeout(()=>{
+      const el = document.getElementById('spec-reveal-opt-' + shouxingChoice);
+      if (el){ el.classList.remove('dim'); el.classList.add('shouxing-glow', 'reveal-pop'); }
+      const banner = document.getElementById('spec-reveal-suspense');
+      if (banner) banner.innerHTML = `🎂 壽星選的是「${esc(shouxingLabel)}」！`;
+    }, 900);
+  }
 }
 /* （二十五）改版：跟 renderHostFinal() 一樣拿掉凸台插圖，改成一份表格排行榜
    （前三名標皇冠）——投影頁本來就是唯讀、單純鏡射主持人已經決定的狀態，
@@ -4306,6 +4414,7 @@ function renderSpectateAwards(state){
   if (stage === 'rps') return renderSpectateAwardsRps(state);
   if (stage === 'picking') return renderSpectateAwardsPicking(state);
   if (stage === 'done') return renderSpectateAwardsDone(state);
+  if (stage === 'wishes') return renderSpectateAwardsWishes(state);
   return renderSpectateAwardsPodium(state);
 }
 function renderSpectateAwardsPodium(state){
@@ -4315,13 +4424,20 @@ function renderSpectateAwardsPodium(state){
   const rest = rankedGuessers(state.players, sx).filter(([id])=> !(state.topIds||[]).includes(id));
   const prizes = state.prizes || ['','',''];
   const prizeLine = (i, elId) => prizes[i] ? `<div class="sub prize-line" id="${elId}">🎁 ${esc(prizes[i])}</div>` : '';
+  // (二十九) 第一次進到這個畫面時，跟主持人頁一樣播「3rd→2nd→1st 依序跳出＋
+  // 撒花」；之後同一輪的每次 poll 重新渲染（分數／許願卡等其他狀態變化都會
+  // 觸發整頁重畫）就跳過動畫、直接顯示最終狀態，避免動畫一直重播閃爍——同一套
+  // 判斷方式用在 renderSpectateReveal()／renderPlayerReveal()。
+  const key = (state.roundId||'') + '_podium';
+  const isFirstRender = _lastSpecPodiumKey !== key;
+  _lastSpecPodiumKey = key;
   render(`
     <div class="shell"><div class="col" style="align-items:center;text-align:center">
       <span class="eyebrow">🎊 頒獎典禮</span>
       <h1 class="marquee-title">最懂壽星<span class="hl">前三名</span></h1>
       <div class="awards-layout">
         <div class="podium-wrap">
-          <div class="podium" style="--pw:min(46vw,300px)">
+          <div class="podium" style="--pw:min(58vw,380px)">
             <img class="riser-img" src="${PODIUM_RISER_IMG}" alt="頒獎台">
             ${top3[1]?podiumCharHtml(2,'spec-ap-2',top3[1][1]):''}
             ${top3[0]?podiumCharHtml(1,'spec-ap-1',top3[0][1]):''}
@@ -4338,8 +4454,12 @@ function renderSpectateAwardsPodium(state){
       ${top3.length? '' : '<p class="sub">這場沒有人猜，先跳過頒獎</p>'}
     </div></div>
   `);
-  document.querySelectorAll('.podium .p').forEach(el => el.classList.add('show'));
-  document.querySelectorAll('.prize-line').forEach(el => el.classList.add('show'));
+  if (isFirstRender){
+    animatePodiumReveal('spec-ap');
+  } else {
+    document.querySelectorAll('.podium .p').forEach(el => el.classList.add('show'));
+    document.querySelectorAll('.prize-line').forEach(el => el.classList.add('show'));
+  }
   startRestRankCycle();
 }
 function renderSpectateAwardsRps(state){
@@ -4398,6 +4518,11 @@ function renderSpectateAwardsRps(state){
     </div></div>
   `);
 }
+// (二十九) 跟主持人頁的 _lastPickingAnimId 同一套寫法：換到新的人選卡時
+// （currentId 變了）播一次發牌動畫，同一個人選卡途中的其他 poll 重新渲染
+// 不重播。host/spectate 是不同裝置各自跑一份 script，變數本來就不會互相
+// 干擾，這裡另外宣告一個是為了語意清楚。
+let _lastSpecPickingAnimId = null;
 function renderSpectateAwardsPicking(state){
   clearSpectateCountdown();
   const order = state.pickOrder || [];
@@ -4406,6 +4531,9 @@ function renderSpectateAwardsPicking(state){
   const pickedIdxs = Object.values(picked);
   const currentId = order.find(id => picked[id] === undefined);
   const currentP = currentId ? state.players[currentId] : null;
+  const dealCards = currentId !== _lastSpecPickingAnimId;
+  _lastSpecPickingAnimId = currentId;
+  const dealRot = [-9, 7, -5];
   render(`
     <div class="shell"><div class="col" style="align-items:center;text-align:center">
       <span class="eyebrow">🃏 選卡中</span>
@@ -4415,7 +4543,7 @@ function renderSpectateAwardsPicking(state){
       ` : '<h1 class="marquee-title" style="font-size:clamp(24px,5vw,40px)">都選完了！</h1>'}
       <div class="options-grid" style="max-width:760px">
         ${[0,1,2].map(i=> `
-          <div class="opt-card ${OPT_CLASS[i]} ${pickedIdxs.includes(i)?'dim':''}">
+          <div class="opt-card ${OPT_CLASS[i]} ${pickedIdxs.includes(i)?'dim':''} ${dealCards?'card-deal':''}"${dealCards?` style="animation-delay:${i*120}ms;--deal-rot:${dealRot[i]}deg"`:''}>
             <span class="tag">${i+1}</span>
             <span>${pickedIdxs.includes(i) ? '（已被選走）' : (cards[i] ? esc(cards[i]) : '（壽星還沒填這張卡）')}</span>
           </div>
@@ -4435,6 +4563,10 @@ function renderSpectateAwardsPicking(state){
     </div></div>
   `);
 }
+/* (二十九) 跟 renderHostAwardsDone() 一起拆頁：這頁現在只留凸台，「🎁 許願
+   任務」清單搬到 renderSpectateAwardsWishes()。凸台的依序跳出＋撒花動畫，
+   只在第一次進到這個階段時播（判斷方式同 renderSpectateAwardsPodium()），
+   之後同一輪的 poll 重新渲染直接顯示最終狀態，不重播。 */
 function renderSpectateAwardsDone(state){
   clearSpectateCountdown();
   const sx = state.shouxingId;
@@ -4442,15 +4574,16 @@ function renderSpectateAwardsDone(state){
   const rest = rankedGuessers(state.players, sx).filter(([id])=> !(state.topIds||[]).includes(id));
   const prizes = state.prizes || ['','',''];
   const prizeLine = (i, elId) => prizes[i] ? `<div class="sub prize-line" id="${elId}">🎁 ${esc(prizes[i])}</div>` : '';
-  const order = state.pickOrder || [];
-  const cards = state.wishCards || ['','',''];
+  const key = (state.roundId||'') + '_done';
+  const isFirstRender = _lastSpecDoneKey !== key;
+  _lastSpecDoneKey = key;
   render(`
     <div class="shell"><div class="col" style="align-items:center;text-align:center">
       <span class="eyebrow">🎊 頒獎典禮</span>
       <h1 class="marquee-title">最懂壽星<span class="hl">前三名</span></h1>
       <div class="awards-layout">
         <div class="podium-wrap">
-          <div class="podium" style="--pw:min(46vw,300px)">
+          <div class="podium" style="--pw:min(58vw,380px)">
             <img class="riser-img" src="${PODIUM_RISER_IMG}" alt="頒獎台">
             ${top3[1]?podiumCharHtml(2,'spec-ad-2',top3[1][1]):''}
             ${top3[0]?podiumCharHtml(1,'spec-ad-1',top3[0][1]):''}
@@ -4464,8 +4597,25 @@ function renderSpectateAwardsDone(state){
         </div>
         ${restRankPanelHtml(rest)}
       </div>
+    </div></div>
+  `);
+  if (isFirstRender){
+    animatePodiumReveal('spec-ad');
+  } else {
+    document.querySelectorAll('.podium .p').forEach(el => el.classList.add('show'));
+    document.querySelectorAll('.prize-line').forEach(el => el.classList.add('show'));
+  }
+  startRestRankCycle();
+}
+function renderSpectateAwardsWishes(state){
+  clearSpectateCountdown();
+  const order = state.pickOrder || [];
+  const cards = state.wishCards || ['','',''];
+  render(`
+    <div class="shell"><div class="col" style="align-items:center;text-align:center">
+      <span class="eyebrow">🎁 許願任務</span>
+      <h1 class="marquee-title">大家抽到<span class="hl">什麼任務</span>？</h1>
       ${order.length? `<div class="panel" style="margin-top:10px;width:100%;max-width:520px">
-        <h2>🎁 許願任務</h2>
         <div class="stack" style="margin-top:10px">
           ${order.map(id=>{
             const p = state.players[id]; if (!p) return '';
@@ -4473,12 +4623,9 @@ function renderSpectateAwardsDone(state){
             return `<div class="lb-row"><div class="lb-name">${avatarSpan(p.avatar)}${nameTag(p)}</div><div class="sub" style="flex:2;text-align:right">${idx!=null? esc(cards[idx]||'—') : '—'}</div></div>`;
           }).join('')}
         </div>
-      </div>` : ''}
+      </div>` : '<p class="sub">這場沒有人抽許願卡</p>'}
     </div></div>
   `);
-  document.querySelectorAll('.podium .p').forEach(el => el.classList.add('show'));
-  document.querySelectorAll('.prize-line').forEach(el => el.classList.add('show'));
-  startRestRankCycle();
 }
 
 /* ============================================================
@@ -4840,6 +4987,8 @@ function renderPlayerReveal(state){
   }
 
   const gotIt = mine && mine.correct;
+  const myChoice = mine ? mine.choice : null;
+  const myOpt = myChoice != null ? q.options[myChoice] : null;
   const key = 'q' + state.questionIndex;
   const isFirstRender = _lastPlayerRevealKey !== key;
   _lastPlayerRevealKey = key;
@@ -4876,6 +5025,7 @@ function renderPlayerReveal(state){
       <h1 class="marquee-title" style="font-size:clamp(22px,7vw,34px);color:${gotIt?'var(--moss)':'var(--ink)'}">
         ${shouxingChoice==null ? '壽星這題沒作答' : gotIt ? '猜對了！' : '猜錯了'}
       </h1>
+      <p class="sub">你選的是：<b>${esc(myOpt ? myOpt.label : '（沒有作答）')}</b></p>
       ${shouxingOpt ? `
         <p class="sub">壽星選的是：${esc(shouxingOpt.label)}</p>
         ${shouxingOpt.img? `<img src="${shouxingOpt.img}" style="width:120px;height:120px;object-fit:cover;border-radius:16px">`:''}
@@ -4886,7 +5036,7 @@ function renderPlayerReveal(state){
       <div class="panel" style="margin-top:6px;width:100%;max-width:320px">
         <div class="sub" style="text-align:left">📊 大家怎麼選</div>
         <div class="options-grid" style="margin-top:6px">
-          ${q.options.map((o,i)=> revealRowHtml(o, i, counts[i], !isFirstRender && shouxingChoice!=null && i===shouxingChoice, 'preveal-opt-'+i, totalAnswered)).join('')}
+          ${q.options.map((o,i)=> revealRowHtml(o, i, counts[i], !isFirstRender && shouxingChoice!=null && i===shouxingChoice, 'preveal-opt-'+i, totalAnswered, i===myChoice)).join('')}
         </div>
       </div>
       ${!isWarmup ? `
