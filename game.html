@@ -801,6 +801,10 @@ let _lastSpecDoneKey = null;
 // animateFinalLeaderboardReveal()，兩邊渲染出來的 DOM id／class 結構相同，
 // 不需要另外寫一份），之後同一輪的重畫維持靜態顯示最終結果，不重播。
 let _lastSpecFinalKey = null;
+// （三十）renderSpectateAwardsWishes() 本身沒有任何動畫可以掛，純粹是靜態
+// 清單，但公布許願任務要播一個提示音——所以另外開一個鍵值只用來擋「同一輪
+// 只播一次」，不像上面幾個變數還兼職控制動畫要不要重播。
+let _lastSpecWishesKey = null;
 
 /* ---------- generic helpers ---------- */
 function esc(s){
@@ -3107,6 +3111,63 @@ function playTimeUpAlarm(){
   playBeep(660, 220, 0.22);
   setTimeout(()=> playBeep(440, 320, 0.22), 150);
 }
+/* ---------- 派對高潮音效（三十，音效改進追加） ----------
+   延續上面倒數計時音效同一個原則：純用 Web Audio API 現場合成，不需要任何
+   外部音檔。這幾個新音效對應「團隊視角總體檢報告」音效設計師角色點名的三個
+   最可惜的靜音時刻——公布正解、頒獎台／最終排行榜皇冠揭曉、許願任務公布。
+   用 AskUserQuestion 跟使用者確認過音效要在哪個畫面播放：使用者選了「主持人
+   畫面／投影頁兩邊都播放」（不是像倒數計時嗶聲那樣只在主持人端），理由是
+   這幾個音效是要炒熱全場氣氛的，投影頁才是真正投影出去給大家看、大家聽到
+   聲音的那個畫面，只在主持人端播反而可能全場聽不到。所以下面每個播放呼叫
+   都直接放進 host／spectate 各自（或共用）的揭曉邏輯裡，沿用既有的
+   isFirstRender／_lastSpecXxxKey 一次性播放閘門，不會每次 poll 重新渲染就
+   又響一次；host 端因為對應的 renderHostXxx() 本身就是一次性導航渲染（不像
+   spectate 掛在 poll 迴圈上），不需要另外加鍵值判斷。
+   全部沿用 _timerAudio.ctx（同一個 AudioContext），不需要另外呼叫
+   ensureAudioCtx()——這幾個音效發生的時間點必定在「主持人已經點過開始第一題」
+   之後（遊戲一定先出過至少一題才會走到公布正解／頒獎／許願任務），所以
+   AudioContext 早就在真實使用者手勢裡建立並解鎖過了，不需要重新要求手勢。 */
+function playChirp(freqStart, freqEnd, durMs, vol){
+  const ctx = _timerAudio.ctx; if (!ctx) return;
+  try{
+    const t0 = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freqStart, t0);
+    osc.frequency.exponentialRampToValueAtTime(freqEnd, t0 + durMs/1000);
+    gain.gain.setValueAtTime(0, t0);
+    gain.gain.linearRampToValueAtTime(vol, t0 + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, t0 + durMs/1000);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(t0);
+    osc.stop(t0 + durMs/1000 + 0.03);
+  }catch(err){ /* 音效只是錦上添花——絕對不能讓音效本身的例外擋到遊戲邏輯 */ }
+}
+/* 公布正解：兩個上揚音疊在一起（G5→C6），跟「時間到」的下降警示音
+   （playTimeUpAlarm，660→440）聽起來明顯不同方向，避免兩種情境的音效被
+   使用者搞混。 */
+function playRevealChime(){
+  playBeep(784, 130, 0.16);
+  setTimeout(()=> playBeep(1047, 200, 0.18), 110);
+}
+/* 頒獎台／最終排行榜第 3、2 名站上台（或戴上皇冠）時各一個輕巧的短音；
+   第 1 名（跟五彩紙花同時出現）換成四音上揚的小小號角，呼應那是整段揭曉裡
+   最大的高潮。 */
+function playPodiumPop(){
+  playBeep(659, 110, 0.14);
+}
+function playPodiumFanfare(){
+  [523, 659, 784, 1047].forEach((freq, i) => {
+    setTimeout(()=> playBeep(freq, 160, 0.18), i * 100);
+  });
+}
+/* 許願任務公布：一個快速上滑的掃頻音，模擬「刷」一聲翻牌攤開的感覺，音色上
+   刻意跟前面兩組「固定音高的短嗶」做出區隔，讓使用者光聽聲音就能分辨現在是
+   哪一種揭曉。 */
+function playCardFlipSound(){
+  playChirp(320, 900, 180, 0.15);
+}
 /* Beep spacing shrinks in stages as remainMs approaches 0 — that's the
    "越接近時間到滴得越快" effect the user asked for. Infinity means silent
    (more than 5 seconds left). */
@@ -3363,6 +3424,7 @@ function renderHostReveal(){
       if (el){ el.classList.remove('dim'); el.classList.add('shouxing-glow', 'reveal-pop'); }
       const banner = document.getElementById('reveal-suspense');
       if (banner) banner.innerHTML = `🎂 壽星選的是「${esc(shouxingLabel)}」！`;
+      playRevealChime();
     }, 900);
   }
   setTimeout(()=> animateRevealLeaderboard(newRanked), shouxingChoice!=null ? 1900 : 500);
@@ -3520,7 +3582,12 @@ function animateFinalLeaderboardReveal(visible, rest){
         const rank = i + 1;
         const slot = el.querySelector('.lb-crown-slot');
         if (slot){ slot.innerHTML = `<img src="${RANK_CROWN_IMG[rank]}" alt="第${rank}名">`; slot.classList.add('pop'); }
-        if (rank === 1) spawnConfetti();
+        // （三十）跟 animatePodiumReveal() 同一套音效分工：第 1 名撒花＋號角，
+        // 第 2、3 名戴皇冠只是輕巧一聲。這個函式本身已經由呼叫端
+        // （renderHostFinal()／renderSpectateFinal()）各自的 isFirstRender
+        // 閘門保證同一輪只執行一次，不需要重複判斷。
+        if (rank === 1){ spawnConfetti(); playPodiumFanfare(); }
+        else playPodiumPop();
       }, delay);
     });
     // Anyone past the animated top 5 just fades in below at their real score.
@@ -3699,7 +3766,11 @@ function animatePodiumReveal(prefix){
     setTimeout(()=>{
       const el = document.getElementById(id);
       if (el) el.classList.add('show');
-      if (id === prefix+'-1') spawnConfetti();
+      // （三十）音效：第 1 名跟撒花一起放最大的號角，第 2、3 名只是輕巧的
+      // 一聲——這個函式本身已經被兩邊（host 一次性導航渲染／spectate 靠
+      // isFirstRender 閘門）各自只呼叫一次，不需要再另外判斷要不要播。
+      if (id === prefix+'-1'){ spawnConfetti(); playPodiumFanfare(); }
+      else playPodiumPop();
       setTimeout(()=>{
         const prizeEl = document.getElementById(id+'-prize');
         if (prizeEl) prizeEl.classList.add('show');
@@ -4137,6 +4208,9 @@ function goAwardsWishes(){
   hostState.awardsStage = 'wishes';
   sSet('game:state', hostState);
   renderHostAwardsWishes();
+  // （三十）公布許願任務是主持人點擊觸發的一次性導覽（不像 spectate 掛在
+  // poll 迴圈上，這裡不需要另外判斷「是不是第一次」）。
+  playCardFlipSound();
 }
 function renderHostAwardsWishes(){
   const order = hostState.pickOrder || [];
@@ -4182,21 +4256,29 @@ function renderHostAwardsWishes(){
    hostState and writes back to the server — exclusively the host tab's job;
    running it a second time from here risks double-processing races). This
    view only ever calls sGet('game:state') to read, then paints.
-   Also deliberately silent — no countdown beep/alarm audio (see
-   ensureAudioCtx()/tickCountdownSound(), host-tab-only) and no confetti/
-   suspense-timed reveal animations: the host's own tab already plays sound
-   and both tabs sit in the same room at a party, and a poll loop re-rendering
-   the SAME screen more than once (a heartbeat re-sync, or any other key
-   changing) would replay any staggered "reveal" animation every time, which
-   reads as flicker rather than delight (see
-   animateOptionBars()'s own comment on exactly this trade-off — the vote
-   bars are the one animation kept here, guarded by _lastSpecRevealKey so
-   they still only grow-in once per question, matching that established
-   pattern). Podium/leaderboard scores are simply painted at their current
-   value on every poll instead of counting up or reordering — a session
-   watching this screen already just watched (or will watch) the host's own
-   tab do the full suspense version once; the projector's job here is to stay
-   accurate and legible, not to re-run the big reveal moment a second time.
+   （這段註解原本寫「投影頁完全靜音、沒有懸念動畫」，是（二十四）剛拆出
+   spectate 章節那時候的狀態，之後（二十九）／（三十）陸續把懸念動畫跟音效
+   都補上了，這段一直沒有跟著更新——順手一併修正，避免繼續誤導。）
+   倒數計時的嗶聲／時間到警示音（ensureAudioCtx()/playCountdownTick()/
+   playTimeUpAlarm()）目前仍然「只在主持人分頁播」，這點沒有變：那是給
+   主持人自己抓節奏用的工具音，跟下面這些「炒熱全場氣氛」的音效目的不同，
+   沒有理由跟著搬過來。公布正解／頒獎台皇冠揭曉／許願任務公布這三組音效
+   （playRevealChime()/playPodiumPop()/playPodiumFanfare()/
+   playCardFlipSound()，見（三十））則是主持人頁跟投影頁「兩邊都播」——
+   使用者透過 AskUserQuestion 明確選了這個做法：這幾個音效是要讓全場聽到的
+   高潮時刻，只在主持人端播反而可能全場聽不到。
+   撒花／懸念揭曉動畫本身也不是「完全沒有」，而是每一輪最多只播一次：
+   renderSpectateReveal()／renderSpectateAwardsPodium()／
+   renderSpectateAwardsDone()／renderSpectateFinal() 都用
+   _lastSpecRevealKey／_lastSpecPodiumKey／_lastSpecDoneKey／_lastSpecFinalKey
+   這幾個「只在第一次渲染這個目標時才播」的鍵值擋著——poll 迴圈重新渲染同一個
+   畫面（心跳重新整理、或任何其他 key 變動觸發的整頁重畫）不會讓動畫或音效
+   重播第二次，避免變成閃爍／連環嗶聲。新加的許願任務公布音效也是同一套
+   模式，只是額外開了一個 _lastSpecWishesKey（那個畫面本身沒有動畫可以掛，
+   純粹為了擋音效重播才新增）。排行榜／頒獎台在「第一次」之後的重畫，
+   仍然只是照最終數值直接畫出來，不會再重新跑一次數字跳動或重新排序——
+   這部分的判斷維持不變：懸念只需要讓全場「看到、聽到」一次，不需要每次
+   poll 都重新演一遍。
    ============================================================ */
 /* Small fixed corner label so the host can tell this window apart from the
    real control panel at a glance — appended to <body> once (outside #app,
@@ -4446,6 +4528,7 @@ function renderSpectateReveal(state){
       if (el){ el.classList.remove('dim'); el.classList.add('shouxing-glow', 'reveal-pop'); }
       const banner = document.getElementById('spec-reveal-suspense');
       if (banner) banner.innerHTML = `🎂 壽星選的是「${esc(shouxingLabel)}」！`;
+      playRevealChime();
     }, 900);
   }
 }
@@ -4488,14 +4571,28 @@ function renderSpectateFinal(state){
           </div>
           <div class="stack" style="margin-top:6px" id="final-leaderboard-rest"></div>
         ` : `
-          <h2>🏆 最終名次</h2>
-          <div class="stack" style="margin-top:10px">
+          <h2 id="final-leaderboard-title">🏆 最終名次</h2>
+          <div class="stack" style="margin-top:10px" id="final-leaderboard">
             ${ranked.map(([id,p],i)=> finalRowHtml(i+1, p, { pid: id })).join('') || '<p class="sub">這場沒有人猜</p>'}
           </div>
         `}
       </div>
     </div></div>
   `);
+  // （三十，音效改進時發現並修正的既有小缺口）這個畫面每 ~1.5-1.8 秒 poll 一次
+  // 就整個 innerHTML 重畫，isFirstRender 只有「第一次看到這個 roundId」那一次
+  // 是 true——但 animateFinalLeaderboardReveal() 排的動畫序列拖得比一次 poll
+  // 間隔還長（500ms 起跳＋crownTop3 的 1700ms＋第一名再 1400ms，加總 3.6 秒），
+  // 只要動畫還沒播完、中途又被下一次 poll 觸發的重畫換掉 DOM，原本排隊中的
+  // setTimeout 回呼會用 document.getElementById('final-leaderboard')／
+  // data-pid 選擇器去新的 DOM 裡重新找元素——如果找不到（原本這個「已結算」
+  // 分支的容器沒有掛 id、行也沒有掛 data-pid）就會整批靜默失敗，皇冠彈出效果
+  // 跟這次新增的音效都不會播，但因為 finalRowHtml() 本來就已經把皇冠圖片
+  // 直接畫進最終名次列表裡（不靠 crownTop3() 動態塞入），畫面上完全看不出來
+  // 有東西沒播到，非常隱蔽。修法很單純：讓「已結算」這個分支也掛上同一組
+  // id／data-pid，這樣即使重畫真的發生在動畫播到一半，setTimeout 回呼還是
+  // 能在新 DOM 裡找到同一位玩家對應的列，把彈出樣式跟音效補上去（畫面上頂多
+  // 看起來像數字沒有跳動過程、直接定格在最終值，但不會整組動畫跟音效都消失）。
   if (isFirstRender) setTimeout(()=> animateFinalLeaderboardReveal(visible, rest), 500);
 }
 function renderSpectateAwards(state){
@@ -4700,6 +4797,13 @@ function renderSpectateAwardsWishes(state){
   clearSpectateCountdown();
   const order = state.pickOrder || [];
   const cards = state.wishCards || ['','',''];
+  // （三十）這個畫面本身沒有任何動畫可以掛，純粹是每 1.5 秒 poll 就重畫一次
+  // 的靜態清單，所以另外用 _lastSpecWishesKey 擋「同一輪只播一次公布音效」，
+  // 不然會變成每次 poll 重新渲染都再響一次。
+  const wishesKey = (state.roundId || '') + '_wishes';
+  const isFirstWishesRender = _lastSpecWishesKey !== wishesKey;
+  _lastSpecWishesKey = wishesKey;
+  if (isFirstWishesRender) playCardFlipSound();
   render(`
     <div class="shell"><div class="col" style="align-items:center;text-align:center">
       <span class="eyebrow">🎁 許願任務</span>
