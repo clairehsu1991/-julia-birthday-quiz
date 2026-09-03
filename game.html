@@ -792,6 +792,15 @@ let _lastSpecRevealKey = null;      // guards animateOptionBars() so the vote ba
 // renderSpectateAwardsDone()、renderSpectateReveal()。
 let _lastSpecPodiumKey = null;
 let _lastSpecDoneKey = null;
+// (二十九後續修正) renderSpectateFinal() 原本是完全靜態的（見（二十四）／
+// （二十五）當時的既有設計理由：怕每 1.5 秒 poll 重畫會重播動畫變閃爍）。但
+// 這個畫面就是實際投影給全場看的最終結果，完全靜態代表現場觀眾永遠看不到
+// 主持人端那段「分數跳動＋排名重排＋前三名依序戴上皇冠＋撒花」的懸念動畫——
+// 這其實是真正的體驗缺口，不是設計取捨。改用跟上面同一套「第一次 vs 重播」
+// 鍵值判斷，第一次進到這個畫面時播一次跟主持人端一模一樣的動畫（直接共用
+// animateFinalLeaderboardReveal()，兩邊渲染出來的 DOM id／class 結構相同，
+// 不需要另外寫一份），之後同一輪的重畫維持靜態顯示最終結果，不重播。
+let _lastSpecFinalKey = null;
 
 /* ---------- generic helpers ---------- */
 function esc(s){
@@ -998,18 +1007,67 @@ function optionCardHtml(opt, i, onclickAttr){
      an answer is long enough that a half-width 2-col card would wrap it
      awkwardly, force a single full-width column instead (top-to-bottom) so
      every answer gets the full row to lay out on as few lines as possible. */
+/* （二十九後續修正）optionsGridClass() 原本只看題目物件上存的 imgW/imgH——這兩個
+   欄位是 saveQuestionFromForm() 在「這次上傳」的當下才會寫入的，任何在這個功能上線
+   之前就已經存在的圖片題（沒有重新編輯、重新上傳過照片）完全沒有這兩個欄位，於是
+   永遠掉回舊版的 img-row，即使照片其實是橫式的——這是真的功能缺口，不是使用者
+   誤會：使用者已經存在的題庫沒辦法「自動」享受到新版面，得逐題重新上傳圖片才行，
+   這對已經建好一整份題庫的人來說很不合理。改成 imgW/imgH 缺席時，直接從選項本身
+   已經存著的壓縮後 JPEG 圖片（`o.img`，一定是 canvas.toDataURL('image/jpeg',...)
+   產生的）解析檔案表頭裡的寬高——不需要使用者重新上傳任何東西，舊題目直接就能拿到
+   正確的版面。解析結果用 Map 存一份快取（key 是圖片本身的 data URL 字串），避免
+   host/spectate/player 三個角色每 1.5~1.8 秒的 poll 重畫都要重新解一次同一張圖。 */
+const _jpegDimsCache = new Map();
+function jpegDimsFromDataUrl(dataUrl){
+  if (!dataUrl || typeof dataUrl !== 'string') return null;
+  if (_jpegDimsCache.has(dataUrl)) return _jpegDimsCache.get(dataUrl);
+  let result = null;
+  try{
+    const comma = dataUrl.indexOf(',');
+    const b64 = comma >= 0 ? dataUrl.slice(comma + 1) : dataUrl;
+    const bin = atob(b64);
+    if (bin.charCodeAt(0) === 0xFF && bin.charCodeAt(1) === 0xD8){
+      let i = 2;
+      while (i + 8 < bin.length){
+        if (bin.charCodeAt(i) !== 0xFF){ i++; continue; }
+        const marker = bin.charCodeAt(i + 1);
+        // SOF0–SOF15 markers carry the real width/height, except DHT(C4)/JPG(C8)/DAC(CC)
+        // which share the 0xC0–0xCF range but aren't frame-start markers.
+        if (marker >= 0xC0 && marker <= 0xCF && marker !== 0xC4 && marker !== 0xC8 && marker !== 0xCC){
+          const h = (bin.charCodeAt(i + 5) << 8) | bin.charCodeAt(i + 6);
+          const w = (bin.charCodeAt(i + 7) << 8) | bin.charCodeAt(i + 8);
+          if (w > 0 && h > 0) result = { w, h };
+          break;
+        }
+        if (marker === 0xD8 || marker === 0xD9 || (marker >= 0xD0 && marker <= 0xD7)){ i += 2; continue; }
+        const len = (bin.charCodeAt(i + 2) << 8) | bin.charCodeAt(i + 3);
+        if (len < 2) break;
+        i += 2 + len;
+      }
+    }
+  } catch(e){ result = null; }
+  _jpegDimsCache.set(dataUrl, result);
+  return result;
+}
 function optionsGridClass(q){
   if (!q || !Array.isArray(q.options)) return 'options-grid';
   if (q.type === 'image'){
     // （二十九）四張並排一列（img-row）每格窄、靠高度吃滿，適合窄長的直式
     // 照片；改新增的 2x2 四宮格（img-grid2）每格比較寬、靠寬度吃滿，適合
     // 寬短的橫式照片——用四張照片「寬 ÷ 高」的平均值決定選哪一種，同一題
-    // 統一套用同一種版面（不然四張選項卡忽高忽寬，看起來會很亂）。
-    // imgW/imgH 是 saveQuestionFromForm() 存圖片時一併記錄的原始尺寸（見
-    // fileToCompressedDataUrl()）；這個功能上線前存的舊題目沒有這兩個欄
-    // 位，比例就當作 1（=<閾值），維持舊題目原本永遠是 img-row 的樣子，不
-    // 會因為這次改動忽然跳版。
-    const ratios = q.options.filter(o => o && o.imgW && o.imgH).map(o => o.imgW / o.imgH);
+    // 統一套用同一種版面（不然四張選項卡忽高忽寬，看起來會很亂）。優先用
+    // 選項物件上存的 imgW/imgH（saveQuestionFromForm() 上傳當下記錄的，免
+    // 一次解析），沒有的話（這個功能上線前就存在的舊題目）改用上面的
+    // jpegDimsFromDataUrl() 直接解析已經存著的圖片本身。兩者都沒有（例如
+    // img 是 null／損毀的資料）就跳過那張照片，不計入平均值；四張都沒有
+    // 任何尺寸資料時比例當作 1（=<閾值），維持 img-row，不會沒有照片可
+    // 參考時亂猜版面。
+    const ratios = q.options.map(o => {
+      if (!o) return null;
+      if (o.imgW && o.imgH) return o.imgW / o.imgH;
+      const dims = jpegDimsFromDataUrl(o.img);
+      return dims ? dims.w / dims.h : null;
+    }).filter(r => r != null);
     const avgRatio = ratios.length ? ratios.reduce((a,b)=>a+b, 0) / ratios.length : 1;
     return avgRatio > 1.15 ? 'options-grid img-grid2' : 'options-grid img-row';
   }
@@ -3441,7 +3499,11 @@ function renderHostFinal(){
    settle here once, so replaying the whole tally-and-reorder a second and
    third time for the exact same, already-known numbers would slow the party
    down rather than add suspense — they go straight to their own podium
-   reveal (see renderHostAwardsPodium() / renderHostAwardsDone()). */
+   reveal (see renderHostAwardsPodium() / renderHostAwardsDone()).
+   （二十九後續修正）renderSpectateFinal() 第一次渲染這一輪最終結果時也直接呼叫
+   這個函式——投影頁跟主持人頁渲染出來的「結算中」骨架用的是同一組 id
+   （final-leaderboard-title/-leaderboard/-leaderboard-rest），純 DOM 操作的
+   這個函式完全不需要另外寫一份給投影頁用。 */
 function animateFinalLeaderboardReveal(visible, rest){
   const crownTop3 = () => {
     const titleEl = document.getElementById('final-leaderboard-title');
@@ -4395,19 +4457,46 @@ function renderSpectateFinal(state){
   const sx = state.shouxingId;
   const ranked = rankedGuessers(state.players, sx);
   const sxName = state.players[sx] ? state.players[sx].name : '';
+  // (二十九後續修正) 第一次看到這一輪的最終結果，跟主持人端一樣先渲染「結算中」
+  // 的 join-order／分數 0 畫面，再呼叫共用的 animateFinalLeaderboardReveal()
+  // 播一次跟主持人端一模一樣的分數跳動＋排名重排＋前三名依序戴皇冠＋撒花；
+  // 同一輪之後的每次 poll 重畫（例如許願卡狀態變化觸發的整頁重畫）直接顯示
+  // 已經結算完的最終名次，不重播。
+  const key = state.roundId || '';
+  const isFirstRender = _lastSpecFinalKey !== key;
+  _lastSpecFinalKey = key;
+  const LB_CAP = 5;
+  const visible = ranked.slice(0, Math.min(ranked.length, LB_CAP));
+  const rest = ranked.slice(visible.length);
   render(`
     <div class="shell"><div class="col" style="align-items:center;text-align:center">
       <span class="eyebrow">🎊 遊戲結束</span>
       <h1 class="marquee-title">最終<span class="hl">排行榜</span></h1>
       ${sxName? `<div class="chip shouxing" style="margin:0 auto">🎂 今天的壽星 ${nameTag(state.players[sx])}</div>`:''}
       <div class="panel" style="width:100%;max-width:520px">
-        <h2>🏆 最終名次</h2>
-        <div class="stack" style="margin-top:10px">
-          ${ranked.map(([id,p],i)=> finalRowHtml(i+1, p, { pid: id })).join('') || '<p class="sub">這場沒有人猜</p>'}
-        </div>
+        ${isFirstRender ? `
+          <h2 id="final-leaderboard-title">🧮 分數結算中…</h2>
+          <div class="stack" style="margin-top:10px" id="final-leaderboard">
+            ${visible.map(([id,p])=>`
+              <div class="lb-row" data-pid="${id}">
+                <span class="lb-crown-slot"></span>
+                <div class="lb-rank">–</div>
+                <div class="lb-name">${avatarSpan(p.avatar)}${nameTag(p)}</div>
+                <div class="lb-score num">0</div>
+              </div>
+            `).join('') || '<p class="sub">這場沒有人猜</p>'}
+          </div>
+          <div class="stack" style="margin-top:6px" id="final-leaderboard-rest"></div>
+        ` : `
+          <h2>🏆 最終名次</h2>
+          <div class="stack" style="margin-top:10px">
+            ${ranked.map(([id,p],i)=> finalRowHtml(i+1, p, { pid: id })).join('') || '<p class="sub">這場沒有人猜</p>'}
+          </div>
+        `}
       </div>
     </div></div>
   `);
+  if (isFirstRender) setTimeout(()=> animateFinalLeaderboardReveal(visible, rest), 500);
 }
 function renderSpectateAwards(state){
   const stage = state.awardsStage;
