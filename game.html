@@ -178,24 +178,31 @@
        up the vertical space a 2nd row would've taken, so .opt-img can grow
        into that height instead — a narrow column still fits a tall photo at a
        good size. */
-    .options-grid.img-row{ grid-template-columns:repeat(4,1fr); gap:14px; max-width:1500px; }
+    .options-grid.img-row{ grid-template-columns:repeat(4,1fr); gap:14px; max-width:1680px; }
     /* Sized off the viewport height (like the QR code is off vmin) so the photo
        claims most of the room a single row frees up instead of a fixed, timid
        bump. object-fit:contain on .opt-img still protects very tall portrait
        photos from ever being cropped — a photo whose own aspect ratio can't
        use the full height just lets a bit more of the option's colour show
-       through at top/bottom instead of stretching or cropping. */
-    .options-grid.img-row .opt-img{ height:clamp(220px, 44vh, 460px); }
-    .options-grid.img-row .opt-cap{ font-size:16px; }
+       through at top/bottom instead of stretching or cropping.
+       （三十一後續修正）使用者實際使用後回報「圖片題的圖還是太小，想看清楚
+       臉」——原本 clamp(220px, 44vh, 460px) 在一般筆電視窗高度下幾乎都是直接
+       頂到 460px 這個上限，加大 vh 係數其實沒什麼用，真正要調的是這個上限跟
+       下限本身。整組往上調（220→260 / 44vh→55vh / 460→600），連帶把外層
+       max-width 從 1500px 放寬到 1680px，讓變寬的欄位跟得上變高的照片，不會
+       反過來被欄寬卡住。 */
+    .options-grid.img-row .opt-img{ height:clamp(260px, 55vh, 600px); }
+    .options-grid.img-row .opt-cap{ font-size:17px; }
     /* （二十九）Landscape-leaning photos (wide/short): the opposite problem —
        squeezed into one of 4 narrow columns, a wide photo is width-capped long
        before it uses the height budget above, so most of that clamp() range
        goes to waste. A 2x2 grid gives each photo roughly double the column
        width instead, which is what a wide photo actually needs to render big;
-       it doesn't need as much height, so the row height stays modest. */
-    .options-grid.img-grid2{ grid-template-columns:repeat(2,1fr); gap:16px; max-width:1100px; }
-    .options-grid.img-grid2 .opt-img{ height:clamp(200px, 30vh, 340px); }
-    .options-grid.img-grid2 .opt-cap{ font-size:16px; }
+       it doesn't need as much height, so the row height stays modest.
+       （三十一後續修正）同上，一併放大＋放寬外層 max-width。 */
+    .options-grid.img-grid2{ grid-template-columns:repeat(2,1fr); gap:16px; max-width:1300px; }
+    .options-grid.img-grid2 .opt-img{ height:clamp(240px, 40vh, 440px); }
+    .options-grid.img-grid2 .opt-cap{ font-size:17px; }
   }
 
   .opt-card{
@@ -215,7 +222,11 @@
   /* object-fit:contain (not cover) so the whole uploaded photo is always visible —
      any letterboxing shows the option's own colour (gold/leaf/terracotta/sky)
      through the padding, so it still looks like a deliberate frame, not a bug. */
-  .opt-img{ width:100%; height:170px; object-fit:contain; border-radius:12px; display:block; }
+  /* （三十一後續修正）手機（<900px，玩家自己的螢幕）原本固定 170px，使用者
+     覺得看不清楚臉，一併調大到 210px——玩家手機畫面本來就窄，這裡沒有欄寬可以
+     搶，維持固定值（不是 clamp），但把基準值調高，跟桌面／投影頁那組放大的
+     幅度大致一致。 */
+  .opt-img{ width:100%; height:210px; object-fit:contain; border-radius:12px; display:block; }
   .opt-cap{ font-size:14px; font-weight:800; text-align:center; }
   .opt-card.dim{ filter:grayscale(.35) brightness(.92); opacity:.7; }
   .opt-card.shouxing-glow{ outline:4px solid var(--coral); box-shadow:0 0 0 6px rgba(232,101,75,0.22); }
@@ -1374,6 +1385,14 @@ async function boot(){
     if (await verifyHostKey(sp)){
       SPECTATE_KEY = sp;
       ensureSpectateBadge();
+      // （三十後續修正）投影頁現在自己會出聲（見 animatePodiumReveal()／
+      // animateFinalLeaderboardReveal() 的 playSound 參數），這裡盡早嘗試解鎖
+      // AudioContext——這個分頁通常是主持人點「🖥️ 開投影頁」用 window.open()
+      // 從真實使用者手勢開出來的，多數瀏覽器會讓這種情況下開出來的分頁也算
+      // 數。ensureAudioCtx() 本身已經是防呆寫法（拿不到就靜靜回傳 null，之後
+      // 每次 playBeep() 呼叫也都會再檢查一次 ctx 存不存在／要不要 resume），
+      // 這裡多呼叫一次沒有風險，只是讓「解鎖」這件事盡量提早發生。
+      ensureAudioCtx();
       startSpectatePolling();
     } else {
       renderHostDenied();
@@ -2659,6 +2678,7 @@ async function startLobby(){
     rpsPicks: {},
     rpsRoundToken: null,
     rpsThrowSeq: 0,
+    rpsEvalSeq: 0,
     rpsSolo: null,
     rpsFinalOrder: null,
     rpsRoundMsg: '',
@@ -3424,7 +3444,10 @@ function renderHostReveal(){
       if (el){ el.classList.remove('dim'); el.classList.add('shouxing-glow', 'reveal-pop'); }
       const banner = document.getElementById('reveal-suspense');
       if (banner) banner.innerHTML = `🎂 壽星選的是「${esc(shouxingLabel)}」！`;
-      playRevealChime();
+      // （三十後續修正）跟頒獎台／許願卡同一個道理：主持人這裡是自己點擊觸發的
+      // 即時動畫，投影頁則要等下一次 poll 才追得上、天生會晚一拍——兩邊都播的話，
+      // 現場聽起來就是同一個音效前後響兩次、跟畫面對不起來。改成只留投影頁那邊
+      // （見 renderSpectateReveal()）播，音效永遠跟「玩家實際看到翻牌」的畫面同步。
     }, 900);
   }
   setTimeout(()=> animateRevealLeaderboard(newRanked), shouxingChoice!=null ? 1900 : 500);
@@ -3566,7 +3589,7 @@ function renderHostFinal(){
    這個函式——投影頁跟主持人頁渲染出來的「結算中」骨架用的是同一組 id
    （final-leaderboard-title/-leaderboard/-leaderboard-rest），純 DOM 操作的
    這個函式完全不需要另外寫一份給投影頁用。 */
-function animateFinalLeaderboardReveal(visible, rest){
+function animateFinalLeaderboardReveal(visible, rest, playSound){
   const crownTop3 = () => {
     const titleEl = document.getElementById('final-leaderboard-title');
     if (titleEl) titleEl.textContent = '🏆 最終名次';
@@ -3582,12 +3605,17 @@ function animateFinalLeaderboardReveal(visible, rest){
         const rank = i + 1;
         const slot = el.querySelector('.lb-crown-slot');
         if (slot){ slot.innerHTML = `<img src="${RANK_CROWN_IMG[rank]}" alt="第${rank}名">`; slot.classList.add('pop'); }
-        // （三十）跟 animatePodiumReveal() 同一套音效分工：第 1 名撒花＋號角，
-        // 第 2、3 名戴皇冠只是輕巧一聲。這個函式本身已經由呼叫端
-        // （renderHostFinal()／renderSpectateFinal()）各自的 isFirstRender
-        // 閘門保證同一輪只執行一次，不需要重複判斷。
-        if (rank === 1){ spawnConfetti(); playPodiumFanfare(); }
-        else playPodiumPop();
+        if (rank === 1) spawnConfetti();
+        // （三十後續修正）第三個參數 playSound：只有 spectate 端（投影頁本來
+        // 就比主持人頁慢半拍，音效要跟著它自己的畫面走，不要跟主持人端搶著
+        // 播）傳 true，見 animatePodiumReveal() 上方那段文件註解的完整理由。
+        // 第 1 名撒花＋號角，第 2、3 名戴皇冠只是輕巧一聲。這個函式本身已經
+        // 由呼叫端（renderHostFinal()／renderSpectateFinal()）各自的
+        // isFirstRender 閘門保證同一輪只執行一次，不需要重複判斷。
+        if (playSound){
+          if (rank === 1) playPodiumFanfare();
+          else playPodiumPop();
+        }
       }, delay);
     });
     // Anyone past the animated top 5 just fades in below at their real score.
@@ -3658,6 +3686,7 @@ function restartSameGame(){
   hostState.rpsPicks = {};
   hostState.rpsRoundToken = null;
   hostState.rpsThrowSeq = 0;
+  hostState.rpsEvalSeq = 0;
   hostState.rpsSolo = null;
   hostState.rpsFinalOrder = null;
   hostState.rpsRoundMsg = '';
@@ -3760,17 +3789,32 @@ function renderHostAwardsPodium(){
    .p.show ...), with the 🎁 prize text fading in ~650ms later as its own
    separate reveal beat. Unlike renderHostFinal(), these two screens don't
    replay the score-tally/reorder suspense first — see
-   animateFinalLeaderboardReveal()'s doc comment for why. */
-function animatePodiumReveal(prefix){
+   animateFinalLeaderboardReveal()'s doc comment for why.
+   （三十後續修正）第二個參數 playSound：（三十）原本讓 playPodiumPop()/
+   playPodiumFanfare() 在 host 跟 spectate 兩邊都播，結果使用者實測發現
+   投影頁本來就比主持人頁慢半拍（要等自己的 poll 抓到新狀態才會渲染），兩邊
+   都出聲會變成先聽到主持人端的音效、投影頁的畫面才姍姍來遲，音效跟畫面對
+   不起來，比原本完全沒有音效還讓人出戲。改成只有 spectate 端傳 playSound=true
+   會出聲，host 端（renderHostAwardsPodium()/renderHostAwardsDone()）呼叫時
+   不傳這個參數，維持靜音——這樣聲音永遠跟它自己所在那個畫面的動畫是同步的，
+   不會有兩邊各自觸發、時間點對不上的問題。這個「兩邊都播」到「只投影頁播」
+   的往返本身也值得記一筆：一開始想靠「兩邊都出聲」保證不管實體佈局如何都
+   聽得到，結果反而在「主持人跟投影機同一個房間、兩邊都聽得到」這個最常見的
+   佈局下製造出新的體驗問題——音效這種跟畫面時間點綁死的東西，播放來源應該
+   跟到「這個音效對應的畫面實際顯示在哪裡」，而不是為了保險兩邊都播。 */
+function animatePodiumReveal(prefix, playSound){
   [[prefix+'-3',0],[prefix+'-2',500],[prefix+'-1',1000]].forEach(([id,delay])=>{
     setTimeout(()=>{
       const el = document.getElementById(id);
       if (el) el.classList.add('show');
-      // （三十）音效：第 1 名跟撒花一起放最大的號角，第 2、3 名只是輕巧的
-      // 一聲——這個函式本身已經被兩邊（host 一次性導航渲染／spectate 靠
-      // isFirstRender 閘門）各自只呼叫一次，不需要再另外判斷要不要播。
-      if (id === prefix+'-1'){ spawnConfetti(); playPodiumFanfare(); }
-      else playPodiumPop();
+      if (id === prefix+'-1') spawnConfetti();
+      // （三十後續修正）音效改成只在投影頁播，見本函式上方文件註解——host 端
+      // 呼叫這個函式時不傳 playSound，維持靜音；只有 spectate 端兩個呼叫點
+      // 傳 true。第 1 名跟撒花一起放最大的號角，第 2、3 名只是輕巧的一聲。
+      if (playSound){
+        if (id === prefix+'-1') playPodiumFanfare();
+        else playPodiumPop();
+      }
       setTimeout(()=>{
         const prizeEl = document.getElementById(id+'-prize');
         if (prizeEl) prizeEl.classList.add('show');
@@ -3829,6 +3873,7 @@ function goAwardsRps(){
     hostState.rpsSolo = null;
     hostState.rpsFinalOrder = null;
     hostState.rpsThrowSeq = 0;
+    hostState.rpsEvalSeq = 0;
     startRpsThrow();
   } else {
     // 0 or 1 people in "最後三名" — nothing to compare, nothing to draw.
@@ -3908,6 +3953,10 @@ function renderHostAwardsRps(){
       <div class="btn-row" style="margin-top:10px">
         <button class="btn ghost" onclick="hostForceRps()">⏭ 還有人沒出拳？幫他們隨機出拳</button>
       </div>
+      ${active.some(id => hostState.players[id] && hostState.players[id].isTestBot) ? `
+      <div class="btn-row" style="margin-top:6px">
+        <button class="btn ghost" style="font-size:13px;opacity:0.85" onclick="simulateBotRealRpsThrows()">🧪 讓測試玩家真的延遲猜拳（模擬真人手機網路延遲，可以拿來測「急救按鈕」會不會卡住）</button>
+      </div>` : ''}
     </div></div>
   `);
 }
@@ -3928,17 +3977,91 @@ function hostForceRps(){
   renderHostAwardsRps();
   if (active.every(id => hostState.rpsPicks[id])) evaluateRpsRound();
 }
+/* （三十一，猜拳當機修正）"🧪 讓測試玩家真的延遲猜拳" —— 使用者實際反映「猜拳決定
+   選卡順序後面很容易當機，但測試玩家很難測到這段」。問題根源是真人手機提交猜拳
+   （submitPlayerRpsHand() 把 rpsthrow:<id> 寫進 storage，主持人再靠 processRpsThrows()
+   非同步輪詢讀回來）跟主持人不耐煩點「還有人沒出拳？幫他們隨機出拳」幾乎同時發生
+   時的競態——🧪 測試玩家原本完全不會寫 rpsthrow: storage（見 addTestPlayers() 上方
+   的說明：他們背後沒有手機，只能被強制代打），所以這段真人 timing 相關的行為，一個
+   人拿著單一瀏覽器測試時完全模擬不出來、也就永遠點不到「急救按鈕跟真人手機晚一點
+   才送到的猜拳」同時發生的那個瞬間。
+   這個按鈕讓每一位 🧪 測試玩家，用跟真人手機完全相同的路徑（sSet('rpsthrow:'+id,
+   {hand,token})，不是直接改 hostState.rpsPicks），各自等一個隨機的 0.4-3 秒「網路
+   延遲」才送出猜拳——刻意留一段夠長的空檔，讓使用者可以自己抓時機去點「還有人沒
+   出拳」，實際重現＋驗證這個場景是否還會卡住，不用真的找好幾支手機才能測。 */
+function simulateBotRealRpsThrows(){
+  const active = hostState.rpsActive || [];
+  const token = hostState.rpsRoundToken;
+  const shapes = ['rock','paper','scissors'];
+  const bots = active.filter(id => hostState.players[id] && hostState.players[id].isTestBot);
+  if (!bots.length){ toast('這一輪的猜拳名單裡沒有 🧪 測試玩家'); return; }
+  bots.forEach(id=>{
+    const delayMs = 400 + Math.random() * 2600;
+    setTimeout(()=>{
+      // 送出前重新檢查一次，避免這一輪已經結束後，遲來的模擬延遲又送出一筆過時的猜拳。
+      if (hostState.rpsRoundToken !== token || hostState.awardsStage !== 'rps') return;
+      if (!(hostState.rpsActive||[]).includes(id)) return;
+      const hand = shapes[Math.floor(Math.random()*3)];
+      sSet('rpsthrow:' + id, { hand, token });
+    }, delayMs);
+  });
+  toast('🧪 ' + bots.length + ' 位測試玩家已經開始模擬真人延遲猜拳，這時候可以試著點「還有人沒出拳」看看會不會卡住');
+}
 /* Purely synchronous — like goToReveal(), nothing here awaits, so nothing can
    interleave and see a half-updated hostState. The async bits (persisting,
    and moving on after a short suspense pause) happen in the scheduled
    continuations below, each re-checking rpsRoundToken/awardsStage first in
    case the host force-filled the rest of a round that a real submission was
-   also mid-flight for — same discipline as processAnswers(). */
+   also mid-flight for — same discipline as processAnswers().
+
+   （三十一，猜拳當機修正）hostState.rpsEvalSeq is bumped every single time this
+   function runs, on every branch, unconditionally — unlike rpsRoundToken,
+   which restart()/advanceSolo() deliberately leave UNCHANGED for their own
+   1.7-1.9s display window (see the comment further down). That's exactly
+   the gap processRpsThrows() falls into: it's an async for-loop that awaits
+   a network round-trip per player, and hostForceRps() (the host's own "還有
+   人沒出拳？幫他們隨機出拳" rescue button) is a fully synchronous function
+   that can run to completion in between two of those awaits — while a real
+   submission is still in flight for player X, the host taps the rescue
+   button, which fills in everyone ELSE and calls evaluateRpsRound() itself.
+   That call can restart()/advanceSolo() the round and (critically) RESET
+   hostState.rpsPicks = {} for the next sub-round. When processRpsThrows()'s
+   own loop then resumes, its token/awardsStage checks still pass (neither
+   changed), so it writes player X's now-STALE throw straight into the reset
+   rpsPicks as if it were their throw for the sub-round that hasn't even
+   started yet, and can go on to call evaluateRpsRound() a SECOND time using
+   an `active` array that's stale by then too. Depending on exactly how far
+   evaluateRpsRound() had already narrowed hostState.rpsActive, that second,
+   spurious call could run with active.length === 0 — falling through the
+   old code's unguarded "not 2, so must be 3" branch, destructuring [a,b,c]
+   out of an empty array (all undefined), and spuriously calling restart()
+   AGAIN on an already-decided round. That's the freeze the user hit at a
+   real party ("猜拳決定選卡順序後面很容易當機") — real phones are slow/janky
+   enough that a real throw is very often still in flight exactly when an
+   impatient host taps the rescue button, but on localhost the same await
+   resolves in a millisecond, which is why no earlier test (all sequential,
+   all on localhost) ever tripped over it.
+   The fix has two independent layers:
+     1. Below, processRpsThrows() captures rpsEvalSeq alongside the token and
+        re-checks it after every await, right next to the existing token/
+        awardsStage check — so the moment ANY evaluateRpsRound() call (from
+        hostForceRps() or a genuinely overlapping poll) has run while we were
+        awaiting, we bail out instead of acting on data that round has since
+        moved past. This is strictly finer-grained than the token check,
+        since it also catches restart()/advanceSolo()'s "same token, new
+        sub-round" case that the token check alone was blind to.
+     2. Just below, active.length is validated up front — if it's neither 2
+        nor 3 (i.e. the round was already decided out from under this call),
+        this returns immediately instead of falling into the 3-way branch on
+        an empty array. Belt-and-suspenders: even if some future caller ever
+        slips past the seq guard, this can no longer corrupt state. */
 function evaluateRpsRound(){
+  hostState.rpsEvalSeq = (hostState.rpsEvalSeq || 0) + 1;
   const token = hostState.rpsRoundToken;
   const active = hostState.rpsActive.slice();
   const picks = hostState.rpsPicks;
   const stillCurrent = () => hostState.rpsRoundToken === token && hostState.awardsStage === 'rps';
+  if (active.length !== 2 && active.length !== 3) return; // already decided/reset elsewhere — nothing to evaluate
 
   /* restart()/advanceSolo() both keep hostState.rpsRoundToken UNCHANGED until
      their own setTimeout below calls startRpsThrow() (the only place that
@@ -4034,27 +4157,41 @@ function evaluateRpsRound(){
    then immediately get told they tied against each other on those same two
    rocks. Deleting each throw as soon as it's read closes that: nothing is
    left on the server for a later poll to mistake as unconsumed. */
+/* （三十一）rpsEvalSeq is captured alongside token/awardsStage and re-checked
+   at every single checkpoint below — see the long comment above
+   evaluateRpsRound() for exactly why the token/awardsStage check alone isn't
+   enough: restart()/advanceSolo() intentionally leave rpsRoundToken UNCHANGED
+   across a sub-round boundary, so a synchronous hostForceRps() click landing
+   in the middle of one of this loop's awaits can reset hostState.rpsPicks and
+   move the round on without either of those two changing — but it always
+   bumps rpsEvalSeq, so that's the one check here that can never be blind to
+   it. The moment we detect a stale seq we bail immediately, before writing
+   anything into hostState.rpsPicks or calling evaluateRpsRound() again. */
 async function processRpsThrows(){
   const token = hostState.rpsRoundToken;
+  const evalSeq = hostState.rpsEvalSeq;
   const active = hostState.rpsActive || [];
+  const stale = () => hostState.rpsRoundToken !== token || hostState.awardsStage !== 'rps' || hostState.rpsEvalSeq !== evalSeq;
   let changed = false;
   for (const id of active){
-    if (hostState.rpsRoundToken !== token || hostState.awardsStage !== 'rps') return;
+    if (stale()) return;
     if (hostState.rpsPicks[id]) continue;
     const info = await sGet('rpsthrow:' + id);
-    if (hostState.rpsRoundToken !== token || hostState.awardsStage !== 'rps') return;
+    if (stale()) return;
     if (hostState.rpsPicks[id]) continue;               // race guard
     if (!info || info.token !== token) continue;         // stale or not-yet-submitted
     if (!['rock','paper','scissors'].includes(info.hand)) continue;
     hostState.rpsPicks[id] = info.hand;
     await sDel('rpsthrow:' + id); // awaited — a later poll must never be able to re-read this
+    if (stale()) return; // the delete's own await is one more gap the rescue button could land in
     changed = true;
   }
-  if (hostState.rpsRoundToken !== token || hostState.awardsStage !== 'rps') return;
+  if (stale()) return;
   if (changed){
     await sSet('game:state', hostState);
     renderHostAwardsRps();
   }
+  if (stale()) return;
   if (active.length && active.every(id => hostState.rpsPicks[id])) evaluateRpsRound();
 }
 function proceedToPickingFromRps(){
@@ -4208,9 +4345,11 @@ function goAwardsWishes(){
   hostState.awardsStage = 'wishes';
   sSet('game:state', hostState);
   renderHostAwardsWishes();
-  // （三十）公布許願任務是主持人點擊觸發的一次性導覽（不像 spectate 掛在
-  // poll 迴圈上，這裡不需要另外判斷「是不是第一次」）。
-  playCardFlipSound();
+  // （三十後續修正）使用者實際使用後回報「投影頁比較慢，音效跟畫面對不起來」——
+  // 跟頒獎台／最終排行榜同一個道理（見 animatePodiumReveal() 上方的說明），
+  // 主持人端這裡改成不再播音效，只留 renderSpectateAwardsWishes() 的
+  // isFirstWishesRender 判斷播放，音效跟「畫面真的翻牌」的那個瞬間（投影頁）
+  // 綁在一起，不會有主持人／投影頁兩邊各響一次、聽起來像回音的問題。
 }
 function renderHostAwardsWishes(){
   const order = hostState.pickOrder || [];
@@ -4264,9 +4403,13 @@ function renderHostAwardsWishes(){
    主持人自己抓節奏用的工具音，跟下面這些「炒熱全場氣氛」的音效目的不同，
    沒有理由跟著搬過來。公布正解／頒獎台皇冠揭曉／許願任務公布這三組音效
    （playRevealChime()/playPodiumPop()/playPodiumFanfare()/
-   playCardFlipSound()，見（三十））則是主持人頁跟投影頁「兩邊都播」——
-   使用者透過 AskUserQuestion 明確選了這個做法：這幾個音效是要讓全場聽到的
-   高潮時刻，只在主持人端播反而可能全場聽不到。
+   playCardFlipSound()，見（三十））原本是主持人頁跟投影頁「兩邊都播」——
+   使用者透過 AskUserQuestion 明確選了這個做法。但後來實際使用時回報「投影頁
+   比較慢，音效跟畫面對不起來」：主持人是自己點擊觸發的即時動畫，投影頁天生
+   要晚一個 poll 週期才追得上，兩邊都播就變成同一個音效前後響兩次，比只播一邊
+   還難聽。（三十後續修正）把這幾個音效全部改成「只在投影頁播」——音效跟
+   「畫面實際翻牌／揭曉」的那一刻永遠綁在同一個螢幕上，不會再對不起來；主持人
+   自己耳朵聽不到沒關係，反正主持人通常就站在投影幕旁邊。
    撒花／懸念揭曉動畫本身也不是「完全沒有」，而是每一輪最多只播一次：
    renderSpectateReveal()／renderSpectateAwardsPodium()／
    renderSpectateAwardsDone()／renderSpectateFinal() 都用
@@ -4593,7 +4736,7 @@ function renderSpectateFinal(state){
   // id／data-pid，這樣即使重畫真的發生在動畫播到一半，setTimeout 回呼還是
   // 能在新 DOM 裡找到同一位玩家對應的列，把彈出樣式跟音效補上去（畫面上頂多
   // 看起來像數字沒有跳動過程、直接定格在最終值，但不會整組動畫跟音效都消失）。
-  if (isFirstRender) setTimeout(()=> animateFinalLeaderboardReveal(visible, rest), 500);
+  if (isFirstRender) setTimeout(()=> animateFinalLeaderboardReveal(visible, rest, true), 500);
 }
 function renderSpectateAwards(state){
   const stage = state.awardsStage;
@@ -4641,7 +4784,7 @@ function renderSpectateAwardsPodium(state){
     </div></div>
   `);
   if (isFirstRender){
-    animatePodiumReveal('spec-ap');
+    animatePodiumReveal('spec-ap', true);
   } else {
     document.querySelectorAll('.podium .p').forEach(el => el.classList.add('show'));
     document.querySelectorAll('.prize-line').forEach(el => el.classList.add('show'));
@@ -4786,7 +4929,7 @@ function renderSpectateAwardsDone(state){
     </div></div>
   `);
   if (isFirstRender){
-    animatePodiumReveal('spec-ad');
+    animatePodiumReveal('spec-ad', true);
   } else {
     document.querySelectorAll('.podium .p').forEach(el => el.classList.add('show'));
     document.querySelectorAll('.prize-line').forEach(el => el.classList.add('show'));
