@@ -174,35 +174,62 @@
      (projector/laptop, not a phone), which of the two layouts below applies
      is decided by optionsGridClass() from the photos' own aspect ratio. */
   @media(min-width:900px){
-    /* Portrait-leaning photos (narrow/tall): one row of 4 narrow columns frees
-       up the vertical space a 2nd row would've taken, so .opt-img can grow
-       into that height instead — a narrow column still fits a tall photo at a
-       good size. */
+    /* （三十一再修正・第二次嘗試後撤回）曾經試過把並排欄數從 4 砍成 2（一排兩張、
+       兩排），想法是欄寬直接翻倍、直式照片就不會先被寬度卡住。但實際量測
+       （在 1440x900 視窗量 .q-content 扣掉 .options-grid 之後剩下的高度）發現
+       這個方向算錯了方向：主持人畫面上「圖片格子以外」的東西（頂列選單、題號／
+       壽星／倒數 chip、題目文字、下面的作答進度條跟按鈕列、外層留白）固定要吃掉
+       將近 400px，一排 4 張時整個格子可以用剩下的完整高度（~500px）；改成兩排
+       之後，這筆高度預算要被兩排對半分，等於每排能用的高度反而縮水到原本的一半
+       左右——直式照片如果是「高度吃滿、寬度還有餘裕」（也就是還沒被寬度卡住的
+       情況，實測大多數合理的直式比例都是這樣），兩排版面算出來的照片其實比一排
+       四張還要小，跟直覺完全相反，也是這次改完使用者還是覺得「沒有變大」的
+       真正原因（甚至反而更小、還多跑出捲動）。改回一排 4 欄，专心把高度上限
+       盡量推到「單排這一整筆高度預算」能撐到的極限，而不是砍欄數。 */
     .options-grid.img-row{ grid-template-columns:repeat(4,1fr); gap:14px; max-width:1680px; }
-    /* Sized off the viewport height (like the QR code is off vmin) so the photo
-       claims most of the room a single row frees up instead of a fixed, timid
-       bump. object-fit:contain on .opt-img still protects very tall portrait
-       photos from ever being cropped — a photo whose own aspect ratio can't
-       use the full height just lets a bit more of the option's colour show
-       through at top/bottom instead of stretching or cropping.
-       （三十一後續修正）使用者實際使用後回報「圖片題的圖還是太小，想看清楚
-       臉」——原本 clamp(220px, 44vh, 460px) 在一般筆電視窗高度下幾乎都是直接
-       頂到 460px 這個上限，加大 vh 係數其實沒什麼用，真正要調的是這個上限跟
-       下限本身。整組往上調（220→260 / 44vh→55vh / 460→600），連帶把外層
-       max-width 從 1500px 放寬到 1680px，讓變寬的欄位跟得上變高的照片，不會
-       反過來被欄寬卡住。 */
-    .options-grid.img-row .opt-img{ height:clamp(260px, 55vh, 600px); }
-    .options-grid.img-row .opt-cap{ font-size:17px; }
-    /* （二十九）Landscape-leaning photos (wide/short): the opposite problem —
-       squeezed into one of 4 narrow columns, a wide photo is width-capped long
-       before it uses the height budget above, so most of that clamp() range
-       goes to waste. A 2x2 grid gives each photo roughly double the column
-       width instead, which is what a wide photo actually needs to render big;
-       it doesn't need as much height, so the row height stays modest.
-       （三十一後續修正）同上，一併放大＋放寬外層 max-width。 */
-    .options-grid.img-grid2{ grid-template-columns:repeat(2,1fr); gap:16px; max-width:1300px; }
-    .options-grid.img-grid2 .opt-img{ height:clamp(240px, 40vh, 440px); }
-    .options-grid.img-grid2 .opt-cap{ font-size:17px; }
+    /* 高度上限原本用 vh 百分比（例如 50vh）去抓，但這其實是算錯了公式：不管
+       視窗高不高，主持人畫面上「圖片格子以外」那些固定的東西（導覽列、頂列
+       chip、題目文字、下面的進度條跟按鈕列、外層留白）加起來是一個「固定的
+       像素數」，不會隨視窗變矮而跟著變矮——用 vh 百分比等於假設它也會按比例
+       縮小，在 1440x900 這種比較高的視窗剛好套得準，換成 1366x768 這類常見的
+       筆電解析度（尤其是這次的主持人筆電）視窗變矮了、但固定的那一截還是那麼
+       高，於是整個頁面就會超出視窗高度、要捲動才看得到最下面的按鈕列——這正是
+       使用者最在意的「不要捲動」。改用 calc(100vh - 452px)：452px 是實測出來
+       「圖片格子以外」固定要吃掉的高度（含一點安全邊界），讓圖片格子永遠精準
+       地把「這個視窗剩下的空間」用滿，不多也不少，視窗矮的時候會自動跟著縮，
+       不會硬撐出捲動；視窗高的時候一樣可以逼近 460px 的上限。 */
+    .options-grid.img-row .opt-img{ height:clamp(220px, calc(100vh - 452px), 460px); }
+    .options-grid.img-row .opt-cap{ font-size:16px; }
+    /* （二十九）Landscape-leaning photos (wide/short): squeezed into a narrow
+       column, a wide photo is width-capped long before it uses much height, so
+       a 2x2 grid (each photo roughly double the column width of a 4-across row)
+       is what actually lets a wide photo render big; it doesn't need much height,
+       so the row height stays modest.
+       （三十一再修正）上一版把這裡的高度上限跟外層 max-width 一起調大過
+       （200→240 / 30vh→40vh / 340→440，1100px→1300px），結果兩排疊起來太高，
+       使用者反映的是要捲動才看得到全部選項，這個副作用比「圖片還可以再大一點」
+       更糟——改回原本的數值。這裡從一開始就是 2x2（不是像 img-row 那樣從 4 欄
+       砍成 2 欄），欄寬本來就足夠寬給橫式照片用，問題從來不在這裡。 */
+    .options-grid.img-grid2{ grid-template-columns:repeat(2,1fr); gap:16px; max-width:1100px; }
+    .options-grid.img-grid2 .opt-img{ height:clamp(200px, 30vh, 340px); }
+    .options-grid.img-grid2 .opt-cap{ font-size:16px; }
+    /* （三十一三修）真正的元兇：找到了。上面兩個 .options-grid 子類別各自的
+       max-width（1680px／1100px）其實從來沒有真的生效過——.options-grid 本身
+       是用 width:100%，而它外層真正決定「100% 是多少」的是 .col，.col 的
+       max-width 全站統一寫死 920px（給文字題／一般版面用，見上面 .col 的
+       定義）。所以無論這裡的 max-width 調多大，圖片格子在桌機／投影頁上其實
+       一直被關在 920px 寬的盒子裡：一排 4 欄時，扣掉 3 個 14px 的 gap，每欄
+       只有大約 (920-42)/4 ≈ 220px，再扣掉 .opt-card 的左右 padding（10px×2）
+       實際圖片可用寬度只剩 ~200px——這就是先前「調高度上限沒有用」的真正
+       幾何天花板所在，並不是 4 欄並排本身的問題，也不是 460px 這個高度值錯了；
+       是外層的盒子從頭到尾都太窄，圖片一路都被寬度卡住，高度上限根本沒機會
+       用到（多出來的高度只變成上下留白）。用 :has() 讓 .col 在包到圖片格子時
+       改用跟 .options-grid 一致的寬度上限，兩者才會真的一起生效，圖片才可能
+       又高又寬地一起放大，不是像先前那樣「盒子在原地不動、只在裡面喬」。 */
+    .col:has(> .q-content > .options-grid.img-row),
+    .col:has(> .options-grid.img-row){ max-width:1680px; }
+    .col:has(> .q-content > .options-grid.img-grid2),
+    .col:has(> .options-grid.img-grid2){ max-width:1100px; }
   }
 
   .opt-card{
