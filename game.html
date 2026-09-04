@@ -326,6 +326,23 @@
   .lb-delta{ font-size:12px; color:var(--leaf); font-weight:700; background:rgba(127,178,122,0.18); padding:2px 8px; border-radius:999px; opacity:0; transition:opacity .35s ease; }
   .lb-delta.show{ opacity:1; }
 
+  /* （三十二）排名追逐：只出現在玩家自己手機的公布答案畫面，緊接在既有的
+     「累積排行榜」面板裡面，點名前面／並列的是誰、差幾分，用嗆辣一點的語氣
+     鼓勵追分。跟排行榜面板共用同一張卡片（不是獨立面板），用漸層底色＋
+     terracotta 邊框跟一般的 .lb-row 區隔開來，一眼就看得出這塊是「特別喊話」，
+     不是排行榜資料本身。見 renderPlayerReveal() 裡的 CHASE_MSG_POOLS。 */
+  .chase{
+    margin-top:12px; border-radius:14px; padding:12px 14px;
+    background:linear-gradient(135deg, rgba(242,193,78,0.22), rgba(232,101,75,0.14));
+    border:1px solid rgba(232,101,75,0.35);
+  }
+  .chase-eyebrow{
+    font-size:11px; font-weight:800; letter-spacing:.03em; color:#9e3a27;
+    text-transform:uppercase; margin-bottom:5px;
+  }
+  .chase-line{ font-size:14.5px; font-weight:700; color:var(--ink); line-height:1.5; }
+  .chase-line b{ color:#9e3a27; }
+
   /* ---------- 主持人揭曉頁：整頁收緊成一屏塞得下，投影時不用滑鼠往下滑 ----------
      使用者實測發現公佈答案那頁（問題＋選項長條圖＋前 5 名排行榜＋下一題按鈕全部疊
      在一起）常常比一般筆電視窗還高，得往下滑才看得到排行榜／按鈕，派對現場沒空一直
@@ -4472,6 +4489,20 @@ function ensureSpectateBadge(){
    long enough to visibly eat chapter-intro/question entrance animations.
    sWait() below wakes this up in roughly one LAN round-trip instead. */
 let spectatePollBooted = false; // see POLL_BOOT_DELAY_MS's comment (near startHostPolling)
+/* （三十四）頻寬優化：sWait() 逾時回來時一定會帶「目前全站 rev」，不管這段
+   期間有沒有任何 key 真的被改過。過去不管三七二十一都接著整包重抓
+   game:state（裡面塞了所有題目、選項圖片的 base64），代表只要投影分頁開著
+   沒關，就算完全沒人在動，也會每 1.5 秒重新下載一次整包狀態——這正是
+   Render 頻寬被閒置分頁默默吃光的主因（見開發紀錄「三十四」）。
+   這裡刻意記錄「這支迴圈自己上次看到的 rev」而不是直接拿共用的
+   storageRev 來比較，且用「不等於」而不是「有沒有變大」來判斷有沒有變化
+   ——是因為 storageRev 只會單調往上疊（noteRev() 只在新值更大時才更新），
+   一旦伺服器重開（Render 喚醒就是這樣，_rev 這個計數器在記憶體裡，重開就
+   歸零），伺服器回傳的新 rev 反而會比舊的 storageRev 小，若用「>」比較會
+   誤判成「沒有變化」而永遠跳過重抓，畫面就會卡死。用「!==」比對兩次
+   sWait 各自拿到的原始 rev，不管是變大還是變小都算「變了」，才能在伺服器
+   重開時照樣抓到「整包狀態不見了」並且正確顯示重新連線畫面。 */
+let _spectateLastSeenRev = null;
 function startSpectatePolling(){
   const gen = ++spectatePollGen;
   spectateTick();
@@ -4500,7 +4531,11 @@ async function runSpectatePollLoop(gen){
       continue;
     }
     failStreak = 0;
-    await spectateTick();
+    // 見上面「三十四」註解：跟上一次這支迴圈自己拿到的原始 rev 比對，
+    // 不等於才代表真的變了（含伺服器重開歸零這種「變小」的情況）。
+    const changed = _spectateLastSeenRev === null || r.rev !== _spectateLastSeenRev;
+    _spectateLastSeenRev = r.rev;
+    if (changed) await spectateTick();
   }
 }
 async function spectateTick(){
@@ -5051,6 +5086,24 @@ async function rejoinIfNeeded(){
 /* Long-poll driven replacement for the old `setInterval(playerPollTick, 1500)`
    — see runHostPollLoop()/runSpectatePollLoop() above for the same pattern. */
 let playerPollBooted = false; // see POLL_BOOT_DELAY_MS's comment (near startHostPolling)
+/* （三十四）頻寬優化：sWait() 逾時回來時一定會帶「目前全站 rev」，不管這段
+   期間有沒有任何 key 真的被改過。過去不管三七二十一都接著整包重抓
+   game:state（裡面塞了所有題目、壽星選項的圖片 base64），代表只要有一支
+   手機分頁開著沒關，就算完全沒人在動，也會每 1.5 秒重新下載一次整包
+   狀態——這正是 Render 頻寬被閒置分頁默默吃光的主因（見開發紀錄「三十四」）。
+   這裡記錄「這支迴圈自己上次看到的 rev」，用「不等於」（而不是「有沒有
+   變大」）判斷有沒有變化，理由跟 _spectateLastSeenRev 那段註解一樣：
+   伺服器重開（Render 喚醒）會讓 rev 歸零變小，用「>」比較會誤判成沒
+   變化而永遠不重抓，畫面就卡死了。
+   另外 playerRejoinPending 是專門補一個「!==」比較本身抓不到的洞：
+   當這支手機不在 state.players 裡、需要 rejoinIfNeeded() 把自己加回去，
+   但那個呼叫有 4 秒節流（見 rejoinIfNeeded 註解）而被跳過時，這一輪
+   完全沒有任何 storage 寫入發生，全站 rev 自然也不會動——如果只看
+   rev 有沒有變，這個「等節流過期後重試」的動作就永遠不會再被觸發。
+   所以只要我們知道自己還沒被確認加回名單，就算 rev 沒變也要照樣每
+   ~1.5 秒重試一次，直到真的重新加入成功為止。 */
+let playerRejoinPending = false;
+let _playerLastSeenRev = null;
 function startPlayerPolling(){
   const gen = ++playerPollGen;
   playerPollTick();
@@ -5081,7 +5134,11 @@ async function runPlayerPollLoop(gen){
       continue;
     }
     failStreak = 0;
-    await playerPollTick();
+    // 見上面「三十四」註解：跟這支迴圈自己上次拿到的原始 rev 比對（含
+    // 伺服器重開歸零這種「變小」也算變化），或是還在等重新加入確認。
+    const changed = _playerLastSeenRev === null || r.rev !== _playerLastSeenRev;
+    _playerLastSeenRev = r.rev;
+    if (changed || playerRejoinPending) await playerPollTick();
   }
 }
 async function playerPollTick(){
@@ -5094,13 +5151,17 @@ async function playerPollTick(){
       // Don't freeze on the old screen — say so, and keep offering ourselves up
       // so we're already on the list when the host opens the next game.
       renderPlayerReconnecting();
+      playerRejoinPending = true;
       await rejoinIfNeeded();
       return;
     }
     lastPlayerState = state;
     // Host doesn't know us any more (restart, or they cleared the name list) — get back on.
     if (state.players && !state.players[PLAYER_ID] && ['lobby','idle'].includes(state.status)){
+      playerRejoinPending = true;
       await rejoinIfNeeded();
+    } else {
+      playerRejoinPending = false;
     }
     // Don't yank the player out of a self-typed screen (wish cards, answer log)
     // just because a poll landed — same bug class as the old time-limit-wipes-form one.
@@ -5322,11 +5383,85 @@ function renderPlayerAnswered(state){
    given key, and just paint the already-final state on every repeat poll. */
 let _lastPlayerRevealKey = null;
 let _cachedEncourageMsg = '';
+let _cachedChaseMsg = '';
 const ENCOURAGE_MSGS = {
   correct: ['太厲害了，猜中壽星的心思！🎯', '你們果然有默契～', '答對啦，保持這個氣勢！', '壽星說：你最懂我 😆', '神準！再接再厲～'],
   wrong: ['沒關係，下一題扳回來！', '猜錯也沒差，開心最重要 🎉', '壽星的腦迴路果然難猜～', '再想想壽星平常的樣子？', '別灰心，還有好幾題呢！'],
   none: ['壽星還在猶豫這題怎麼選…', '這題壽星棄權啦，大家平手～']
 };
+/* （三十二）排名追逐：只加在玩家自己手機的公布答案畫面（不放主持人／投影頁，
+   使用者透過 AskUserQuestion 明確選了「只放玩家手機」），緊接在既有的
+   「累積排行榜」面板裡面，直接點名「前面／並列的是誰、差幾分」，語氣選的是
+   使用者明確選的「嗆辣」那一檔。用跟 ENCOURAGE_MSGS／_cachedEncourageMsg
+   一樣的快取模式（見下面 renderPlayerReveal() 裡 isFirstRender 那段）：
+   同一題只在第一次渲染公布畫面時抽一次，之後同一題的每次 repoll 都沿用
+   同一句，不會讓玩家盯著螢幕看的時候文字一直跳。
+   name／gap 是先組好帶 <b> 標籤的 HTML 片段（玩家名字已經先過 esc()），
+   直接字串插值進訊息裡；訊息本身不含使用者輸入，不需要再 esc() 一次。 */
+const CHASE_MSG_POOLS = {
+  leading: (n, g) => [
+    `👑 暫時第一名！把 ${n} 甩開 ${g}——這種差距，${n} 追得到嗎？`,
+    `目前穩坐冠軍寶座，${n} 只能看你的車尾燈，落後 ${g} 😎`,
+    `領先 ${n} ${g}，說真的，這局 ${n} 大概沒機會了`,
+    `第一名是你，${n} 排第二——不酸，但 ${g} 不是隨便追得回來的`,
+  ],
+  tiedLead: (n) => [
+    `跟 ${n} 並列第一！這種平手最尷尬，下一題直接把 ${n} 甩開`,
+    `你跟 ${n} 目前戰成平手——同分不算贏，敢不敢拉開差距？`,
+    `並列第一中，${n} 現在應該也在偷看排行榜，下一題別輸給 ${n}`,
+  ],
+  behind: (n, g) => [
+    `${n} 在你前面領先 ${g}，下一題敢不敢把 ${n} 拉下來？`,
+    `被 ${n} 甩開 ${g} 了，這種程度不奮起直追說不過去吧`,
+    `${n} 現在贏你 ${g}，看起來很得意——下一題讓 ${n} 笑不出來`,
+    `只贏你 ${g} 的 ${n}，也敢在你面前囂張？下一題教訓回去`,
+  ],
+  tied: (n) => [
+    `你跟 ${n} 打成平手——這種局面最刺激，看誰先受不了先犯錯`,
+    `跟 ${n} 戰成平手中，敢不敢直接把 ${n} 比下去？`,
+    `跟 ${n} 同分——不上不下最難受，下一題直接分勝負`,
+  ],
+  last: (n, g) => [
+    `敬陪末座中，只差 ${n} ${g}——這種差距，翻盤故事都是這樣開始的 😏`,
+    `目前吊車尾，離 ${n} 只差 ${g}——沒什麼好丟臉的，反正大家都會看到`,
+    `最後一名警報：只差 ${n} ${g}，還有機會翻身，還不快追`,
+    `暫居最後，${n} 在你前面 ${g}——趁現在還沒被拉開更遠，快追`,
+  ],
+};
+const CHASE_EYEBROW = {
+  leading: '👑 目前第一名',
+  tiedLead: '🤝 並列第一',
+  behind: '😤 被拉開了',
+  tied: '⚔️ 戰成平手',
+  last: '😆 敬陪末座',
+};
+/* rankedFull 必須是「沒有 slice(0,5)」的完整名次陣列——排名在 5 名以外的
+   玩家也要能看到自己前面是誰、差幾分，不能只靠畫面上顯示的前 5 名去算。 */
+function computeChaseInfo(rankedFull, myId){
+  if (!rankedFull || rankedFull.length < 2) return null;
+  const myIdx = rankedFull.findIndex(([id]) => id === myId);
+  if (myIdx === -1) return null;
+  const mePlayer = rankedFull[myIdx][1];
+  if (myIdx === 0){
+    const second = rankedFull[1][1];
+    const gap = mePlayer.score - second.score;
+    return gap === 0
+      ? { cat: 'tiedLead', name: second.name }
+      : { cat: 'leading', name: second.name, gap };
+  }
+  const target = rankedFull[myIdx - 1][1];
+  const gap = target.score - mePlayer.score;
+  if (gap === 0) return { cat: 'tied', name: target.name };
+  const isLast = myIdx === rankedFull.length - 1;
+  return { cat: isLast ? 'last' : 'behind', name: target.name, gap };
+}
+function pickChaseMsg(info){
+  if (!info) return '';
+  const n = '<b>' + esc(info.name) + '</b>';
+  const g = info.gap != null ? '<b>' + info.gap + ' 分</b>' : '';
+  const pool = CHASE_MSG_POOLS[info.cat](n, g);
+  return pool[Math.floor(Math.random() * pool.length)];
+}
 function renderPlayerReveal(state){
   const sx = state.shouxingId;
   const mine = state.currentAnswers ? state.currentAnswers[PLAYER_ID] : null;
@@ -5362,14 +5497,20 @@ function renderPlayerReveal(state){
   Object.entries(state.currentAnswers).forEach(([id,a])=>{ if (id!==sx && a.choice!=null) counts[a.choice]++; });
   const totalAnswered = counts.reduce((a,b)=>a+b, 0);
 
-  const ranked = rankedGuessers(state.players, sx).slice(0, 5);
+  const rankedFull = rankedGuessers(state.players, sx);
+  const ranked = rankedFull.slice(0, 5);
   const inTop5 = ranked.some(([id])=> id === PLAYER_ID);
+  // （三十二）排名追逐：用完整名次（不是只有前 5 名）算「我前面／並列的是誰、
+  // 差幾分」，排名在 5 名以外的玩家才也看得到自己的追分目標。暖身題不計分，
+  // 這裡也不算——跟排行榜面板本身的 !isWarmup 閘門保持一致。
+  const chaseInfo = isWarmup ? null : computeChaseInfo(rankedFull, PLAYER_ID);
 
-  // Cache the encouragement line on the first render of THIS question's
-  // reveal only, so it doesn't re-roll on every repoll.
+  // Cache the encouragement line + 排名追逐 話術 on the first render of THIS
+  // question's reveal only, so neither re-rolls on every repoll.
   if (isFirstRender){
     const pool = shouxingChoice==null ? ENCOURAGE_MSGS.none : gotIt ? ENCOURAGE_MSGS.correct : ENCOURAGE_MSGS.wrong;
     _cachedEncourageMsg = pool[Math.floor(Math.random() * pool.length)];
+    _cachedChaseMsg = pickChaseMsg(chaseInfo);
   }
 
   // Streak: walk this player's history backwards and count consecutive
@@ -5415,6 +5556,12 @@ function renderPlayerReveal(state){
           `).join('') || '<p class="sub">還沒有排名</p>'}
         </div>
         ${!inTop5 ? `<p class="sub" style="margin-top:6px">目前總分：<b>${me ? me.score : 0}</b>（還沒擠進前 5，加油！）</p>` : ''}
+        ${chaseInfo ? `
+        <div class="chase">
+          <div class="chase-eyebrow">${CHASE_EYEBROW[chaseInfo.cat]}</div>
+          <div class="chase-line">${_cachedChaseMsg}</div>
+        </div>
+        ` : ''}
       </div>
       ` : ''}
     </div></div>
