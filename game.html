@@ -219,9 +219,38 @@
        實際吃掉的固定高度（頂部主持人列＋題目文字＋格子 row-gap＋每格內距
        跟圖說），兩排加總約 560px，所以每格圖片高度用
        calc((100vh - 560px) / 2)，視窗矮的時候兩排會一起等比例縮小、不會
-       只縮一排造成失衡，也不會像固定比例那樣完全不管版面雜項多寡。*/
+       只縮一排造成失衡，也不會像固定比例那樣完全不管版面雜項多寡。
+       （三十八後續）使用者實測真的把主持人筆電螢幕跟投影頁都跑起來後回報：
+       圖片格下面留了明顯一截空白，希望可以再放大、留白壓到約 1 公分就好。
+       重新用 Playwright 個別量測「格子以外」每個元素自己的高度＋間距（不是
+       像上面那樣從 vh 反推，那個算法在既有公式已經套用時只會得到套套邏輯、
+       量不出誤差），發現兩個問題：
+       1) 560px 這個常數本身，是「主持人頁」跟「投影頁」共用同一份——但投影頁
+          （renderSpectateQuestion）完全沒有主持人的 .host-nav 列，也沒有最下面
+          一整排「提前公布／代選/測試玩家」按鈕（.btn-row），這兩塊主持人頁
+          獨有的東西吃掉了將近 190px，投影頁根本用不到、卻被迫跟主持人頁一樣
+          「讓出」這筆高度預算，圖片因此白白縮小一大截——這正是使用者截圖裡
+          留白最明顯的那個畫面（投影頁）。實測「格子以外」固定高度：主持人頁
+          約 397px，投影頁只要約 271px；分別加回格子內部（每格 padding／圖說／
+          兩排中間的 gap，約 114px）才是每格圖片高度公式要扣掉的完整常數——
+          主持人頁約 511px、投影頁約 385px，改成兩邊分開算，稍微留一點安全
+          邊界，主持人用 520px、投影頁用 395px。
+       2) 340px 這個上限本身也偏保守：.q-content 有 justify-content:center，
+          螢幕越高、格子被 340px 卡住不再長大之後，多出來的高度不會消失，而是
+          變成整塊內容（標題／格子／進度條／按鈕列）一起被往中間推，等於在
+          格子上下各自多擠出一截看起來像「留白」的空間，螢幕越高（例如投影機
+          外接螢幕）越明顯。跟 img-row 現有的 460px 上限看齊，两排 2x2 在夠高
+          的螢幕上才有機會真的把留白吃掉，不會早早被卡住。
+       上面兩個常數只解決「格子以外固定要吃多少」跟「上限別卡太早」，跟先前
+       （三十一三修）修過的「外層 max-width 是不是真的生效」是不同層次的
+       問題，那次的修法（.col:has(...) 那組規則）不受影響、繼續套用。 */
     .options-grid.img-grid2{ grid-template-columns:repeat(2,1fr); gap:16px; max-width:1100px; }
-    .options-grid.img-grid2 .opt-img{ height:clamp(100px, calc((100vh - 560px) / 2), 340px); }
+    .options-grid.img-grid2 .opt-img{ height:clamp(100px, calc((100vh - 520px) / 2), 460px); }
+    /* 投影頁（見 renderSpectateQuestion() 加的 .spec-grid 標記）沒有主持人頁
+       獨有的 .host-nav／.btn-row，固定高度預算比主持人頁少了將近 130px，
+       用同一顆常數只會讓投影頁的圖片被迫比主持人頁更小——這正是使用者
+       實際截圖裡留白最明顯的畫面，所以另外給投影頁自己的常數。 */
+    .options-grid.img-grid2.spec-grid .opt-img{ height:clamp(100px, calc((100vh - 395px) / 2), 460px); }
     .options-grid.img-grid2 .opt-cap{ font-size:16px; }
     /* （三十一三修）真正的元兇：找到了。上面兩個 .options-grid 子類別各自的
        max-width（1680px／1100px）其實從來沒有真的生效過——.options-grid 本身
@@ -960,10 +989,6 @@ let _lastSpecDoneKey = null;
 // animateFinalLeaderboardReveal()，兩邊渲染出來的 DOM id／class 結構相同，
 // 不需要另外寫一份），之後同一輪的重畫維持靜態顯示最終結果，不重播。
 let _lastSpecFinalKey = null;
-// （三十）renderSpectateAwardsWishes() 本身沒有任何動畫可以掛，純粹是靜態
-// 清單，但公布許願任務要播一個提示音——所以另外開一個鍵值只用來擋「同一輪
-// 只播一次」，不像上面幾個變數還兼職控制動畫要不要重播。
-let _lastSpecWishesKey = null;
 
 /* ---------- generic helpers ---------- */
 function esc(s){
@@ -974,6 +999,21 @@ function esc(s){
 function app(){ return document.getElementById('app'); }
 function render(html){ app().innerHTML = html; }
 function sleep(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
+/* （三十七）主持人／玩家／投影頁三支長輪詢迴圈（runHostPollLoop／
+   runPlayerPollLoop／runSpectatePollLoop）本來是直接 `await xPollTick()`，
+   tick 函式內部雖然有 try/finally 保證 pollBusy 會重設，但沒有 catch——
+   一旦裡面任何一步意外丟出例外（例如某個邊界資料狀況、或未來新增功能
+   踩到的新 bug），例外會順著 await 一路往上炸，讓整個 while 迴圈直接
+   中斷，之後不管伺服器發生什麼事這個分頁都不會再收到任何更新，畫面卡死
+   在例外發生當下那一刻——症狀就是「卡住，要重新整理才會恢復」，而且
+   完全不會在畫面上顯示任何錯誤訊息，很難察覺。改用這個共用小函式包住
+   每次呼叫：接住例外、印到 console（方便之後真的遇到再回頭查是哪裡炸的），
+   但讓迴圈繼續跑下一輪——這一輪跳過，下一輪 sWait() 一樣會正常喚醒、
+   繼續正常運作，不會整個凍結到使用者手動重新整理為止。 */
+async function safePollTick(fn, label){
+  try{ await fn(); }
+  catch(e){ console.error('[' + label + ' poll tick 失敗，已跳過這一輪]', e); }
+}
 /* Every /api/storage/* response carries the server's current global write
    revision (bumped on every set/delete to ANY key — see server.py's `_rev`).
    Track the highest one this client has ever seen so sWait() below can ask
@@ -3073,11 +3113,11 @@ async function runHostPollLoop(gen){
       // push the moment the server catches up (no reload needed).
       failStreak++;
       await sleep(failStreak >= 3 ? 1800 : 600);
-      if (failStreak >= 3) await hostPollTick();
+      if (failStreak >= 3) await safePollTick(hostPollTick, 'host');
       continue;
     }
     failStreak = 0;
-    await hostPollTick();
+    await safePollTick(hostPollTick, 'host');
   }
 }
 async function hostPollTick(){
@@ -3923,7 +3963,6 @@ function renderHostAwards(){
   if (stage === 'rps') return renderHostAwardsRps();
   if (stage === 'picking') return renderHostAwardsPicking();
   if (stage === 'done') return renderHostAwardsDone();
-  if (stage === 'wishes') return renderHostAwardsWishes();
   return renderHostAwardsPodium();
 }
 /* （二十五）改版：凸台＋角色縮小，並改成跟右側「其餘排名」面板並排的兩欄
@@ -4489,80 +4528,48 @@ function finishPicking(){
   sSet('game:state', hostState);
   renderHostAwardsDone();
 }
-/* (二十九) 這頁原本同時擠了凸台圖＋「🎁 許願任務」清單，在小螢幕上常常要
-   捲動才看得完——使用者反饋希望凸台可以再大、不用捲動，所以拆成兩頁：這頁
-   只留凸台（放大＋往下移，見 .awards-layout／--pw），許願任務清單跟「再玩
-   一輪／回設定」按鈕搬到 goAwardsWishes() 進入的 renderHostAwardsWishes()。 */
+/* （三十八）使用者實測回報：頒獎台（renderHostAwardsPodium）跟點擊「查看
+   最終結果」進到的這頁，畫面根本一模一樣（同一個凸台圖＋角色＋懸疑淡入
+   獎品），她覺得沒有必要公布兩次。凸台的「猜猜看誰得獎」懸疑感只需要在
+   podium 那頁演一次；這頁的任務改成單純把「已經知道的答案」講清楚——不
+   再重畫一次凸台，直接用清單列出前三名的名次／分數／獎品，如果這場有跑
+   猜拳選卡（hasWishes），最後三名抽到的任務也直接接在下面一起顯示，不用
+   再多點一次「公布許願任務」才看得到（原本拆成 renderHostAwardsDone() 跟
+   goAwardsWishes()/renderHostAwardsWishes() 兩頁，現在合併成一頁；
+   awardsStage 的 state machine 仍然是 'podium' -> 'rps' -> 'picking' ->
+   'done'，只是 'done' 不會再轉去 'wishes' 了）。 */
 function renderHostAwardsDone(){
-  const sx = hostState.shouxingId;
   const top3 = (hostState.topIds||[]).map(id=>[id, hostState.players[id]]).filter(([,p])=>p);
-  const rest = rankedGuessers(hostState.players, sx).filter(([id])=> !(hostState.topIds||[]).includes(id));
   const prizes = hostState.prizes || ['','',''];
-  const prizeLine = (i, elId) => prizes[i] ? `<div class="sub prize-line" id="${elId}">🎁 ${esc(prizes[i])}</div>` : '';
-  // 少於兩位「最後三名」時（見 goAwardsRps()）整場根本沒有猜拳／選卡流程，
-  // pickOrder 會是空的——這種情況沒有許願任務可以公布，直接跳過「公布許願
-  // 任務」那一頁，維持舊版行為（原本合併畫面在 order.length===0 時也是直接
-  // 不出現許願任務區塊），比多一頁點進去看到「這場沒有人抽許願卡」乾淨。
-  const hasWishes = (hostState.pickOrder || []).length > 0;
-  render(`
-    <div class="shell"><div class="col" style="align-items:center;text-align:center">
-      ${hostNav(true)}
-      <span class="eyebrow">🎊 頒獎典禮</span>
-      <h1 class="marquee-title">最懂壽星<span class="hl">前三名</span></h1>
-      <div class="awards-layout">
-        <div class="podium-wrap">
-          <div class="podium" style="--pw:min(58vw,380px)">
-            <img class="riser-img" src="${PODIUM_RISER_IMG}" alt="頒獎台">
-            ${top3[1]?podiumCharHtml(2,'ad-2',top3[1][1]):''}
-            ${top3[0]?podiumCharHtml(1,'ad-1',top3[0][1]):''}
-            ${top3[2]?podiumCharHtml(3,'ad-3',top3[2][1]):''}
-          </div>
-          <div class="podium-labels">
-            ${top3[1]?podiumLabelHtml(2,'ad-2',top3[1][1],String(top3[1][1].score),prizeLine(1,'ad-2-prize')):''}
-            ${top3[0]?podiumLabelHtml(1,'ad-1',top3[0][1],String(top3[0][1].score),prizeLine(0,'ad-1-prize')):''}
-            ${top3[2]?podiumLabelHtml(3,'ad-3',top3[2][1],String(top3[2][1].score),prizeLine(2,'ad-3-prize')):''}
-          </div>
-        </div>
-        ${restRankPanelHtml(rest)}
-      </div>
-      <div class="btn-row" style="margin-top:14px">
-        ${hasWishes
-          ? `<button class="btn" onclick="goAwardsWishes()">🎁 公布許願任務 →</button>`
-          : `<button class="btn secondary" onclick="restartSameGame()">🔄 再玩一輪</button>
-             <button class="btn ghost" onclick="hostNewGame()">🆕 回設定改題目</button>`}
-      </div>
-    </div></div>
-  `);
-  animatePodiumReveal('ad');
-  startRestRankCycle();
-}
-function goAwardsWishes(){
-  hostState.awardsStage = 'wishes';
-  sSet('game:state', hostState);
-  renderHostAwardsWishes();
-  // （三十後續修正）使用者實際使用後回報「投影頁比較慢，音效跟畫面對不起來」——
-  // 跟頒獎台／最終排行榜同一個道理（見 animatePodiumReveal() 上方的說明），
-  // 主持人端這裡改成不再播音效，只留 renderSpectateAwardsWishes() 的
-  // isFirstWishesRender 判斷播放，音效跟「畫面真的翻牌」的那個瞬間（投影頁）
-  // 綁在一起，不會有主持人／投影頁兩邊各響一次、聽起來像回音的問題。
-}
-function renderHostAwardsWishes(){
   const order = hostState.pickOrder || [];
   const cards = hostState.wishCards || ['','',''];
+  const hasWishes = order.length > 0;
   render(`
     <div class="shell"><div class="col" style="align-items:center;text-align:center">
       ${hostNav(true)}
-      <span class="eyebrow">🎁 許願任務</span>
-      <h1 class="marquee-title">大家抽到<span class="hl">什麼任務</span>？</h1>
-      ${order.length? `<div class="panel" style="margin-top:10px;width:100%;max-width:520px">
-        <div class="stack" style="margin-top:10px">
+      <span class="eyebrow">🎊 頒獎結果公布</span>
+      <h1 class="marquee-title">恭喜<span class="hl">得獎名單</span>！</h1>
+      <div class="panel" id="awards-done-top3" style="width:100%;max-width:480px">
+        <div class="stack">
+          ${top3.length ? top3.map(([id,p],i)=> `
+            <div>
+              ${finalRowHtml(i+1, p, { pid: id })}
+              ${prizes[i] ? `<div class="sub" style="text-align:right;padding-right:10px;margin-top:2px">🎁 ${esc(prizes[i])}</div>` : ''}
+            </div>
+          `).join('') : '<p class="sub">這場沒有人猜</p>'}
+        </div>
+      </div>
+      ${hasWishes ? `
+      <div class="panel" id="awards-done-wishes" style="width:100%;max-width:480px;margin-top:14px">
+        <h3 style="margin:0 0 10px;font-size:14px">🃏 最後三名抽到的任務</h3>
+        <div class="stack">
           ${order.map(id=>{
             const p = hostState.players[id]; if (!p) return '';
             const idx = hostState.pickedCards[id];
             return `<div class="lb-row"><div class="lb-name">${avatarSpan(p.avatar)}${nameTag(p)}</div><div class="sub" style="flex:2;text-align:right">${idx!=null? esc(cards[idx]||'—') : '—'}</div></div>`;
           }).join('')}
         </div>
-      </div>` : '<p class="sub">這場沒有人抽許願卡</p>'}
+      </div>` : ''}
       <div class="btn-row" style="margin-top:14px">
         <button class="btn secondary" onclick="restartSameGame()">🔄 再玩一輪</button>
         <button class="btn ghost" onclick="hostNewGame()">🆕 回設定改題目</button>
@@ -4611,12 +4618,16 @@ function renderHostAwardsWishes(){
    _lastSpecRevealKey／_lastSpecPodiumKey／_lastSpecDoneKey／_lastSpecFinalKey
    這幾個「只在第一次渲染這個目標時才播」的鍵值擋著——poll 迴圈重新渲染同一個
    畫面（心跳重新整理、或任何其他 key 變動觸發的整頁重畫）不會讓動畫或音效
-   重播第二次，避免變成閃爍／連環嗶聲。新加的許願任務公布音效也是同一套
-   模式，只是額外開了一個 _lastSpecWishesKey（那個畫面本身沒有動畫可以掛，
-   純粹為了擋音效重播才新增）。排行榜／頒獎台在「第一次」之後的重畫，
-   仍然只是照最終數值直接畫出來，不會再重新跑一次數字跳動或重新排序——
-   這部分的判斷維持不變：懸念只需要讓全場「看到、聽到」一次，不需要每次
-   poll 都重新演一遍。
+   重播第二次，避免變成閃爍／連環嗶聲。排行榜／頒獎台在「第一次」之後的
+   重畫，仍然只是照最終數值直接畫出來，不會再重新跑一次數字跳動或重新
+   排序——這部分的判斷維持不變：懸念只需要讓全場「看到、聽到」一次，不需要
+   每次 poll 都重新演一遍。
+   （三十八）renderSpectateAwardsDone() 原本會重播一次凸台懸疑動畫，跟
+   renderSpectateAwardsPodium() 幾乎一模一樣，見該函式上方的文件註解——
+   現在改成不重播凸台，_lastSpecDoneKey 只用來擋「同一輪重複 poll」時重複
+   撒花／重複出聲，畫面本身一律是靜態清單。原本另外要點一次才看得到的
+   renderSpectateAwardsWishes()／_lastSpecWishesKey 也一併收掉，許願任務
+   內容直接併進這頁。
    ============================================================ */
 /* Small fixed corner label so the host can tell this window apart from the
    real control panel at a glance — appended to <body> once (outside #app,
@@ -4678,7 +4689,7 @@ async function runSpectatePollLoop(gen){
       // fall back to plain periodic ticking instead of never updating again.
       failStreak++;
       await sleep(failStreak >= 3 ? 1500 : 600);
-      if (failStreak >= 3) await spectateTick();
+      if (failStreak >= 3) await safePollTick(spectateTick, 'spectate');
       continue;
     }
     failStreak = 0;
@@ -4686,7 +4697,7 @@ async function runSpectatePollLoop(gen){
     // 不等於才代表真的變了（含伺服器重開歸零這種「變小」的情況）。
     const changed = _spectateLastSeenRev === null || r.rev !== _spectateLastSeenRev;
     _spectateLastSeenRev = r.rev;
-    if (changed) await spectateTick();
+    if (changed) await safePollTick(spectateTick, 'spectate');
   }
 }
 async function spectateTick(){
@@ -4825,7 +4836,7 @@ function renderSpectateQuestion(state){
         </div>
         ${q.headerImg? `<img class="q-header-img" src="${q.headerImg}" alt="">` : ''}
         ${qtextHtml(q.text, null, q.alignLeft)}
-        <div class="${optionsGridClass(q)}">
+        <div class="${optionsGridClass(q)} spec-grid">
           ${q.options.map((o,i)=> optionCardHtml(o, i, null)).join('')}
         </div>
         <div class="progress-wrap">
@@ -4886,7 +4897,6 @@ function renderSpectateReveal(state){
   const counts = [0,0,0,0];
   Object.entries(state.currentAnswers || {}).forEach(([id,a])=>{ if (id!==sx && a.choice!=null) counts[a.choice]++; });
   const totalAnswered = counts.reduce((a,b)=>a+b, 0);
-  const ranked = rankedGuessers(state.players, sx).slice(0, 5);
   const sxName = state.players[sx] ? state.players[sx].name : '';
   const key = (state.roundId||'') + '_q' + state.questionIndex;
   const isFirstRender = _lastSpecRevealKey !== key;
@@ -4896,6 +4906,25 @@ function renderSpectateReveal(state){
   // 揭曉畫面時播，之後同一題的 poll 重新渲染（例如又有人晚交卷）直接顯示
   // 已經公布的最終狀態，不重播，同一套判斷方式跟 animateOptionBars() 共用
   // 的 isFirstRender。
+  // （三十七）使用者反映主持人揭曉頁有「答對的人加分」的排行榜動畫（FLIP
+  // 位移＋數字跳動＋「+N分」淡入，見 animateRevealLeaderboard()），投影頁
+  // 卻只是直接顯示結算好的最終分數——這其實不是這次新增功能造成的迴歸，
+  // 是投影頁這個畫面本來就一直沒有接上那組動畫。跟 renderHostReveal() 一樣
+  // 算出「這題分數還沒加上去」的 before frame，第一次渲染這題時直接共用
+  // 同一個 animateRevealLeaderboard()（純 DOM 操作、不靠 hostState，投影頁
+  // 呼叫起來沒有任何問題），之後同一題的 poll 重新渲染就直接顯示已經結算好
+  // 的最終排行榜，不重播。
+  const newRankedFull = rankedGuessers(state.players, sx);
+  const newRanked = newRankedFull.slice(0, 5);
+  let prevRanked = null;
+  if (isFirstRender){
+    const prevRankedFull = Object.entries(state.players)
+      .filter(([id]) => id !== sx)
+      .map(([id, p]) => [id, p, p.score - ((state.currentAnswers[id] && state.currentAnswers[id].points) || 0)])
+      .sort((a, b) => b[2] - a[2]);
+    const visibleIds = new Set(newRanked.map(([id]) => id));
+    prevRanked = prevRankedFull.filter(([id]) => visibleIds.has(id));
+  }
   render(`
     <div class="shell tight"><div class="col reveal-tight">
       <span class="eyebrow">🎂 壽星的選擇</span>
@@ -4912,14 +4941,25 @@ function renderSpectateReveal(state){
       <div class="panel">
         <h2>🏆 目前排行榜（前 5 名）</h2>
         ${sxName? `<p class="sub" style="margin-top:2px">🎂 ${nameTag(state.players[sx])} 是今天的壽星，負責出正解，不列入排名</p>`:''}
-        <div class="stack">
-          ${ranked.map(([id,p],i)=>`
-            <div class="lb-row">
-              <div class="lb-rank ${i===0?'top1':i===1?'top2':i===2?'top3':''}">${i+1}</div>
-              <div class="lb-name">${avatarSpan(p.avatar)}${nameTag(p)}</div>
-              <div class="lb-score num">${p.score}</div>
-            </div>
-          `).join('') || '<p class="sub">還沒有人猜</p>'}
+        <div class="stack" id="reveal-leaderboard">
+          ${isFirstRender
+            ? (prevRanked.map(([id,p,prevScore],i)=>{
+                const points = (state.currentAnswers[id] && state.currentAnswers[id].points) || 0;
+                return `
+                <div class="lb-row" data-pid="${id}">
+                  <div class="lb-rank ${i===0?'top1':i===1?'top2':i===2?'top3':''}">${i+1}</div>
+                  <div class="lb-name">${avatarSpan(p.avatar)}${nameTag(p)}</div>
+                  ${points>0 ? `<div class="lb-delta">+${points}</div>` : ''}
+                  <div class="lb-score num">${prevScore}</div>
+                </div>
+              `;}).join('') || '<p class="sub">還沒有人猜</p>')
+            : (newRanked.map(([id,p],i)=>`
+                <div class="lb-row" data-pid="${id}">
+                  <div class="lb-rank ${i===0?'top1':i===1?'top2':i===2?'top3':''}">${i+1}</div>
+                  <div class="lb-name">${avatarSpan(p.avatar)}${nameTag(p)}</div>
+                  <div class="lb-score num">${p.score}</div>
+                </div>
+              `).join('') || '<p class="sub">還沒有人猜</p>')}
         </div>
         ${isWarmup ? `<p class="sub" style="margin-top:6px;color:var(--gold);font-weight:700">🔥 暖身題不計分，正式題開始後分數會重新算喔！</p>` : ''}
       </div>
@@ -4935,6 +4975,7 @@ function renderSpectateReveal(state){
       playRevealChime();
     }, 900);
   }
+  if (isFirstRender) setTimeout(()=> animateRevealLeaderboard(newRanked), shouxingChoice!=null ? 1900 : 500);
 }
 /* （二十五）改版：跟 renderHostFinal() 一樣拿掉凸台插圖，改成一份表格排行榜
    （前三名標皇冠）——投影頁本來就是唯讀、單純鏡射主持人已經決定的狀態，
@@ -5009,7 +5050,6 @@ function renderSpectateAwards(state){
   if (stage === 'rps') return renderSpectateAwardsRps(state);
   if (stage === 'picking') return renderSpectateAwardsPicking(state);
   if (stage === 'done') return renderSpectateAwardsDone(state);
-  if (stage === 'wishes') return renderSpectateAwardsWishes(state);
   return renderSpectateAwardsPodium(state);
 }
 function renderSpectateAwardsPodium(state){
@@ -5158,76 +5198,55 @@ function renderSpectateAwardsPicking(state){
     </div></div>
   `);
 }
-/* (二十九) 跟 renderHostAwardsDone() 一起拆頁：這頁現在只留凸台，「🎁 許願
-   任務」清單搬到 renderSpectateAwardsWishes()。凸台的依序跳出＋撒花動畫，
-   只在第一次進到這個階段時播（判斷方式同 renderSpectateAwardsPodium()），
-   之後同一輪的 poll 重新渲染直接顯示最終狀態，不重播。 */
+/* （三十八）跟 renderHostAwardsDone() 同一次修正：這頁原本跟
+   renderSpectateAwardsPodium() 一樣重畫一次凸台＋懸疑淡入獎品，使用者反映
+   「查看最終結果」跟頒獎台內容一模一樣。改成不重播凸台，直接列出前三名的
+   名次／分數／獎品；如果這場有跑猜拳選卡，最後三名抽到的任務也直接接在
+   下面一起顯示（原本要另外進 renderSpectateAwardsWishes() 才看得到，現在
+   合併成一頁，不再需要那個中繼畫面／_lastSpecWishesKey）。isFirstRender
+   只用來擋「同一輪重複 poll 重新渲染」時重複撒花／重複出聲，不影響畫面
+   內容本身（這頁本來就是純靜態清單，沒有懸念要保留）。 */
 function renderSpectateAwardsDone(state){
   clearSpectateCountdown();
-  const sx = state.shouxingId;
   const top3 = (state.topIds||[]).map(id=>[id, state.players[id]]).filter(([,p])=>p);
-  const rest = rankedGuessers(state.players, sx).filter(([id])=> !(state.topIds||[]).includes(id));
   const prizes = state.prizes || ['','',''];
-  const prizeLine = (i, elId) => prizes[i] ? `<div class="sub prize-line" id="${elId}">🎁 ${esc(prizes[i])}</div>` : '';
+  const order = state.pickOrder || [];
+  const cards = state.wishCards || ['','',''];
+  const hasWishes = order.length > 0;
   const key = (state.roundId||'') + '_done';
   const isFirstRender = _lastSpecDoneKey !== key;
   _lastSpecDoneKey = key;
   render(`
     <div class="shell"><div class="col" style="align-items:center;text-align:center">
-      <span class="eyebrow">🎊 頒獎典禮</span>
-      <h1 class="marquee-title">最懂壽星<span class="hl">前三名</span></h1>
-      <div class="awards-layout">
-        <div class="podium-wrap">
-          <div class="podium" style="--pw:min(58vw,380px)">
-            <img class="riser-img" src="${PODIUM_RISER_IMG}" alt="頒獎台">
-            ${top3[1]?podiumCharHtml(2,'spec-ad-2',top3[1][1]):''}
-            ${top3[0]?podiumCharHtml(1,'spec-ad-1',top3[0][1]):''}
-            ${top3[2]?podiumCharHtml(3,'spec-ad-3',top3[2][1]):''}
-          </div>
-          <div class="podium-labels">
-            ${top3[1]?podiumLabelHtml(2,'spec-ad-2',top3[1][1],String(top3[1][1].score),prizeLine(1,'spec-ad-2-prize')):''}
-            ${top3[0]?podiumLabelHtml(1,'spec-ad-1',top3[0][1],String(top3[0][1].score),prizeLine(0,'spec-ad-1-prize')):''}
-            ${top3[2]?podiumLabelHtml(3,'spec-ad-3',top3[2][1],String(top3[2][1].score),prizeLine(2,'spec-ad-3-prize')):''}
-          </div>
+      <span class="eyebrow">🎊 頒獎結果公布</span>
+      <h1 class="marquee-title">恭喜<span class="hl">得獎名單</span>！</h1>
+      <div class="panel" id="awards-done-top3" style="width:100%;max-width:480px">
+        <div class="stack">
+          ${top3.length ? top3.map(([id,p],i)=> `
+            <div>
+              ${finalRowHtml(i+1, p, { pid: id })}
+              ${prizes[i] ? `<div class="sub" style="text-align:right;padding-right:10px;margin-top:2px">🎁 ${esc(prizes[i])}</div>` : ''}
+            </div>
+          `).join('') : '<p class="sub">這場沒有人猜</p>'}
         </div>
-        ${restRankPanelHtml(rest)}
       </div>
-    </div></div>
-  `);
-  if (isFirstRender){
-    animatePodiumReveal('spec-ad', true);
-  } else {
-    document.querySelectorAll('.podium .p').forEach(el => el.classList.add('show'));
-    document.querySelectorAll('.prize-line').forEach(el => el.classList.add('show'));
-  }
-  startRestRankCycle();
-}
-function renderSpectateAwardsWishes(state){
-  clearSpectateCountdown();
-  const order = state.pickOrder || [];
-  const cards = state.wishCards || ['','',''];
-  // （三十）這個畫面本身沒有任何動畫可以掛，純粹是每 1.5 秒 poll 就重畫一次
-  // 的靜態清單，所以另外用 _lastSpecWishesKey 擋「同一輪只播一次公布音效」，
-  // 不然會變成每次 poll 重新渲染都再響一次。
-  const wishesKey = (state.roundId || '') + '_wishes';
-  const isFirstWishesRender = _lastSpecWishesKey !== wishesKey;
-  _lastSpecWishesKey = wishesKey;
-  if (isFirstWishesRender) playCardFlipSound();
-  render(`
-    <div class="shell"><div class="col" style="align-items:center;text-align:center">
-      <span class="eyebrow">🎁 許願任務</span>
-      <h1 class="marquee-title">大家抽到<span class="hl">什麼任務</span>？</h1>
-      ${order.length? `<div class="panel" style="margin-top:10px;width:100%;max-width:520px">
-        <div class="stack" style="margin-top:10px">
+      ${hasWishes ? `
+      <div class="panel" id="awards-done-wishes" style="width:100%;max-width:480px;margin-top:14px">
+        <h3 style="margin:0 0 10px;font-size:14px">🃏 最後三名抽到的任務</h3>
+        <div class="stack">
           ${order.map(id=>{
             const p = state.players[id]; if (!p) return '';
             const idx = state.pickedCards[id];
             return `<div class="lb-row"><div class="lb-name">${avatarSpan(p.avatar)}${nameTag(p)}</div><div class="sub" style="flex:2;text-align:right">${idx!=null? esc(cards[idx]||'—') : '—'}</div></div>`;
           }).join('')}
         </div>
-      </div>` : '<p class="sub">這場沒有人抽許願卡</p>'}
+      </div>` : ''}
     </div></div>
   `);
+  if (isFirstRender){
+    spawnConfetti();
+    if (hasWishes) playCardFlipSound(); else playPodiumFanfare();
+  }
 }
 
 /* ============================================================
@@ -5334,7 +5353,7 @@ async function runPlayerPollLoop(gen){
       // never advance once the host started the game.
       failStreak++;
       await sleep(failStreak >= 3 ? 1500 : 600);
-      if (failStreak >= 3) await playerPollTick();
+      if (failStreak >= 3) await safePollTick(playerPollTick, 'player');
       continue;
     }
     failStreak = 0;
@@ -5342,7 +5361,7 @@ async function runPlayerPollLoop(gen){
     // 伺服器重開歸零這種「變小」也算變化），或是還在等重新加入確認。
     const changed = _playerLastSeenRev === null || r.rev !== _playerLastSeenRev;
     _playerLastSeenRev = r.rev;
-    if (changed || playerRejoinPending) await playerPollTick();
+    if (changed || playerRejoinPending) await safePollTick(playerPollTick, 'player');
   }
 }
 async function playerPollTick(){
