@@ -404,6 +404,47 @@
     .lobby-float-word{ animation:none; opacity:.5; }
     .lobby-hero .hero-pill .dotpulse{ animation:none; }
   }
+  /* （三十九）使用者看完（三十六）新版投影大廳後追加需求：希望玩家掃碼
+     加入的當下，畫面上能有個「彈出名字」的效果，效果結束後名字留在畫面
+     下方的名單裡——不是只有右下角一個累計人數的數字。投影頁本來就是
+     poll-based、每次整頁 render() 整包重畫，沒辦法用一般網站「偵測到新
+     DOM 節點」那套作法去分辨「這個人是不是這次 poll 才新加入的」；改用
+     模組層級的 Set（_specLobbySeenIds）自己記住「這個投影頁分頁到目前
+     為止看過的玩家 id」，每次重新渲染時比對 state.players，多出來的 id
+     才是要播 pop 動畫的對象，已經播過的人維持在下面清單裡不動、不重播
+     （跟其他畫面的 isFirstRender 是同一種「靠模組層級變數記住播過沒」
+     的手法，只是這裡是每個玩家各自一把、不是整個畫面共用一把）。投影頁
+     如果是「大廳已經有人了才打開」，第一次渲染時把當下已經在場的人直接
+     視為「看過」、安靜出現在名單裡，不補放一輪 pop 動畫——這份驚喜感是
+     留給接下來真的在投影頁開著的當下加入的人，不然大廳一開就要看一串
+     連續彈出動畫，反而是干擾。 */
+  .lobby-joined-wrap{ position:relative; z-index:1; margin-top:22px; width:100%; max-width:900px; }
+  .lobby-joined-list{ display:flex; flex-wrap:wrap; justify-content:center; gap:10px; }
+  .lobby-joined-badge{
+    display:flex; align-items:center; gap:7px; background:rgba(255,255,255,0.72); border:1px solid var(--line);
+    border-radius:999px; padding:6px 14px 6px 6px; font-size:13.5px; font-weight:700; color:var(--ink);
+    opacity:0; transform:translateY(-10px) scale(.85);
+  }
+  .lobby-joined-badge.show{ animation:joinedBadgeIn .5s cubic-bezier(.34,1.5,.4,1) forwards; }
+  @keyframes joinedBadgeIn{ to{ opacity:1; transform:translateY(0) scale(1); } }
+  .lobby-joined-badge .avatar-badge{ width:26px; height:26px; }
+  .lobby-join-announce{ position:fixed; top:30%; left:50%; z-index:6; pointer-events:none; transform:translate(-50%,-50%); }
+  .lobby-join-pop{
+    display:flex; flex-direction:column; align-items:center; gap:8px;
+    background:rgba(255,255,255,0.94); border:2px solid var(--gold); border-radius:24px;
+    padding:16px 30px; box-shadow:0 14px 34px rgba(46,36,24,0.28);
+    opacity:0; transform:scale(.4) translateY(10px);
+    animation:joinPopIn .55s cubic-bezier(.3,1.7,.4,1) forwards, joinPopOut .4s ease-in .95s forwards;
+  }
+  .lobby-join-pop .avatar-badge{ width:56px; height:56px; }
+  .lobby-join-pop .join-name{ font-family:'Fredoka',sans-serif; font-weight:600; font-size:20px; color:var(--ink); white-space:nowrap; }
+  .lobby-join-pop .join-tag{ font-size:12.5px; font-weight:700; color:var(--moss); white-space:nowrap; }
+  @keyframes joinPopIn{ 0%{ opacity:0; transform:scale(.4) translateY(10px); } 60%{ opacity:1; transform:scale(1.08) translateY(-4px); } 100%{ opacity:1; transform:scale(1) translateY(0); } }
+  @keyframes joinPopOut{ to{ opacity:0; transform:scale(.85) translateY(-16px); } }
+  @media (prefers-reduced-motion: reduce){
+    .lobby-joined-badge{ opacity:1; transform:none; animation:none; }
+    .lobby-join-pop{ animation:none; opacity:1; }
+  }
 
   .lb-row{
     display:flex; align-items:center; gap:14px; background:var(--cream); border:1px solid var(--line);
@@ -4750,13 +4791,24 @@ const LOBBY_GREETINGS = [
   { t:'С днём рождения', c:'var(--moss)' },
   { t:'Feliz Aniversário', c:'var(--coral)' }
 ];
+let _specLobbySeenIds = new Set();
+let _specLobbyInited = false;
 function renderSpectateLobby(state){
   clearSpectateCountdown();
   const url = joinUrl();
   const players = Object.entries(state.players || {});
+  players.sort((a,b) => (a[1].requestedAt||0) - (b[1].requestedAt||0));
   const total = (state.questions || []).length;
+  if (!_specLobbyInited){
+    // 投影頁第一次進大廳畫面（可能是大廳已經有人才打開投影頁）：這之前
+    // 就加入的人直接視為「看過」，不補放 pop 動畫，安靜出現在下方名單裡。
+    players.forEach(([id]) => _specLobbySeenIds.add(id));
+    _specLobbyInited = true;
+  }
+  const newIds = players.filter(([id]) => !_specLobbySeenIds.has(id)).map(([id]) => id);
   render(`
     <div class="lobby-float-layer" id="lobby-float-layer"></div>
+    <div class="lobby-join-announce" id="lobby-join-announce"></div>
     <div class="lobby-qr-corner">
       <div class="qr-card">${qrSvgHtml(url, 'sm')}</div>
       <span class="qr-cap">📱 掃碼加入</span>
@@ -4769,9 +4821,44 @@ function renderSpectateLobby(state){
         <p class="hero-sub">🎉 猜猜大會即將開始…</p>
         <span class="hero-pill"><span class="dotpulse"></span>本場共 ${total} 題，掃右上角 QR code 加入</span>
       </div>
+      <div class="lobby-joined-wrap">
+        <div class="lobby-joined-list" id="lobby-joined-list">
+          ${players.map(([id,p]) => joinedBadgeHtml(id, p, !newIds.includes(id))).join('')}
+        </div>
+      </div>
     </div></div>
   `);
   spawnLobbyFloatWords();
+  playLobbyJoinPops(newIds, state.players);
+}
+function joinedBadgeHtml(id, p, showNow){
+  return `<div class="lobby-joined-badge${showNow ? ' show' : ''}" data-pid="${id}">${avatarSpan(p.avatar)}<span>${esc(p.name)}${p.isShouxing ? ' 🎂' : ''}</span></div>`;
+}
+/* 依序（不是同時）播放每個新加入玩家的彈出動畫：用 setTimeout 把每個人
+   要出場的時間點串起來排隊，人多的話會一個接一個跳出，不會擠成一團看
+   不清楚是誰加入的。每個人標記為「看過」的時間點在排進佇列的當下就做
+   （而不是動畫播完才做）——這樣同一位玩家不會因為動畫播放中途剛好又
+   來了一次 poll 重新渲染而被誤判成「還沒看過」、重播第二次。 */
+function playLobbyJoinPops(newIds, players){
+  if (!newIds.length) return;
+  const announce = document.getElementById('lobby-join-announce');
+  newIds.forEach((id, i) => {
+    _specLobbySeenIds.add(id);
+    const p = players[id];
+    if (!p) return;
+    setTimeout(() => {
+      if (!announce) return;
+      const pop = document.createElement('div');
+      pop.className = 'lobby-join-pop';
+      pop.innerHTML = `${avatarSpan(p.avatar)}<span class="join-name">${esc(p.name)}</span><span class="join-tag">${p.isShouxing ? '🎂 今天的壽星！' : '🎉 加入猜猜囉！'}</span>`;
+      announce.appendChild(pop);
+      setTimeout(() => {
+        pop.remove();
+        const badge = document.querySelector('.lobby-joined-badge[data-pid="' + id + '"]');
+        if (badge) badge.classList.add('show');
+      }, 1350);
+    }, i * 1400);
+  });
 }
 /* 飄動文字的起點/飄移方向與距離/速度/大小/透明度全部用 Math.random() 現場
    決定——每次進大廳（或大廳有玩家加入/離開觸發重新渲染）都會重新排列一次，
