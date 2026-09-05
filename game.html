@@ -209,9 +209,19 @@
        （200→240 / 30vh→40vh / 340→440，1100px→1300px），結果兩排疊起來太高，
        使用者反映的是要捲動才看得到全部選項，這個副作用比「圖片還可以再大一點」
        更糟——改回原本的數值。這裡從一開始就是 2x2（不是像 img-row 那樣從 4 欄
-       砍成 2 欄），欄寬本來就足夠寬給橫式照片用，問題從來不在這裡。 */
+       砍成 2 欄），欄寬本來就足夠寬給橫式照片用，問題從來不在這裡。
+       （三十五）上面這次「改回原本數值」其實只是治標：30vh 本身就是跟
+       img-row 原本用的 50vh 一樣的錯誤（見上面 img-row 那段「筆電視窗變矮」
+       的註解）——是拿「視窗高度的固定比例」去湊「其實是固定像素的版面
+       雜項」，兩排疊起來後這個誤差會加倍，所以只是把數值調小、沒有真的
+       解決根因，換一台矮一點的螢幕／多開幾個測試按鈕還是會爆版。這次直接
+       比照 img-row 改成量出來的 calc()：用 Playwright 量測「圖片格以外」
+       實際吃掉的固定高度（頂部主持人列＋題目文字＋格子 row-gap＋每格內距
+       跟圖說），兩排加總約 560px，所以每格圖片高度用
+       calc((100vh - 560px) / 2)，視窗矮的時候兩排會一起等比例縮小、不會
+       只縮一排造成失衡，也不會像固定比例那樣完全不管版面雜項多寡。*/
     .options-grid.img-grid2{ grid-template-columns:repeat(2,1fr); gap:16px; max-width:1100px; }
-    .options-grid.img-grid2 .opt-img{ height:clamp(200px, 30vh, 340px); }
+    .options-grid.img-grid2 .opt-img{ height:clamp(100px, calc((100vh - 560px) / 2), 340px); }
     .options-grid.img-grid2 .opt-cap{ font-size:16px; }
     /* （三十一三修）真正的元兇：找到了。上面兩個 .options-grid 子類別各自的
        max-width（1680px／1100px）其實從來沒有真的生效過——.options-grid 本身
@@ -243,8 +253,11 @@
     display:flex; align-items:center; justify-content:center; font-family:'Fredoka',sans-serif; font-size:18px; font-weight:700;
   }
   .opt-card .tag.corner{ position:absolute; top:12px; left:12px; z-index:2; box-shadow:0 2px 4px rgba(0,0,0,.2); background:rgba(255,255,255,0.85); }
-  .opt-a{ background:var(--gold); } .opt-b{ background:var(--leaf); }
-  .opt-c{ background:var(--terracotta); } .opt-d{ background:var(--sky); }
+  /* （三十五）使用者反映四個選項的實色色塊在暖色系插畫背景上看起來太搶、不
+     和諧——改成半透明（0.6 alpha），讓底下 body 的米色跟插畫隱約透出來，
+     選項之間還是靠色相區分（金/綠/赭/藍），但不會是四塊完全不透光的色塊。 */
+  .opt-a{ background:rgba(242,193,78,0.6); } .opt-b{ background:rgba(127,178,122,0.6); }
+  .opt-c{ background:rgba(232,161,107,0.6); } .opt-d{ background:rgba(111,179,217,0.6); }
   .opt-card.has-img{ flex-direction:column; align-items:stretch; padding:10px; gap:8px; }
   /* object-fit:contain (not cover) so the whole uploaded photo is always visible —
      any letterboxing shows the option's own colour (gold/leaf/terracotta/sky)
@@ -304,6 +317,65 @@
   .badge-shouxing{ display:inline-flex; background:var(--coral); color:#fff; font-size:11px; font-weight:800; padding:3px 8px; border-radius:999px; margin-left:6px; white-space:nowrap; }
   .test-badge{ display:inline-flex; background:#8a8a8a; color:#fff; font-size:10.5px; font-weight:800; padding:2px 7px; border-radius:999px; margin-left:6px; white-space:nowrap; vertical-align:1px; }
 
+  /* ---------- （三十六）投影頁大廳重新設計 ----------
+     使用者參考別人投影頁的呈現方式：QR code 收到畫面右上角、主視覺換成
+     大大的生日祝福＋各國語言「生日快樂」像螢幕保護程式一樣隨機飄過畫面，
+     取代原本置中的「掃碼加入猜猜」大標題＋整片玩家頭像牆（見 renderSpectateLobby()）。
+     這幾層都用 position:fixed 直接貼齊整個瀏覽器視窗，不受 .shell/.col
+     原本的置中欄寬跟內距限制——投影頁本來就是整個視窗只放這一個畫面，
+     不需要跟其他頁面共用那套「內容欄置中、留邊距」的排版。 */
+  .lobby-qr-corner{
+    position:fixed; top:clamp(14px,3vh,28px); right:clamp(14px,3vw,28px); z-index:5;
+    display:flex; flex-direction:column; align-items:center; gap:6px;
+  }
+  .lobby-qr-corner .qr-card{ padding:clamp(6px,1vmin,10px); }
+  .lobby-qr-corner .qr-cap{
+    font-size:11px; font-weight:700; color:var(--ink); background:rgba(255,255,255,0.82);
+    border-radius:999px; padding:3px 11px; white-space:nowrap;
+  }
+  .lobby-count-corner{
+    position:fixed; left:clamp(14px,3vw,28px); bottom:clamp(14px,3vh,28px); z-index:5;
+    display:flex; align-items:center; gap:6px; background:var(--cream); border:1px solid var(--line);
+    border-radius:999px; padding:7px 14px; font-size:12.5px; font-weight:700; color:var(--ink);
+    box-shadow:0 4px 10px rgba(46,36,24,0.1);
+  }
+  .lobby-hero{ position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; gap:10px; text-align:center; }
+  .lobby-hero .hero-icon{ font-size:clamp(30px,4.5vw,46px); }
+  .lobby-hero .hero-title{
+    font-family:'Fredoka',sans-serif; font-weight:600; font-size:clamp(30px,7vw,64px); line-height:1.12; margin:0;
+    text-shadow:0 3px 0 rgba(255,255,255,0.55);
+  }
+  .lobby-hero .hero-title .hl{ color:var(--coral); }
+  .lobby-hero .hero-sub{ margin:0; font-size:clamp(13px,1.7vw,17px); font-weight:700; color:var(--ink-dim); }
+  .lobby-hero .hero-pill{
+    margin-top:6px; display:inline-flex; align-items:center; gap:7px; font-size:12.5px; font-weight:700;
+    color:var(--moss); background:rgba(255,255,255,0.55); border:1.5px dashed rgba(63,92,51,0.45);
+    border-radius:999px; padding:6px 16px;
+  }
+  .lobby-hero .hero-pill .dotpulse{ width:7px; height:7px; border-radius:50%; background:var(--leaf); animation:dotpulse 1.4s ease-in-out infinite; }
+  @keyframes dotpulse{ 0%,100%{opacity:.4;transform:scale(.8);} 50%{opacity:1;transform:scale(1.15);} }
+  /* 飄動的各國語言生日快樂——position:fixed 鋪滿整個視窗、pointer-events:none
+     不擋 QR/按鈕，每個字的起點/飄移方向/速度/大小/顏色都是渲染時隨機決定
+     （見 spawnLobbyFloatWords()），效果比較像螢幕保護程式而不是固定跑馬燈。 */
+  .lobby-float-layer{ position:fixed; inset:0; z-index:2; pointer-events:none; overflow:hidden; }
+  .lobby-float-word{
+    position:absolute; font-family:'Fredoka',sans-serif; font-weight:600; white-space:nowrap;
+    left:var(--sx); top:var(--sy); opacity:0; will-change:transform,opacity;
+    animation:lobbyFloatDrift var(--dur) linear var(--delay) infinite;
+    text-shadow:0 2px 6px rgba(46,36,24,0.14);
+  }
+  @keyframes lobbyFloatDrift{
+    0%{ transform:translate(0,0) rotate(var(--r0)); opacity:0; }
+    10%{ opacity:var(--op); }
+    50%{ transform:translate(var(--dx),var(--dy)) rotate(var(--r1)); }
+    90%{ opacity:var(--op); }
+    100%{ transform:translate(calc(var(--dx)*1.7),calc(var(--dy)*1.7)) rotate(var(--r0)); opacity:0; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    .lobby-float-word{ animation:none; opacity:.5; }
+    .lobby-hero .hero-pill .dotpulse{ animation:none; }
+  }
+
   .lb-row{
     display:flex; align-items:center; gap:14px; background:var(--cream); border:1px solid var(--line);
     border-radius:16px; padding:14px 18px;
@@ -325,6 +397,29 @@
   .lb-score{ font-family:'Fredoka',sans-serif; font-size:26px; color:var(--moss); }
   .lb-delta{ font-size:12px; color:var(--leaf); font-weight:700; background:rgba(127,178,122,0.18); padding:2px 8px; border-radius:999px; opacity:0; transition:opacity .35s ease; }
   .lb-delta.show{ opacity:1; }
+
+  /* （三十六後續）最終排行榜第 6 名以後：使用者反映投影出來前 5 名之後，
+     後面的人名次沒辦法讓大家看到（投影頁不能像網頁一樣讓觀眾自己滾動），
+     問過使用者要「自動向上滾動」還是「跑馬燈」，選了跑馬燈——見
+     animateFinalLeaderboardReveal() 裡把 #final-leaderboard-rest 內容包一層
+     .lb-rest-track，如果整份排完的高度超過這個小窗，就把 track 內容複製
+     一份接在後面、整條無限往上捲動，捲到剛好走完第一份的高度（-50%）時
+     視覺上跟開頭無縫接軌，看起來像沒有盡頭一直捲。人數少、本來就塞得下
+     的話（scrolling class 沒被加上去）就維持原本的靜態淡入，不會為了
+     一兩個人硬跑動畫。 */
+  .lb-rest-viewport{ position:relative; max-height:clamp(170px,24vh,260px); overflow:hidden; }
+  .lb-rest-viewport.scrolling{
+    -webkit-mask-image:linear-gradient(to bottom, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
+    mask-image:linear-gradient(to bottom, transparent 0, #000 14px, #000 calc(100% - 14px), transparent 100%);
+  }
+  .lb-rest-track{ display:flex; flex-direction:column; gap:10px; }
+  .lb-rest-viewport.scrolling .lb-rest-track{ animation-name: lbRestMarquee; animation-timing-function:linear; animation-iteration-count:infinite; }
+  @keyframes lbRestMarquee{ 0%{ transform:translateY(0); } 100%{ transform:translateY(-50%); } }
+  @media (prefers-reduced-motion: reduce){
+    .lb-rest-viewport.scrolling .lb-rest-track{ animation:none; }
+    .lb-rest-viewport{ max-height:none; }
+    .lb-rest-viewport.scrolling{ -webkit-mask-image:none; mask-image:none; }
+  }
 
   /* （三十二）排名追逐：只出現在玩家自己手機的公布答案畫面，緊接在既有的
      「累積排行榜」面板裡面，點名前面／並列的是誰、差幾分，用嗆辣一點的語氣
@@ -628,16 +723,25 @@
      跟使用者確認過的「版本 A・溫馨字卡風」示意圖同一套配色與版面，換成
      真正的畫面尺寸（填滿扣掉 hostNav() 之後剩下的空間，見 .q-content 用
      同一招 flex:1 centering 的既有慣例）。 */
+  /* （三十五）使用者反映章節開場的背景太鮮豔，出了 4 種透明度示意圖
+     （A 現況／B 淡透一階／C 看得到背景／D 融入整體背景）讓她挑，選中
+     C：卡片本身的沙色底從完全不透（原本 background:var(--sand)）降到
+     55% alpha，兩顆金/綠暈染也一起調淡。因為 .chapter-intro 本來就是
+     疊在 body 後面固定的 .bg-scene／.bg-veil（森林插畫＋米色柔化層，
+     見上面「Julia 森林場景背景」那段）之上，沙色底一半透明，插畫就會
+     自然透出來，不用另外接圖層。頒獎典禮背景（使用者要求「同前面的透明度
+     選擇」）還沒套用同一組數值——那部分要跟皇冠遮字、版面調整一起處理，
+     見開發紀錄「待處理」清單，先不要看到這裡就以為頒獎典禮也已經改完。 */
   .chapter-intro{
     flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center;
     gap:clamp(14px,3vh,26px); padding:6% 6%; position:relative; text-align:center;
-    border-radius:22px; overflow:hidden; background:var(--sand); margin-top:10px;
+    border-radius:22px; overflow:hidden; background:rgba(243,231,206,0.55); margin-top:10px;
   }
   .chapter-intro::before{
     content:''; position:absolute; inset:0; pointer-events:none;
     background:
-      radial-gradient(circle at 15% 20%, rgba(242,193,78,0.35), transparent 42%),
-      radial-gradient(circle at 85% 78%, rgba(127,178,122,0.30), transparent 46%);
+      radial-gradient(circle at 15% 20%, rgba(242,193,78,0.10), transparent 42%),
+      radial-gradient(circle at 85% 78%, rgba(127,178,122,0.08), transparent 46%);
   }
   .chapter-kicker{
     position:relative; color:var(--moss); border:1.5px dashed rgba(63,92,51,0.45);
@@ -1290,6 +1394,42 @@ function finalRowHtml(rank, player, opts){
     <div class="lb-name">${avatarSpan(player.avatar)}${nameTag(player)}</div>
     <div class="lb-score num">${opts.scoreText != null ? opts.scoreText : player.score}</div>
   </div>`;
+}
+/* （三十六後續）最終排行榜第 6 名以後：塞進 #final-leaderboard-rest 這個
+   固定高度的小窗（見 CSS .lb-rest-viewport／.lb-rest-track）。人少、原本
+   一份就塞得下的話，維持普通的靜態清單；量出來的內容高度一旦超過小窗，
+   就把同一份名單複製接在後面、整條無限往上捲（-50% 剛好走完第一份，跟
+   開頭無縫接軌），使用者確認過要跑馬燈這個方向（比較過「自動向上滾動」
+   跟「分頁淡入輪播」兩種示意）。捲動速度按內容高度換算，人多捲久一點、
+   人少捲快一點，讀起來的速度大致穩定，不會人多的時候咻一下就捲完。
+   opts.fade：只有 renderHostFinal()／renderSpectateFinal() 第一次結算的
+   那次呼叫會傳 true，讓這幾列跟著上面前 5 名的 FLIP／數字跳動一起淡入；
+   投影頁之後每次 poll 重畫（例如許願卡狀態變化觸發的整頁重畫）不需要再
+   淡入一次，直接靜態顯示已經結算好的名次就好。 */
+function renderLbRestList(rest, startRank, opts){
+  opts = opts || {};
+  const restEl = document.getElementById('final-leaderboard-rest');
+  if (!restEl) return;
+  restEl.classList.remove('scrolling');
+  if (!rest.length){ restEl.innerHTML = ''; return; }
+  const rowsHtml = rest.map(([id,p],i)=> finalRowHtml(startRank + i, p, { pid: id })).join('');
+  restEl.innerHTML = `<div class="lb-rest-track">${rowsHtml}</div>`;
+  const track = restEl.querySelector('.lb-rest-track');
+  if (opts.fade){
+    track.querySelectorAll('.lb-row').forEach(row => { row.style.opacity = '0'; row.style.transition = 'opacity .5s ease'; });
+  }
+  if (track.scrollHeight > restEl.clientHeight + 2){
+    track.innerHTML = rowsHtml + rowsHtml; // 複製一份，動畫跑到 -50% 正好無縫接回開頭
+    const singleHeight = track.scrollHeight / 2;
+    track.style.animationDuration = Math.max(6, singleHeight / 26).toFixed(1) + 's';
+    restEl.classList.add('scrolling');
+    if (opts.fade) track.querySelectorAll('.lb-row').forEach(row => { row.style.opacity = '0'; });
+  }
+  if (opts.fade){
+    requestAnimationFrame(()=>{
+      restEl.querySelectorAll('.lb-row').forEach(row => { row.style.transition = 'opacity .5s ease'; row.style.opacity = '1'; });
+    });
+  }
 }
 /* Ranks 4+ on the awards podium / awards-done recap screens: a paginated,
    gently cross-fading side panel next to the podium (no sliding/scrolling —
@@ -2946,13 +3086,23 @@ async function hostPollTick(){
   try{
     if (['lobby','chapterIntro','question','reveal'].includes(hostState.status)) await processJoins();
     if (hostState.status === 'question') await processAnswers();
-    if (['lobby','chapterIntro','question','reveal','final'].includes(hostState.status)) await processStarCards();
+    // （三十五）頒獎台（awards/podium）也要繼續收壽星那邊的許願卡更新——
+    // 「要不要出最後三名任務」這個開關可能到頒獎台才臨時決定／改變主意，
+    // 只到 final 為止會錯過這種最後一刻的調整。一旦真的進了猜拳／選卡
+    // （awardsStage 不是 podium），卡片內容已經在發放，就不要再中途換牌。
+    if (['lobby','chapterIntro','question','reveal','final'].includes(hostState.status)
+      || (hostState.status === 'awards' && hostState.awardsStage === 'podium')) await processStarCards();
     if (hostState.status === 'awards' && hostState.awardsStage === 'rps') await processRpsThrows();
     if (hostState.status === 'awards' && hostState.awardsStage === 'picking') await processCardPicks();
   } finally { pollBusy = false; }
 }
 /* The 壽星 writes her 3 wish cards to her own storage key from her phone; pick it
-   up here and fold it into the authoritative state, same pattern as processJoins(). */
+   up here and fold it into the authoritative state, same pattern as processJoins().
+   （三十五）多帶一個 hasWishTasks 布林值：壽星在編輯畫面勾選「這次要不要出
+   最後三名任務」，這裡原樣收進 hostState.wishTasksEnabled，供 goAwardsRps()
+   判斷要不要整個跳過猜拳／選卡／公布任務那三個畫面。舊資料（沒有這個欄位的
+   info，理論上只會出現在還沒重新整理過網頁的舊分頁）預設當作 true，維持
+   這個功能加上去之前「一律都出任務」的行為，不會突然把人嚇到。 */
 async function processStarCards(){
   const sx = hostState.shouxingId;
   if (!sx) return;
@@ -2961,6 +3111,7 @@ async function processStarCards(){
   if ((info.updatedAt || 0) === (hostState.wishCardsUpdatedAt || 0)) return;
   hostState.wishCards = [info.text[0]||'', info.text[1]||'', info.text[2]||''];
   hostState.wishCardsUpdatedAt = info.updatedAt || 0;
+  hostState.wishTasksEnabled = info.hasWishTasks !== false;
   await sSet('game:state', hostState);
 }
 async function processJoins(){
@@ -3471,6 +3622,7 @@ function renderHostReveal(){
             </div>
           `;}).join('') || '<p class="sub">還沒有人猜</p>'}
         </div>
+        ${isWarmup ? `<p class="sub" style="margin-top:6px;color:var(--gold);font-weight:700">🔥 暖身題不計分，正式題開始後分數會重新算喔！</p>` : ''}
       </div>
       <div class="btn-row">
         <button class="btn" onclick="${isLast? 'goFinal()' : 'nextQuestion()'}">${isLast? '🏁 查看最終結果 →' : '下一題 →'}</button>
@@ -3605,7 +3757,7 @@ function renderHostFinal(){
             </div>
           `).join('') || '<p class="sub">還沒有人猜</p>'}
         </div>
-        <div class="stack" style="margin-top:6px" id="final-leaderboard-rest"></div>
+        <div class="lb-rest-viewport" style="margin-top:6px" id="final-leaderboard-rest"></div>
       </div>
       <div class="btn-row" style="margin-top:14px">
         <button class="btn" onclick="goAwards()">🏆 進入頒獎典禮 →</button>
@@ -3662,18 +3814,9 @@ function animateFinalLeaderboardReveal(visible, rest, playSound){
         }
       }, delay);
     });
-    // Anyone past the animated top 5 just fades in below at their real score.
-    if (rest.length){
-      const restEl = document.getElementById('final-leaderboard-rest');
-      if (restEl){
-        restEl.innerHTML = rest.map(([id,p],i)=> finalRowHtml(visible.length + i + 1, p, { pid: id })).join('');
-        restEl.querySelectorAll('.lb-row').forEach(row => {
-          row.style.opacity = '0';
-          row.style.transition = 'opacity .5s ease';
-          requestAnimationFrame(()=>{ row.style.opacity = '1'; });
-        });
-      }
-    }
+    // Anyone past the animated top 5: fade in below, auto-scrolling if the
+    // full list doesn't fit in the small window (see renderLbRestList()).
+    renderLbRestList(rest, visible.length + 1, { fade: true });
   };
   if (!visible.length){ crownTop3(); return; }
   const container = document.getElementById('final-leaderboard');
@@ -3820,7 +3963,9 @@ function renderHostAwardsPodium(){
       </div>
       ${top3.length? '' : '<p class="sub">這場沒有人猜，先跳過頒獎</p>'}
       <div class="btn-row" style="margin-top:14px">
-        <button class="btn" onclick="goAwardsRps()">🃏 最後三名 & 許願卡 →</button>
+        ${hostState.wishTasksEnabled === false
+          ? `<button class="btn" onclick="goAwardsRps()">🎉 查看最終結果 →</button>`
+          : `<button class="btn" onclick="goAwardsRps()">🃏 最後三名 & 許願卡 →</button>`}
       </div>
     </div></div>
   `);
@@ -3908,6 +4053,12 @@ function startHostRpsSpin(){
   }, 150);
 }
 function goAwardsRps(){
+  // （三十五）壽星這輪勾掉「要不要出最後三名任務」的話，整段猜拳／選卡／
+  // 公布任務都不用跑——直接借用 finishAwardsNoBottom() 那條「沒有東西可以
+  // 公布」的乾淨結尾路徑（pickOrder 留空，renderHostAwardsDone() 本來就會
+  // 因為 hasWishes=false 自動不出現「公布許願任務」按鈕，直接是「再玩一輪／
+  // 回設定改題目」）。
+  if (hostState.wishTasksEnabled === false) return finishAwardsNoBottom();
   const bottom = (hostState.bottomIds||[]).filter(id=>hostState.players[id]);
   hostState.awardsStage = 'rps';
   hostState.rpsRoundMsg = '';
@@ -4569,32 +4720,79 @@ function renderSpectateIdle(){
     </div></div>
   `);
 }
+/* （三十六）投影頁大廳：主視覺換成生日祝福＋飄動動畫，QR 移到右上角固定
+   位置（見上面 CSS 區塊的說明）。已加入人數仍留一個角落小提示給主持人
+   自己瞄場面用，但拿掉了原本整片玩家頭像牆——那個是給主持人指定壽星用
+   的，指定壽星的操作留在 renderHostLobby()（主持人自己的畫面）就好，
+   投影頁單純給大家看，不需要重複整片名單。 */
+const LOBBY_GREETINGS = [
+  { t:'Happy Birthday 🎉', c:'var(--coral)' },
+  { t:'お誕生日おめでとう', c:'var(--moss)' },
+  { t:'생일 축하해요', c:'var(--sky)' },
+  { t:'Joyeux Anniversaire', c:'var(--terracotta)' },
+  { t:'Feliz Cumpleaños', c:'var(--gold)' },
+  { t:'Alles Gute zum Geburtstag', c:'var(--moss)' },
+  { t:'Buon Compleanno', c:'var(--coral)' },
+  { t:'Chúc Mừng Sinh Nhật', c:'var(--sky)' },
+  { t:'สุขสันต์วันเกิด', c:'var(--terracotta)' },
+  { t:'Selamat Ulang Tahun', c:'var(--gold)' },
+  { t:'С днём рождения', c:'var(--moss)' },
+  { t:'Feliz Aniversário', c:'var(--coral)' }
+];
 function renderSpectateLobby(state){
   clearSpectateCountdown();
   const url = joinUrl();
   const players = Object.entries(state.players || {});
   const total = (state.questions || []).length;
   render(`
-    <div class="shell"><div class="col" style="align-items:center;text-align:center">
-      <span class="eyebrow">📶 等待加入</span>
-      <h1 class="marquee-title" style="font-size:clamp(28px,5vw,48px)">掃碼<span class="hl">加入猜猜</span></h1>
-      <div class="qr-card">${qrSvgHtml(url, '')}</div>
-      <div class="join-url">${esc(url)}</div>
-      <p class="sub" style="font-size:13px;margin-top:-4px">本場共 ${total} 題</p>
-      <div style="margin-top:6px;width:100%">
-        <div class="chip" style="margin:0 auto 10px;width:fit-content">
-          <span>👥 已加入</span><span class="num">${players.length}</span><span>人</span>
-        </div>
-        <div class="players-grid">
-          ${players.length ? players.map(([id,p])=>`
-            <div class="player-pill ${id===state.shouxingId?'is-shouxing':''}">
-              <span class="dot"></span>${avatarSpan(p.avatar)}${nameTag(p)}${id===state.shouxingId? '<span class="badge-shouxing">🎂 壽星</span>' : ''}
-            </div>
-          `).join('') : '<p class="sub">還沒有人加入，請大家掃上面的 QR code</p>'}
-        </div>
+    <div class="lobby-float-layer" id="lobby-float-layer"></div>
+    <div class="lobby-qr-corner">
+      <div class="qr-card">${qrSvgHtml(url, 'sm')}</div>
+      <span class="qr-cap">📱 掃碼加入</span>
+    </div>
+    <div class="lobby-count-corner">👥 已加入 <span class="num">${players.length}</span> 人</div>
+    <div class="shell"><div class="col center">
+      <div class="lobby-hero">
+        <span class="hero-icon">🎂</span>
+        <h1 class="hero-title">Julia<br><span class="hl">生日快樂</span></h1>
+        <p class="hero-sub">🎉 猜猜大會即將開始…</p>
+        <span class="hero-pill"><span class="dotpulse"></span>本場共 ${total} 題，掃右上角 QR code 加入</span>
       </div>
     </div></div>
   `);
+  spawnLobbyFloatWords();
+}
+/* 飄動文字的起點/飄移方向與距離/速度/大小/透明度全部用 Math.random() 現場
+   決定——每次進大廳（或大廳有玩家加入/離開觸發重新渲染）都會重新排列一次，
+   不需要固定座標表，效果自然不會每次都一樣。 */
+function spawnLobbyFloatWords(){
+  const layer = document.getElementById('lobby-float-layer');
+  if (!layer) return;
+  LOBBY_GREETINGS.forEach(g => {
+    const el = document.createElement('span');
+    el.className = 'lobby-float-word';
+    el.textContent = g.t;
+    const sx = 4 + Math.random() * 82;
+    const sy = 8 + Math.random() * 74;
+    const dx = (Math.random() * 32 - 16).toFixed(1) + 'vw';
+    const dy = (Math.random() * 22 - 11).toFixed(1) + 'vh';
+    const dur = (16 + Math.random() * 16).toFixed(1) + 's';
+    const delay = (-Math.random() * 30).toFixed(1) + 's';
+    const size = (13 + Math.random() * 13).toFixed(0) + 'px';
+    const op = (0.35 + Math.random() * 0.4).toFixed(2);
+    el.style.setProperty('--sx', sx + '%');
+    el.style.setProperty('--sy', sy + '%');
+    el.style.setProperty('--dx', dx);
+    el.style.setProperty('--dy', dy);
+    el.style.setProperty('--dur', dur);
+    el.style.setProperty('--delay', delay);
+    el.style.setProperty('--op', op);
+    el.style.setProperty('--r0', (Math.random() * 10 - 5) + 'deg');
+    el.style.setProperty('--r1', (Math.random() * 10 - 5) + 'deg');
+    el.style.fontSize = size;
+    el.style.color = g.c;
+    layer.appendChild(el);
+  });
 }
 function renderSpectateChapterIntro(state){
   clearSpectateCountdown();
@@ -4723,6 +4921,7 @@ function renderSpectateReveal(state){
             </div>
           `).join('') || '<p class="sub">還沒有人猜</p>'}
         </div>
+        ${isWarmup ? `<p class="sub" style="margin-top:6px;color:var(--gold);font-weight:700">🔥 暖身題不計分，正式題開始後分數會重新算喔！</p>` : ''}
       </div>
     </div></div>
   `);
@@ -4774,16 +4973,21 @@ function renderSpectateFinal(state){
               </div>
             `).join('') || '<p class="sub">這場沒有人猜</p>'}
           </div>
-          <div class="stack" style="margin-top:6px" id="final-leaderboard-rest"></div>
+          <div class="lb-rest-viewport" style="margin-top:6px" id="final-leaderboard-rest"></div>
         ` : `
           <h2 id="final-leaderboard-title">🏆 最終名次</h2>
           <div class="stack" style="margin-top:10px" id="final-leaderboard">
-            ${ranked.map(([id,p],i)=> finalRowHtml(i+1, p, { pid: id })).join('') || '<p class="sub">這場沒有人猜</p>'}
+            ${visible.map(([id,p],i)=> finalRowHtml(i+1, p, { pid: id })).join('') || '<p class="sub">這場沒有人猜</p>'}
           </div>
+          <div class="lb-rest-viewport" style="margin-top:6px" id="final-leaderboard-rest"></div>
         `}
       </div>
     </div></div>
   `);
+  // （三十六後續）已結算過的分支：跟動畫那條路一樣，第 6 名以後塞進同一個
+  // 會自動判斷要不要跑馬燈捲動的小窗，不會因為之後每次 poll 重畫（例如
+  // 許願卡狀態變化觸發的整頁重畫）就打回沒有捲動、直接列出全部人的舊版面。
+  if (!isFirstRender) renderLbRestList(rest, visible.length + 1, { fade: false });
   // （三十，音效改進時發現並修正的既有小缺口）這個畫面每 ~1.5-1.8 秒 poll 一次
   // 就整個 innerHTML 重畫，isFirstRender 只有「第一次看到這個 roundId」那一次
   // 是 true——但 animateFinalLeaderboardReveal() 排的動畫序列拖得比一次 poll
@@ -5251,18 +5455,30 @@ function renderStarWishCardsEntry(){
   return `<button class="btn secondary" style="margin-top:10px" onclick="renderStarWishCardsEditor()">🎁 填寫／編輯三張許願卡</button>`;
 }
 let _wishDraft = ['', '', ''];
+/* （三十五）壽星可以自己決定「這次要不要出最後三名任務」——不是每一輪都
+   想準備任務／講懲罰遊戲，勾掉之後主持人那邊點「最後三名 & 許願卡」會直接
+   跳過猜拳／選卡／公布任務三個畫面，直接進結算（見 goAwardsRps() 的判斷）。
+   預設 true（沒動過這個開關的話維持這個功能加上去之前「一律都出任務」的
+   舊行為），從 lastPlayerState.wishTasksEnabled 帶入既有選擇，跟三張卡片
+   文字一樣是「編輯中的草稿」，存檔前純本地狀態。 */
+let _wishTasksEnabled = true;
 /* A manual screen (see manualPlayerScreen) — free-typing textareas must not
    get blown away by a background poll's re-render landing mid-edit. */
 function renderStarWishCardsEditor(){
   manualPlayerScreen = true;
   const existing = (lastPlayerState && lastPlayerState.wishCards) || ['', '', ''];
   _wishDraft = [existing[0]||'', existing[1]||'', existing[2]||''];
+  _wishTasksEnabled = (lastPlayerState && lastPlayerState.wishTasksEnabled) !== false;
   render(`
     <div class="shell"><div class="center">
       <span class="eyebrow">🎁 三張許願卡</span>
       <h1 class="marquee-title" style="font-size:clamp(22px,6vw,34px)">給最後三名的<span class="hl">任務</span></h1>
       <p class="sub">結算時，最不懂你的三個人會猜拳決定順序，輪流挑一張卡——選到的內容就是他們要完成的任務！</p>
-      <div class="stack" style="width:100%;max-width:400px">
+      <div class="checkbox-row" style="width:100%;max-width:400px">
+        <input type="checkbox" id="wish-tasks-on" ${_wishTasksEnabled?'checked':''} onchange="onToggleWishTasksEnabled(this.checked)">
+        <label for="wish-tasks-on">這次要幫最後三名出任務（不勾的話，頒獎典禮會直接跳過猜拳選卡，不出任務）</label>
+      </div>
+      <div class="stack" id="wish-cards-stack" style="width:100%;max-width:400px${_wishTasksEnabled?'':';opacity:.45;pointer-events:none'}">
         ${[0,1,2].map(i=>`
           <div class="field"><label>許願卡 ${i+1}</label>
             <textarea rows="2" style="resize:vertical" oninput="_wishDraft[${i}]=this.value">${esc(_wishDraft[i])}</textarea>
@@ -5276,9 +5492,23 @@ function renderStarWishCardsEditor(){
     </div></div>
   `);
 }
+/* Toggling the checkbox must NOT call renderStarWishCardsEditor() again — that
+   function re-derives _wishTasksEnabled from lastPlayerState (the last SAVED
+   value) at its top, so a full re-render here would immediately stomp the
+   very change the checkbox just made, back to whatever was last saved. Same
+   reasoning as _wishDraft's oninput not re-rendering: just update the JS
+   variable and patch the one bit of DOM that needs to visually react. */
+function onToggleWishTasksEnabled(checked){
+  _wishTasksEnabled = checked;
+  const stack = document.getElementById('wish-cards-stack');
+  if (stack){
+    stack.style.opacity = checked ? '1' : '.45';
+    stack.style.pointerEvents = checked ? '' : 'none';
+  }
+}
 async function saveWishCards(){
-  await sSet('starcards:' + PLAYER_ID, { text: _wishDraft.slice(), updatedAt: Date.now() });
-  toast('許願卡已儲存！');
+  await sSet('starcards:' + PLAYER_ID, { text: _wishDraft.slice(), hasWishTasks: _wishTasksEnabled, updatedAt: Date.now() });
+  toast(_wishTasksEnabled ? '許願卡已儲存！' : '已儲存：這次不出最後三名任務');
   exitManualScreen();
 }
 function renderPlayerQuestionOrWaiting(state){
@@ -5543,7 +5773,14 @@ function renderPlayerReveal(state){
           ${q.options.map((o,i)=> revealRowHtml(o, i, counts[i], !isFirstRender && shouxingChoice!=null && i===shouxingChoice, 'preveal-opt-'+i, totalAnswered, i===myChoice)).join('')}
         </div>
       </div>
-      ${!isWarmup ? `
+      <!-- （三十五）這塊面板原本整個用 !isWarmup 擋掉——host／spectate 的
+           對應面板從來沒有這個閘門，暖身題一樣會顯示排行榜（只是大家都還是
+           0 分），玩家手機卻整塊消失，三個畫面不一致。改成暖身題也照樣顯示
+           （反正 rankedGuessers() 本來就是照 state.players 目前的真實分數
+           排，暖身題不計分所以自然全部是 0，不用另外造假資料），只是把「還
+           沒擠進前5／排名追逐」那段換成一句清楚的提醒：暖身題不算數，正式
+           題開始分數才會重新從 0 起跳，不然玩家看到自己 0 分、別人也 0 分，
+           容易誤會排行榜壞了或是自己已經落後。 -->
       <div class="panel" style="margin-top:8px;width:100%;max-width:320px">
         <div class="sub" style="text-align:left">🏆 累積排行榜（前 5 名）</div>
         <div class="stack" style="margin-top:8px">
@@ -5555,15 +5792,18 @@ function renderPlayerReveal(state){
             </div>
           `).join('') || '<p class="sub">還沒有排名</p>'}
         </div>
-        ${!inTop5 ? `<p class="sub" style="margin-top:6px">目前總分：<b>${me ? me.score : 0}</b>（還沒擠進前 5，加油！）</p>` : ''}
-        ${chaseInfo ? `
-        <div class="chase">
-          <div class="chase-eyebrow">${CHASE_EYEBROW[chaseInfo.cat]}</div>
-          <div class="chase-line">${_cachedChaseMsg}</div>
-        </div>
-        ` : ''}
+        ${isWarmup
+          ? `<p class="sub" style="margin-top:6px;color:var(--gold);font-weight:700">🔥 暖身題不計分，大家先都是 0 分——正式題開始後分數會重新算喔！</p>`
+          : `
+            ${!inTop5 ? `<p class="sub" style="margin-top:6px">目前總分：<b>${me ? me.score : 0}</b>（還沒擠進前 5，加油！）</p>` : ''}
+            ${chaseInfo ? `
+            <div class="chase">
+              <div class="chase-eyebrow">${CHASE_EYEBROW[chaseInfo.cat]}</div>
+              <div class="chase-line">${_cachedChaseMsg}</div>
+            </div>
+            ` : ''}
+          `}
       </div>
-      ` : ''}
     </div></div>
   `);
   animateOptionBars(document, 150, !isFirstRender);
