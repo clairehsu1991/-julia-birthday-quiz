@@ -226,6 +226,30 @@
   }
   .chip.timer.urgent .num{ font-size:32px; font-weight:800; }
   .chip.shouxing{ background: rgba(232,101,75,0.14); border-color:var(--coral); color:#9e3a27; }
+  /* （2026-09-06）暖身題「不計分」提示——使用者反映這句話太不顯眼，容易被
+     忽略，而且之前只有揭曉頁才看得到，作答當下完全沒有任何提示。這裡新增
+     兩種樣式：.chip.warmup 給題目畫面的 topbar 用（跟計時器、猜猜壽星那兩顆
+     chip 排在一起，作答之前就先看到，不用等揭曉才知道），.warmup-note 給
+     揭曉頁那幾句原本用純文字 .sub 呈現的說明用（放大字級＋加底色邊框，做成
+     一個小標籤而不是一行不起眼的小字）。顏色統一用 --gold（題目列表、暖身題
+     核取方塊本來就用這個顏色標暖身題），跟 --coral（必出題／壽星）、
+     --alert（時間到警示）三種既有語意色分開，一眼就知道「這是暖身提示」。 */
+  .chip.warmup{ background: rgba(242,193,78,0.22); border-color:var(--gold); color:#8a6412; }
+  .warmup-note{
+    display:inline-block; font-size:clamp(15px,2.4vw,18px); font-weight:800; color:#8a6412;
+    background: rgba(242,193,78,0.22); border:1.5px dashed var(--gold); border-radius:12px;
+    padding:8px 16px; margin:4px auto; text-align:center;
+  }
+  /* 「壽星選的是「X」！」——使用者反映這句話（揭曉頁的重點）應該要比其他
+     說明文字更醒目，原本只是套用 .sub 的一般小字＋粗體。改成實心珊瑚色圓角
+     藥丸徽章，維持跟「🤔 壽星選的是…」等待態一樣的容器（只換文字內容跟
+     class），避免翻牌那一刻整個元素跳動尺寸。 */
+  .reveal-answer-banner{
+    display:inline-block; margin:2px auto 6px; padding:9px 24px;
+    font-size:clamp(17px,2.8vw,23px); font-weight:800; color:#fff;
+    background:linear-gradient(135deg, var(--coral), #d9534f);
+    border-radius:999px; box-shadow:0 4px 0 rgba(158,58,39,0.35);
+  }
   @keyframes pulse{ 0%,100%{ transform:scale(1);} 50%{ transform:scale(1.06);} }
   @keyframes timerUrgentPulse{ 0%,100%{ transform:scale(1);} 50%{ transform:scale(1.1);} }
 
@@ -1258,6 +1282,7 @@ let _lastSpecDoneKey = null;
 // animateFinalLeaderboardReveal()，兩邊渲染出來的 DOM id／class 結構相同，
 // 不需要另外寫一份），之後同一輪的重畫維持靜態顯示最終結果，不重播。
 let _lastSpecFinalKey = null;
+let _lastSpecWarmupChimeKey = null; // guards playWarmupChime() so a warmup question's start sound only plays once per question, not on every poll re-render — see renderSpectateQuestion()
 
 /* ---------- generic helpers ---------- */
 function esc(s){
@@ -3555,7 +3580,24 @@ async function processAnswers(){
   }
   if (changed && hostState.status === 'question'){
     await sSet('game:state', hostState);
-    renderHostQuestion();
+    /* （2026-09-06）修正「壽星在加碼 5 秒內壓線作答，主持人畫面卡住」：
+       一旦時間到＋加碼 5 秒也到，hostCountdownTick() 會 clearInterval 停掉
+       200ms 的計時器、切成 hostPickForShouxingMode（等主持人代選）。這個
+       flag 一開，往後就再也沒有任何東西會自動偵測「壽星其實剛剛自己選了」
+       ——因為原本負責偵測的就是那顆已經被停掉的計時器。壽星若剛好在計時器
+       停掉前後這個交界點送出答案（長輪詢回來的時間點比 5 秒稍晚一點點），
+       這裡的迴圈一樣會把她的答案收進 currentAnswers，但畫面只會停在
+       renderHostQuestion() 重畫出的「壽星還沒選」舊文案上，主持人只看得到
+       「提前公布壽星的答案」這顆按鈕、以為卡死，其實點下去仍然有效，只是
+       不知道要點。與其靠主持人自己發現該點哪顆按鈕，不如比照「一般情況下
+       時間到、壽星已經回答」的自動邏輯，這裡也直接自動翻牌，行為前後一致。 */
+    const sx = hostState.shouxingId;
+    if (hostPickForShouxingMode && sx && hostState.currentAnswers[sx]){
+      hostPickForShouxingMode = false;
+      goToReveal();
+    } else {
+      renderHostQuestion();
+    }
   }
 }
 
@@ -3741,6 +3783,16 @@ function playPodiumFanfare(){
 function playCardFlipSound(){
   playChirp(320, 900, 180, 0.15);
 }
+/* （2026-09-06）暖身題開始提示音：使用者想要「開始前有音效說明這題不計
+   分」。刻意選一個不上揚（避免聽起來像 playRevealChime() 那種「好消息」）
+   也不下降（避免像 playTimeUpAlarm() 那種警示）的中性提示——同一個音高
+   連續兩個輕快短音，單純表示「請注意，這是練習題」。播放位置見
+   renderSpectateQuestion()：只在投影頁播，理由跟 animatePodiumReveal() 上面
+   那段說明一樣。 */
+function playWarmupChime(){
+  playBeep(880, 100, 0.16);
+  setTimeout(()=> playBeep(880, 140, 0.16), 150);
+}
 /* Beep spacing shrinks in stages as remainMs approaches 0 — that's the
    "越接近時間到滴得越快" effect the user asked for. Infinity means silent
    (more than 5 seconds left). */
@@ -3833,6 +3885,7 @@ function hostPickForShouxing(idx){
 }
 function renderHostQuestion(){
   const q = hostState.questions[hostState.questionIndex];
+  const isWarmup = !!q.isWarmup;
   const answered = Object.keys(hostState.currentAnswers).length;
   const total = Object.keys(hostState.players).length || 1;
   const pct = Math.min(100, Math.round(answered/total*100));
@@ -3851,12 +3904,13 @@ function renderHostQuestion(){
       <div class="q-content">
         <div class="topbar">
           <div class="chip">${questionProgressLabel(hostState.questions, hostState.questionIndex)}</div>
+          ${isWarmup ? '<div class="chip warmup">🔥 暖身題．不計分</div>' : ''}
           <div class="chip shouxing">🎂 猜猜 ${shouxingP ? nameTag(shouxingP) : ''} 會選什麼</div>
           <div class="chip timer ${hostState.graceActive?'urgent':''}" id="host-timer-chip"><span>⏱</span><span class="num">${timerSecs}</span></div>
         </div>
         ${showPickBanner
           ? `<p class="sub" style="text-align:center;font-weight:700;color:var(--alert)">🎂 ${shouxingP?nameTag(shouxingP):'壽星'}還是沒選，請幫他/她點一個答案 👇</p>`
-          : hostState.graceActive
+          : (hostState.graceActive && !sxAnswered)
             ? `<p class="sub" style="text-align:center;font-weight:700;color:var(--alert)">⏰ ${shouxingP?nameTag(shouxingP):'壽星'}還沒選，加碼 5 秒等他/她！</p>`
             : ''}
         ${q.headerImg? `<img class="q-header-img" src="${q.headerImg}" alt="">` : ''}
@@ -3897,13 +3951,18 @@ function goToReveal(){
     const a = hostState.currentAnswers[id];
     const correct = shouxingChoice != null && a.choice === shouxingChoice;
     const elapsed = a.elapsedMs==null ? hostState.timeLimitMs : Math.max(0, Math.min(a.elapsedMs, hostState.timeLimitMs));
-    // Warm-up questions are practice only: everyone still gets a real
-    // 猜對了/猜錯了 verdict, but no points are awarded and nothing is written
-    // to history, so a warm-up round can't pad anyone's real score or streak.
-    const points = (!isWarmup && correct) ? Math.round(500 + 500 * (1 - elapsed / hostState.timeLimitMs)) : 0;
+    // （2026-09-06）使用者想要暖身題「一樣有分數跑出來，只是為了讓玩家更有
+    // 參與的感覺」——所以分數照樣算給暖身題（下面 a.points 不再用 !isWarmup
+    // 擋掉），玩家手機的揭曉頁才有「+分」可以顯示。但暖身題終究不能真的算數：
+    // 只有非暖身題才把 points 加進 hostState.players[id].score（正式排行榜
+    // 總分），暖身題的分數就只活在這個 a.points／renderPlayerReveal() 的
+    // 「+分」小卡片上，score 本身完全不受影響，跟原本「暖身題不列入排名」的
+    // 行為一致。history／streak 依然完全跳過暖身題（下面 isWarmup continue
+    // 沒有動），賽後回顧紀錄跟連續答對次數都不會被暖身題污染。
+    const points = correct ? Math.round(500 + 500 * (1 - elapsed / hostState.timeLimitMs)) : 0;
     a.correct = correct; a.points = points;
     if (!hostState.players[id]) continue;
-    hostState.players[id].score += points;
+    if (!isWarmup) hostState.players[id].score += points;
     if (isWarmup) continue;
     // Keep a per-question record so the player can review their answers after the game.
     if (!hostState.players[id].history) hostState.players[id].history = [];
@@ -3938,9 +3997,15 @@ function renderHostReveal(){
   // animateRevealLeaderboard()). goToReveal() already added the points to
   // hostState.players[id].score by the time we get here, so back them back out
   // just to compute the starting frame — the authoritative score is untouched.
+  // （2026-09-06）暖身題現在也會算 a.points（見 goToReveal()，純粹是為了讓
+  // 玩家手機上看得到「+分」的感覺），但暖身題從來不會真的加進
+  // hostState.players[id].score——這裡如果照樣扣回 points，score 減掉一個
+  // 從未真正加上去的數字，prevScore 會變成負的，這塊排行榜面板就會顯示錯誤
+  // 的「揭曉前分數」。所以只有非暖身題才需要把 points 扣回去算「揭曉前」；
+  // 暖身題直接用 p.score 本身（反正也一直是 0，不會動）。
   const prevRankedFull = Object.entries(hostState.players)
     .filter(([id]) => id !== sx)
-    .map(([id, p]) => [id, p, p.score - ((hostState.currentAnswers[id] && hostState.currentAnswers[id].points) || 0)])
+    .map(([id, p]) => [id, p, isWarmup ? p.score : p.score - ((hostState.currentAnswers[id] && hostState.currentAnswers[id].points) || 0)])
     .sort((a, b) => b[2] - a[2]);
   const newRankedFull = rankedGuessers(hostState.players, sx);
   // Only show the top 5 — a party-sized guest list made this panel scroll for
@@ -3951,27 +4016,34 @@ function renderHostReveal(){
   const newRanked = newRankedFull.slice(0, 5);
   const visibleIds = new Set(newRanked.map(([id]) => id));
   const prevRanked = prevRankedFull.filter(([id]) => visibleIds.has(id));
-  const sxName = hostState.players[sx] ? hostState.players[sx].name : '';
   const isLast = hostState.questionIndex >= hostState.questions.length - 1;
 
   render(`
     <div class="shell tight"><div class="col reveal-tight">
       ${hostNav(true)}
       <span class="eyebrow">🎂 壽星的選擇</span>
-      ${isWarmup ? '<p class="sub" style="color:var(--coral);font-weight:700">🔥 暖身題．這題不計分</p>' : ''}
-      ${qtextHtml(q.text, "font-size:clamp(14px,2.1vw,19px);max-width:32em", q.alignLeft)}
+      ${isWarmup ? '<p class="warmup-note">🔥 暖身題．這題不計分</p>' : ''}
+      <!-- （2026-09-06）使用者反映揭曉頁的題目文字比下面選項格窄，換行的位置
+           看起來很突兀。根因不是原本的 32em 上限太小這麼單純：.qtext 這個
+           class 本身還帶了 margin-inline:auto，而 flex 版面裡「auto 外距」
+           的優先權比 align-items:stretch 更高——瀏覽器會把多出來的空間讓
+           外距吸收掉，而不是把方塊本身撐寬，所以就算把 max-width 調到
+           100%，方塊還是只會照文字內容縮到剛好的寬度，不會真的變寬。這裡
+           額外加一個 width:100%，才會真的讓題目文字方塊撐滿跟下面
+           .options-grid 一樣的寬度（.col 的寬度上限），文字夠長時自然用得到
+           這個寬度才換行，不會提早換行。 -->
+      ${qtextHtml(q.text, "font-size:clamp(14px,2.1vw,19px);max-width:100%;width:100%", q.alignLeft)}
       ${shouxingChoice==null
         ? '<p class="sub" style="text-align:center">壽星這題沒來得及作答，這題大家都不計分</p>'
-        : `<p class="sub" id="reveal-suspense" style="text-align:center;font-weight:700">🤔 壽星選的是<span class="waiting-dots"><span>.</span><span>.</span><span>.</span></span></p>`}
+        : `<p class="reveal-answer-banner" id="reveal-suspense">🤔 壽星選的是<span class="waiting-dots"><span>.</span><span>.</span><span>.</span></span></p>`}
       <div class="options-grid">
         ${q.options.map((o,i)=> revealRowHtml(o, i, counts[i], false, 'reveal-opt-' + i, totalAnswered)).join('')}
       </div>
       <div class="panel">
         <h2>🏆 目前排行榜（前 5 名）</h2>
-        ${sxName? `<p class="sub" style="margin-top:2px">🎂 ${nameTag(hostState.players[sx])} 是今天的壽星，負責出正解，不列入排名</p>`:''}
         <div class="stack" id="reveal-leaderboard">
           ${prevRanked.map(([id,p,prevScore],i)=>{
-            const points = (hostState.currentAnswers[id] && hostState.currentAnswers[id].points) || 0;
+            const points = (!isWarmup && hostState.currentAnswers[id] && hostState.currentAnswers[id].points) || 0;
             return `
             <div class="lb-row" data-pid="${id}">
               <div class="lb-rank ${i===0?'top1':i===1?'top2':i===2?'top3':''}">${i+1}</div>
@@ -3981,7 +4053,7 @@ function renderHostReveal(){
             </div>
           `;}).join('') || '<p class="sub">還沒有人猜</p>'}
         </div>
-        ${isWarmup ? `<p class="sub" style="margin-top:6px;color:var(--coral);font-weight:700">🔥 暖身題不計分，正式題開始後分數會重新算喔！</p>` : ''}
+        ${isWarmup ? `<p class="warmup-note" style="margin-top:6px">🔥 暖身題不計分，正式題開始後分數會重新算喔！</p>` : ''}
       </div>
       <div class="btn-row">
         <button class="btn" onclick="${isLast? 'goFinal()' : 'nextQuestion()'}">${isLast? '🏁 查看最終結果 →' : '下一題 →'}</button>
@@ -5188,15 +5260,27 @@ function renderSpectateChapterIntro(state){
 }
 function renderSpectateQuestion(state){
   const q = state.questions[state.questionIndex];
+  const isWarmup = !!q.isWarmup;
   const answered = Object.keys(state.currentAnswers || {}).length;
   const total = Object.keys(state.players || {}).length || 1;
   const pct = Math.min(100, Math.round(answered/total*100));
   const shouxingP = state.players[state.shouxingId];
+  // （2026-09-06）暖身題開始提示音——只在投影頁播（理由跟 animatePodiumReveal()
+  // 上面那段說明一樣：投影頁才是真正放給全場聽的畫面，而且主持人自己點按鈕
+  // 觸發的渲染是瞬間的，投影頁要等下一次 poll 才追得上，兩邊都播反而會先聽到
+  // 主持人端的聲音、投影頁畫面卻還沒切過來）。用 questionIndex 當 key，跟其他
+  // _lastSpecXxxKey 同一個模式，確保同一題重新 poll 渲染時不會重複響。
+  const warmupChimeKey = 'q' + state.questionIndex;
+  if (isWarmup && _lastSpecWarmupChimeKey !== warmupChimeKey){
+    _lastSpecWarmupChimeKey = warmupChimeKey;
+    playWarmupChime();
+  }
   render(`
     <div class="shell"><div class="col">
       <div class="q-content">
         <div class="topbar">
           <div class="chip">${questionProgressLabel(state.questions, state.questionIndex)}</div>
+          ${isWarmup ? '<div class="chip warmup">🔥 暖身題．不計分</div>' : ''}
           <div class="chip shouxing">🎂 猜猜 ${shouxingP ? nameTag(shouxingP) : ''} 會選什麼</div>
           <div class="chip timer" id="spec-timer-chip"><span>⏱</span><span class="num">--</span></div>
         </div>
@@ -5264,7 +5348,6 @@ function renderSpectateReveal(state){
   const counts = [0,0,0,0];
   Object.entries(state.currentAnswers || {}).forEach(([id,a])=>{ if (id!==sx && a.choice!=null) counts[a.choice]++; });
   const totalAnswered = counts.reduce((a,b)=>a+b, 0);
-  const sxName = state.players[sx] ? state.players[sx].name : '';
   const key = (state.roundId||'') + '_q' + state.questionIndex;
   const isFirstRender = _lastSpecRevealKey !== key;
   _lastSpecRevealKey = key;
@@ -5285,9 +5368,12 @@ function renderSpectateReveal(state){
   const newRanked = newRankedFull.slice(0, 5);
   let prevRanked = null;
   if (isFirstRender){
+    // 跟 renderHostReveal() 同一個理由：暖身題的 points 現在也會算（給玩家
+    // 手機看的「+分」用），但從不真的加進 p.score，所以「揭曉前分數」暖身題
+    // 直接用 p.score，非暖身題才需要扣回 points。
     const prevRankedFull = Object.entries(state.players)
       .filter(([id]) => id !== sx)
-      .map(([id, p]) => [id, p, p.score - ((state.currentAnswers[id] && state.currentAnswers[id].points) || 0)])
+      .map(([id, p]) => [id, p, isWarmup ? p.score : p.score - ((state.currentAnswers[id] && state.currentAnswers[id].points) || 0)])
       .sort((a, b) => b[2] - a[2]);
     const visibleIds = new Set(newRanked.map(([id]) => id));
     prevRanked = prevRankedFull.filter(([id]) => visibleIds.has(id));
@@ -5295,11 +5381,11 @@ function renderSpectateReveal(state){
   render(`
     <div class="shell tight"><div class="col reveal-tight">
       <span class="eyebrow">🎂 壽星的選擇</span>
-      ${isWarmup ? '<p class="sub" style="color:var(--coral);font-weight:700">🔥 暖身題．這題不計分</p>' : ''}
-      ${qtextHtml(q.text, "font-size:clamp(14px,2.1vw,19px);max-width:32em", q.alignLeft)}
+      ${isWarmup ? '<p class="warmup-note">🔥 暖身題．這題不計分</p>' : ''}
+      ${qtextHtml(q.text, "font-size:clamp(14px,2.1vw,19px);max-width:100%;width:100%", q.alignLeft)}
       ${shouxingChoice==null
         ? '<p class="sub" style="text-align:center">壽星這題沒來得及作答，這題大家都不計分</p>'
-        : `<p class="sub" id="spec-reveal-suspense" style="text-align:center;font-weight:700">${isFirstRender
+        : `<p class="reveal-answer-banner" id="spec-reveal-suspense">${isFirstRender
             ? `🤔 壽星選的是<span class="waiting-dots"><span>.</span><span>.</span><span>.</span></span>`
             : `🎂 壽星選的是「${esc(shouxingLabel)}」！`}</p>`}
       <div class="options-grid">
@@ -5307,11 +5393,10 @@ function renderSpectateReveal(state){
       </div>
       <div class="panel">
         <h2>🏆 目前排行榜（前 5 名）</h2>
-        ${sxName? `<p class="sub" style="margin-top:2px">🎂 ${nameTag(state.players[sx])} 是今天的壽星，負責出正解，不列入排名</p>`:''}
         <div class="stack" id="reveal-leaderboard">
           ${isFirstRender
             ? (prevRanked.map(([id,p,prevScore],i)=>{
-                const points = (state.currentAnswers[id] && state.currentAnswers[id].points) || 0;
+                const points = (!isWarmup && state.currentAnswers[id] && state.currentAnswers[id].points) || 0;
                 return `
                 <div class="lb-row" data-pid="${id}">
                   <div class="lb-rank ${i===0?'top1':i===1?'top2':i===2?'top3':''}">${i+1}</div>
@@ -5328,7 +5413,7 @@ function renderSpectateReveal(state){
                 </div>
               `).join('') || '<p class="sub">還沒有人猜</p>')}
         </div>
-        ${isWarmup ? `<p class="sub" style="margin-top:6px;color:var(--coral);font-weight:700">🔥 暖身題不計分，正式題開始後分數會重新算喔！</p>` : ''}
+        ${isWarmup ? `<p class="warmup-note" style="margin-top:6px">🔥 暖身題不計分，正式題開始後分數會重新算喔！</p>` : ''}
       </div>
     </div></div>
   `);
@@ -5903,10 +5988,12 @@ function renderPlayerQuestionOrWaiting(state){
   if (hasAnsweredCurrent){ renderPlayerAnswered(state); return; }
   const q = state.questions[state.questionIndex];
   const isSx = state.shouxingId === PLAYER_ID;
+  const isWarmup = !!q.isWarmup;
   render(`
     <div class="shell"><div class="col" style="justify-content:center">
       <div class="topbar" style="justify-content:center;gap:8px">
         <div class="chip">${questionProgressLabel(state.questions, state.questionIndex)}</div>
+        ${isWarmup ? '<div class="chip warmup">🔥 暖身題．不計分</div>' : ''}
         <div class="chip timer" id="player-timer-chip"><span>⏱</span><span class="num">--</span></div>
       </div>
       <p class="sub" style="text-align:center;font-weight:700">${isSx? '🎂 這題換你決定！大家會猜你的答案' : '🤔 猜猜壽星會選哪一個？'}</p>
@@ -6088,7 +6175,7 @@ function renderPlayerReveal(state){
     const matched = Object.entries(state.currentAnswers).filter(([id,a])=> id!==sx && a.correct).length;
     render(`
       <div class="shell"><div class="center">
-        ${isWarmup ? '<span class="eyebrow" style="color:var(--coral)">🔥 暖身題．不計分</span>' : ''}
+        ${isWarmup ? '<p class="warmup-note">🔥 暖身題．不計分</p>' : ''}
         <div style="font-size:54px">🎂</div>
         <h1 class="marquee-title" style="font-size:clamp(22px,6vw,32px)">你選的是「${esc(shouxingOpt? shouxingOpt.label : '')}」</h1>
         <p class="sub">有 <b>${matched}</b> 人猜中你的答案！</p>
@@ -6137,7 +6224,7 @@ function renderPlayerReveal(state){
 
   render(`
     <div class="shell"><div class="center">
-      ${isWarmup ? '<span class="eyebrow" style="color:var(--coral)">🔥 暖身題．這題不計分</span>' : ''}
+      ${isWarmup ? '<p class="warmup-note">🔥 暖身題．這題不計分</p>' : ''}
       <div style="font-size:54px">${shouxingChoice==null ? '⌛' : gotIt ? '🎯' : '❌'}</div>
       <h1 class="marquee-title" style="font-size:clamp(22px,7vw,34px);color:${gotIt?'var(--moss)':'var(--ink)'}">
         ${shouxingChoice==null ? '壽星這題沒作答' : gotIt ? '猜對了！' : '猜錯了'}
@@ -6147,7 +6234,7 @@ function renderPlayerReveal(state){
         <p class="sub">壽星選的是：${esc(shouxingOpt.label)}</p>
         ${shouxingOpt.img? `<img src="${shouxingOpt.img}" style="width:120px;height:120px;object-fit:cover;border-radius:16px">`:''}
       ` : ''}
-      ${(!isWarmup && gotIt) ? `<div class="chip"><span>+</span><span class="num">${mine.points}</span><span>分</span></div>` : ''}
+      ${gotIt ? `<div class="chip"><span>+</span><span class="num">${mine.points}</span><span>分</span></div>` : ''}
       ${(!isWarmup && streak>=2) ? `<p class="sub" style="font-weight:700;color:var(--gold)">🔥 連續答對 ${streak} 題！</p>` : ''}
       <p class="sub" style="font-weight:600">${esc(_cachedEncourageMsg || '')}</p>
       <div class="panel" style="margin-top:6px;width:100%;max-width:320px">
@@ -6176,7 +6263,7 @@ function renderPlayerReveal(state){
           `).join('') || '<p class="sub">還沒有排名</p>'}
         </div>
         ${isWarmup
-          ? `<p class="sub" style="margin-top:6px;color:var(--coral);font-weight:700">🔥 暖身題不計分，大家先都是 0 分——正式題開始後分數會重新算喔！</p>`
+          ? `<p class="warmup-note" style="margin-top:6px">🔥 暖身題不計分，大家先都是 0 分——正式題開始後分數會重新算喔！</p>`
           : `
             ${!inTop5 ? `<p class="sub" style="margin-top:6px">目前總分：<b>${me ? me.score : 0}</b>（還沒擠進前 5，加油！）</p>` : ''}
             ${chaseInfo ? `
