@@ -80,22 +80,68 @@
      z-index 跟 bg-scene/bg-veil 一樣是 0，只是 DOM 順序排在veil 後面，所以
      畫在veil 上方；#app 是 z-index:1，永遠蓋在最上面，不會被光斑擋到）。
      只在頁面載入時 spawn 一次，跟畫面切換（render()）無關，所以全部畫面
-     背後都會有這個緩慢飄動的效果，不只是某一個畫面。 */
+     背後都會有這個緩慢飄動的效果，不只是某一個畫面。
+     2026-09-06 追加：使用者說完全看不出光斑在動——根因是原本 --dx/--dy 用
+     百分比寫在 translate() 裡，CSS 的 translate(%) 是相對「元素自己的寬高」
+     算的，光斑本身才 60~130px，7% 只等於 4~9px，幾乎看不出來。改成螢火蟲
+     效果：位移改用 vw/vh（相對整個畫面，位移真的看得到）、路徑改成三段
+     隨機航點（不是單純來回擺盪）、額外疊一個獨立的 sunBlobTwinkle 忽明忽暗
+     動畫（週期比飄移短很多，兩個動畫分別只動 transform／opacity，互不干擾）、
+     整體週期也從 9~16 秒縮短到 4~7 秒（使用者要求「稍微快一點」），尺寸也
+     縮小成 16~34px 的點光源，更像螢火蟲而不是大片光斑。 */
   .sun-layer{ position:fixed; inset:0; z-index:0; pointer-events:none; overflow:hidden; }
   .sun-blob{
     position:absolute; left:var(--sx); top:var(--sy); width:var(--sz); height:var(--sz);
     border-radius:50%;
-    background:radial-gradient(circle, rgba(255,214,110,0.76) 0%, rgba(255,214,110,0.44) 35%, rgba(255,214,110,0) 70%);
+    background:radial-gradient(circle, rgba(255,226,140,0.95) 0%, rgba(255,214,110,0.5) 40%, rgba(255,214,110,0) 72%);
     opacity:var(--op); will-change:transform,opacity;
-    animation:sunBlobDrift var(--dur) ease-in-out var(--delay) infinite;
+    animation:
+      sunBlobDrift var(--dur) ease-in-out var(--delay) infinite,
+      sunBlobTwinkle var(--tdur) ease-in-out var(--tdelay) infinite;
   }
   @keyframes sunBlobDrift{
-    0%{ transform:translate(0,0) scale(0.9); opacity:calc(var(--op) * 0.55); }
-    50%{ transform:translate(var(--dx),var(--dy)) scale(1.15); opacity:var(--op); }
-    100%{ transform:translate(0,0) scale(0.9); opacity:calc(var(--op) * 0.55); }
+    0%{ transform:translate(0,0) scale(0.85); }
+    25%{ transform:translate(var(--dx1),var(--dy1)) scale(1.05); }
+    50%{ transform:translate(var(--dx2),var(--dy2)) scale(1.15); }
+    75%{ transform:translate(var(--dx3),var(--dy3)) scale(1); }
+    100%{ transform:translate(0,0) scale(0.85); }
   }
-  @media (prefers-reduced-motion: reduce){ .sun-blob{ animation:none; opacity:var(--op); } }
+  @keyframes sunBlobTwinkle{
+    0%, 100%{ opacity:calc(var(--op) * 0.15); }
+    50%{ opacity:var(--op); }
+  }
+  @media (prefers-reduced-motion: reduce){ .sun-blob{ animation:none; opacity:calc(var(--op) * 0.6); } }
 
+  /* （四十三）答題倒數最後 5 秒：使用者反映原本只放大/發光計時器數字本身
+     （見上面 .chip.timer.urgent）不夠明顯，希望「連帶整個畫面的底色都要
+     被暈染」。這裡疊一層跟 .sun-layer 同一組固定背景（z-index:0、DOM 順序
+     排在最後、蓋在光斑上面，但一樣蓋不到 z-index:1 的 #app），平常完全透明
+     不擋畫面，只有 <body> 被加上 .countdown-tint 這個 class 時才會用暈染色
+     淡入、並跟計時器數字用同一顆 timerUrgentPulse 節奏（0.85s）一起脈動——
+     兩邊視覺上是「同一個警示」的兩種呈現，不是各跳各的。
+     .countdown-tint 這個 class 由 updateHostTimerUI()／updateSpectateTimerUI()／
+     updatePlayerTimerUI() 三邊各自在自己的 tick 裡跟 .chip.timer.urgent 同一行
+     一起 toggle（三邊都會暈染，主持人／投影／玩家手機一致），真正的「隨時
+     清乾淨」則是交給共用的 render() 函式——每次 render() 換頁都會先把這個
+     class 拿掉，離開題目畫面（進揭曉、進大廳……）自然就不會殘留暈染，不用
+     在幾十個離開題目畫面的呼叫點各自寫一次清除。 */
+  .countdown-tint-layer{
+    position:fixed; inset:0; z-index:0; pointer-events:none;
+    background: radial-gradient(ellipse at center,
+      rgba(217,83,79,0.10) 0%, rgba(217,83,79,0.24) 55%, rgba(217,83,79,0.42) 100%);
+    opacity:0; transition:opacity .35s ease;
+  }
+  body.countdown-tint .countdown-tint-layer{
+    opacity:1;
+    animation: countdownTintPulse 0.85s ease-in-out infinite;
+  }
+  @keyframes countdownTintPulse{
+    0%, 100%{ opacity:0.5; }
+    50%{ opacity:1; }
+  }
+  @media (prefers-reduced-motion: reduce){
+    body.countdown-tint .countdown-tint-layer{ animation:none; opacity:0.75; }
+  }
 
   .shell{ flex:1; display:flex; flex-direction:column; align-items:center; padding: clamp(16px,4vw,40px); width:100%; }
   .col{ width:100%; max-width: 920px; margin:0 auto; display:flex; flex-direction:column; gap:16px; flex:1; }
@@ -529,6 +575,33 @@
     .lb-rest-viewport.scrolling{ -webkit-mask-image:none; mask-image:none; }
   }
 
+  /* （四十三）最終排行榜「全員跑馬燈」：使用者要求公布完前三名之後，前三名
+     不要留在頂部靜態卡片、其他人繼續小窗跑馬燈，而是全部人（含前三名皇冠列）
+     一起收進同一條跑馬燈，反覆循環。renderLbFullMarquee() 會把 #final-leaderboard
+     那個原本裝前三名的頂部卡片隱藏起來，改把「所有人」都塞進
+     #final-leaderboard-rest 這個小窗，所以小窗需要比原本「只裝第 6 名以後」
+     大很多的高度，才裝得下前三名＋其餘所有人一起卷動時，畫面看起來夠份量。
+     第一版寫成 clamp(320px,56vh,560px)，實測 11 位玩家在 1366×768／1280×720／
+     1600×900／1152×648 都會把整頁撐出捲軸（56vh 沒有扣掉上面「總排行榜」
+     標題／眉標跟下面按鈕列固定佔掉的高度，算出來的小窗比實際可用空間大了
+     一截）；改成跟頒獎台 --pw 那次一樣的算法——用 calc(100vh - 500px) 反推
+     實際固定版面高度，500 這個數字就是拿這裡量出來的「小窗以外、上下其他
+     元素」總高度反推回去的，保證扣掉這些固定區塊之後還在一屏內；clamp 的
+     160px／560px 上下限則分別擋住「螢幕很矮」跟「螢幕很高」兩種極端，避免
+     小窗小到看不出跑馬燈、或大到不成比例。 */
+  .lb-rest-viewport.full{ max-height:clamp(160px, calc(100vh - 500px), 560px); }
+
+  /* 跑馬燈捲到一輪結束、即將無縫接回開頭時，插入一條淡淡的分隔線＋提示文字，
+     讓看的人知道「這是同一份名單重新開始」，不是又新增了名次。因為
+     translateY(-50%) 的無縫捲動機制要求「重複的最小單位」完全一樣，所以這條
+     分隔列是跟名單一起被複製兩份的（見 renderLbFullMarquee() 裡 unit = rowsHtml
+     + seam，再 unit+unit），不是額外插在正中間。 */
+  .lb-seam{
+    display:flex; align-items:center; justify-content:center; gap:10px;
+    padding:6px 0; font-size:12px; font-weight:800; color:var(--ink-dim);
+  }
+  .lb-seam::before, .lb-seam::after{ content:''; flex:1; height:0; border-top:1.5px dashed rgba(46,36,24,0.25); }
+
   /* （三十二）排名追逐：只出現在玩家自己手機的公布答案畫面，緊接在既有的
      「累積排行榜」面板裡面，點名前面／並列的是誰、差幾分，用嗆辣一點的語氣
      鼓勵追分。跟排行榜面板共用同一張卡片（不是獨立面板），用漸層底色＋
@@ -599,8 +672,43 @@
        都不會裁切也不會捲動的放大幅度，之後如果確定投影的螢幕更高、有更多
        直向空間，可以再往上加）。上緣留白也從 90px 加到 130px，蓋掉 --pw 變
        大後 1 號角色＋皇冠頂出去更多的量，避免跟上面「最懂壽星前三名」標題
-       疊字。 */
-    margin:155px auto 6px;
+       疊字。
+       （2026-09-06，四十三）使用者第二次反映「投影頁看到的畫面還是太小」——
+       上面這串沿革其實已經說明了原因：--pw 雖然寫成 min(58vw,430px)，但
+       430px 這個絕對值上限，在任何寬度超過 741px（430/0.58）的螢幕上都會
+       先被打到，也就是「不管投影機多大台，凸台永遠卡在 430px 寬」，58vw
+       那段實際上只在很窄的手機直式畫面才有作用，等於白調——這正是「還是
+       太小」的根本原因，不是感受問題。這次改成讓 --pw 同時吃「畫面寬度」
+       跟「畫面高度」兩個上限（見 renderHostAwardsPodium()/
+       renderSpectateAwardsPodium() 的行內 style：
+       min(70vw, calc((100vh - 380px)*1.202), 620px)），vh 那一項的數字是拿
+       這裡量出來的固定版面高度（標題／按鈕列／名牌列這些不太隨 --pw 變動
+       的部分）反推回去，保證不管螢幕多高、算出來的凸台再怎麼放大，扣掉
+       這些固定區塊之後都還在一屏高度內、不用捲動；70vw／620px 則分別擋住
+       「螢幕很高但很窄」跟「螢幕大到誇張（例如超寬螢幕、4K）」這兩種極端
+       情況，三者一起用 min() 取最保守的那個，畫面越大凸台就真的跟著變大，
+       不會再卡在同一個絕對值（實測 1366×768 --pw 約 466px、1920×1080／
+       1600×900 都會頂到 620px 這個上限，比原本的 430px 明顯放大）。連帶把
+       這裡的 margin-top 也從固定的 155px 改成跟 --pw 成比例的
+       calc(var(--pw)*0.36)——因為角色＋皇冠往上突出 .podium 容器頂端的量
+       本來就是跟著 --pw 等比放大的（角色身高是 riserh 的比例、riserh 又是
+       --pw 的比例），原本寫死 155px 只在 --pw≈430 附近抓得準留白夠不夠，
+       --pw 一旦隨畫面變大，固定留白就會不夠；0.36 這個係數是刻意選來盡量
+       貼近原本 155/430≈0.36 的留白比例，讓「皇冠跟上面標題的距離」大致
+       維持原本的鬆緊，不會因為換算式就無端變得更擠。
+       誠實補充一個實測發現、但這次沒有完全解決的既有小狀況：皇冠圖片本身
+       是跟著角色頭部比例（--head-scale，見 AVATAR_HEAD_SCALE）縮放的，
+       頭比較大的幾種角色（dolphin/fish/koala/mushroom/turtle，--head-scale
+       1.12）皇冠也跟著比較大，這種角色如果拿第一名，皇冠本來在舊版
+       --pw:430 就已經會些微疊到「前三名」標題的最下緣一點點（實測疊了
+       約 40px 的圖片透明邊框，但看起來只有輕微視覺重疊，不是嚴重裁切）；
+       這次 --pw 整體放大後，同一批頭大角色的皇冠疊字幅度會比原本再明顯
+       一些（因為皇冠尺寸跟著整組放大、爬升速度比留白快一點）。這不是這次
+       新增的功能性問題（不影響捲動或版面），是放大既有場景時一併發現的
+       裝飾性小瑕疵，之後如果要徹底解決可能要另外調整皇冠本身的縮放曲線
+       或版面留白比例，這次先不做（避免又走上「為了留白犧牲放大幅度」的
+       回頭路）。 */
+    margin: calc(var(--pw)*0.36) auto 6px;
   }
   /* 暖色調的光暈貼在凸台後面，讓頒獎台這一塊在森林背景上看起來溫暖、有派對感
      一點（只有頒獎台附近會這樣，不是整頁背景都變）。 */
@@ -940,6 +1048,7 @@
 <div class="bg-scene" aria-hidden="true"></div>
 <div class="bg-veil" aria-hidden="true"></div>
 <div class="sun-layer" id="sunLayer" aria-hidden="true"></div>
+<div class="countdown-tint-layer" aria-hidden="true"></div>
 <div id="app"></div>
 
 <script>
@@ -954,33 +1063,43 @@ var qrcode=function(){function r(t,e){if(void 0===t.length)throw new Error(t.len
    No Claude account needed for players — everyone just needs the same WiFi.
    ============================================================ */
 
-/* ---------- 森林光斑（2026-09-06，示意圖延伸題確認後套用） ----------
+/* ---------- 森林光斑／螢火蟲效果（2026-09-06，示意圖延伸題確認後套用） ----------
    跟畫面切換（render()）無關，頁面載入時 spawn 一次到固定的 #sunLayer，
-   全部畫面背後都會有這個緩慢飄動的效果。濃度是使用者選的「現在濃度
-   降成 80%」版本，只有 opacity／漸層透明度這些跟濃度有關的數字乘了
-   0.8，飄動速度、大小、顆數都跟示意圖的「現在濃度」版本一樣沒有變。 */
+   全部畫面背後都會有這個效果。濃度是使用者選的「現在濃度降成 80%」版本，
+   只有 opacity／漸層透明度這些跟濃度有關的數字乘了 0.8。
+   2026-09-06 追加：使用者反映看不出來在動，改成螢火蟲效果——位移改用
+   vw/vh（相對整個畫面），飄動路徑給三個隨機航點，速度也加快，另外加一個
+   忽明忽暗的 twinkle 週期，尺寸縮小成點光源。 */
 (function spawnSunBlobs(){
   const layer = document.getElementById('sunLayer');
   if (!layer) return;
-  const n = 5;
+  const n = 7;
   for (let i = 0; i < n; i++){
     const el = document.createElement('div');
     el.className = 'sun-blob';
     const sx = 5 + Math.random() * 80;
     const sy = 5 + Math.random() * 70;
-    const sz = (60 + Math.random() * 70).toFixed(0) + 'px';
-    const dx = (Math.random() * 14 - 7).toFixed(1) + '%';
-    const dy = (Math.random() * 10 - 5).toFixed(1) + '%';
-    const dur = (9 + Math.random() * 7).toFixed(1) + 's';
-    const delay = (-Math.random() * 14).toFixed(1) + 's';
-    const op = ((0.55 + Math.random() * 0.3) * 0.8).toFixed(2); // 現在濃度(0.55–0.85) 再乘 0.8
+    const sz = (16 + Math.random() * 18).toFixed(0) + 'px';
+    const wp = () => [
+      (Math.random() * 10 - 5).toFixed(1) + 'vw',
+      (Math.random() * 8 - 4).toFixed(1) + 'vh'
+    ];
+    const [dx1, dy1] = wp(), [dx2, dy2] = wp(), [dx3, dy3] = wp();
+    const dur = (4 + Math.random() * 3).toFixed(1) + 's';       // 飄移一圈的週期，比原本的 9~16 秒快很多
+    const delay = (-Math.random() * 7).toFixed(1) + 's';
+    const tdur = (1.2 + Math.random() * 1.6).toFixed(1) + 's';  // 忽明忽暗的閃爍週期
+    const tdelay = (-Math.random() * 2.8).toFixed(1) + 's';
+    const op = ((0.55 + Math.random() * 0.3) * 0.8).toFixed(2); // 現在濃度(0.55–0.85) 再乘 0.8，維持使用者選的濃度
     el.style.setProperty('--sx', sx + '%');
     el.style.setProperty('--sy', sy + '%');
     el.style.setProperty('--sz', sz);
-    el.style.setProperty('--dx', dx);
-    el.style.setProperty('--dy', dy);
+    el.style.setProperty('--dx1', dx1); el.style.setProperty('--dy1', dy1);
+    el.style.setProperty('--dx2', dx2); el.style.setProperty('--dy2', dy2);
+    el.style.setProperty('--dx3', dx3); el.style.setProperty('--dy3', dy3);
     el.style.setProperty('--dur', dur);
     el.style.setProperty('--delay', delay);
+    el.style.setProperty('--tdur', tdur);
+    el.style.setProperty('--tdelay', tdelay);
     el.style.setProperty('--op', op);
     layer.appendChild(el);
   }
@@ -1147,7 +1266,16 @@ function esc(s){
     .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 function app(){ return document.getElementById('app'); }
-function render(html){ app().innerHTML = html; }
+// （四十三）每次換頁都先把「答題倒數最後 5 秒」的全畫面暈染 class 拿掉——
+// 這個 class 只該在題目畫面、剩不到 5 秒時才出現，離開題目畫面（進揭曉、
+// 進大廳、進頒獎台……）理當立刻消失。與其在幾十個離開題目畫面的呼叫點
+// 各自清一次，不如在這個唯一、所有畫面都會經過的共用 render() 這裡統一
+// 清掉——真的還在題目畫面倒數的那幾個畫面，會在這次 render() 之後緊接著
+// 同步呼叫 updateHostTimerUI()／updateSpectateTimerUI()／updatePlayerTimerUI()
+// 立刻依目前剩餘秒數重新 toggle 回來（跟 .chip.timer.urgent 同一行一起
+// toggle，見那三個函式），兩者在同一輪 JS 執行內完成、瀏覽器還沒機會畫出
+// 中間那一格「先拿掉」的畫面，不會閃爍。
+function render(html){ app().innerHTML = html; document.body.classList.remove('countdown-tint'); }
 function sleep(ms){ return new Promise(resolve => setTimeout(resolve, ms)); }
 /* （三十七）主持人／玩家／投影頁三支長輪詢迴圈（runHostPollLoop／
    runPlayerPollLoop／runSpectatePollLoop）本來是直接 `await xPollTick()`，
@@ -1619,6 +1747,45 @@ function renderLbRestList(rest, startRank, opts){
   if (opts.fade){
     requestAnimationFrame(()=>{
       restEl.querySelectorAll('.lb-row').forEach(row => { row.style.transition = 'opacity .5s ease'; row.style.opacity = '1'; });
+    });
+  }
+}
+/* （四十三）2026-09-06：最終排行榜示意圖⑦確認後套用——公布完前三名的懸疑
+   （撒花／戴皇冠）之後，把原本「前5名定住＋第6名以後小窗跑馬燈」收成一條
+   包含全部名次（含前三名，皇冠照樣在）的跑馬燈，不夠長就靜態顯示、超過
+   視窗高度才複製一份無限捲動，並在複製的接縫加一條「🔁 新一輪」分隔列，
+   捲到那裡就知道是重新開始、不是同一份名單重複播放。呼叫方式跟
+   renderLbRestList() 一樣是純 DOM 操作、共用同一個 #final-leaderboard-rest
+   容器（把它從「只放6+名」升級成「full」模式放全部人），呼叫時把上面
+   #final-leaderboard 那個前5名靜態清單藏起來，避免前5名同時出現兩次。 */
+function renderLbFullMarquee(all, opts){
+  opts = opts || {};
+  const topStatic = document.getElementById('final-leaderboard');
+  if (topStatic) topStatic.style.display = 'none';
+  const restEl = document.getElementById('final-leaderboard-rest');
+  if (!restEl) return;
+  restEl.classList.add('full');
+  restEl.classList.remove('scrolling');
+  if (!all.length){ restEl.innerHTML = ''; return; }
+  const rowsHtml = all.map(([id,p],i)=> finalRowHtml(i+1, p, { pid: id })).join('');
+  restEl.innerHTML = `<div class="lb-rest-track">${rowsHtml}</div>`;
+  const track = restEl.querySelector('.lb-rest-track');
+  if (opts.fade){
+    restEl.style.transition = 'none';
+    restEl.style.opacity = '0';
+  }
+  if (track.scrollHeight > restEl.clientHeight + 2){
+    const seam = '<div class="lb-seam">🔁 新一輪．由第一名開始</div>';
+    const unit = rowsHtml + seam;
+    track.innerHTML = unit + unit; // 複製一份（含分隔列），動畫跑到 -50% 正好無縫接回開頭
+    const singleHeight = track.scrollHeight / 2;
+    track.style.animationDuration = Math.max(8, singleHeight / 26).toFixed(1) + 's';
+    restEl.classList.add('scrolling');
+  }
+  if (opts.fade){
+    requestAnimationFrame(()=>{
+      restEl.style.transition = 'opacity .6s ease';
+      restEl.style.opacity = '1';
     });
   }
 }
@@ -3631,6 +3798,7 @@ function updateHostTimerUI(remainMs){
     const secs = Math.ceil(remainMs/1000);
     chip.querySelector('.num').textContent = secs;
     chip.classList.toggle('urgent', secs <= 5);
+    document.body.classList.toggle('countdown-tint', secs <= 5);
   }
   tickCountdownSound(remainMs);
   if (bar){
@@ -4008,6 +4176,12 @@ function animateFinalLeaderboardReveal(visible, rest, playSound){
     // Anyone past the animated top 5: fade in below, auto-scrolling if the
     // full list doesn't fit in the small window (see renderLbRestList()).
     renderLbRestList(rest, visible.length + 1, { fade: true });
+    // （四十三）使用者確認：前三名的懸疑公布（撒花／戴皇冠）維持不變，但
+    // 公布完之後，全部名次（含前三名）要合併成同一條、一起無限跑馬燈——不
+    // 要再維持「前5名定住＋第6名以後小窗跑馬燈」這種分兩段的版面。最後一個
+    // 皇冠（第1名）在 1400ms 跳出，這裡再等 1.5 秒讓大家看一下撒花的畫面，
+    // 2900ms 整個收成 renderLbFullMarquee() 的單一跑馬燈。
+    setTimeout(()=> renderLbFullMarquee(visible.concat(rest), { fade: true }), 2900);
   };
   if (!visible.length){ crownTop3(); return; }
   const container = document.getElementById('final-leaderboard');
@@ -4134,7 +4308,7 @@ function renderHostAwardsPodium(){
       <h1 class="marquee-title">最懂壽星<span class="hl">前三名</span></h1>
       <div class="awards-layout">
         <div class="podium-wrap">
-          <div class="podium" id="award-podium" style="--pw:min(58vw,430px)">
+          <div class="podium" id="award-podium" style="--pw:min(70vw, calc((100vh - 380px)*1.202), 620px)">
             <img class="riser-img" src="${PODIUM_RISER_IMG}" alt="頒獎台">
             ${top3[1]?podiumCharHtml(2,'ap-2',top3[1][1]):''}
             ${top3[0]?podiumCharHtml(1,'ap-1',top3[0][1]):''}
@@ -5069,6 +5243,7 @@ function updateSpectateTimerUI(state){
     }
     chip.querySelector('.num').textContent = secs;
     chip.classList.toggle('urgent', urgent);
+    document.body.classList.toggle('countdown-tint', urgent);
   }
   const bar = document.getElementById('spec-answer-bar');
   if (bar){
@@ -5217,10 +5392,11 @@ function renderSpectateFinal(state){
       </div>
     </div></div>
   `);
-  // （三十六後續）已結算過的分支：跟動畫那條路一樣，第 6 名以後塞進同一個
-  // 會自動判斷要不要跑馬燈捲動的小窗，不會因為之後每次 poll 重畫（例如
-  // 許願卡狀態變化觸發的整頁重畫）就打回沒有捲動、直接列出全部人的舊版面。
-  if (!isFirstRender) renderLbRestList(rest, visible.length + 1, { fade: false });
+  // （四十三）已結算過的分支：跟動畫那條路一樣，改成全員（含前三名）塞進
+  // 同一個跑馬燈小窗，不會因為之後每次 poll 重畫（例如許願卡狀態變化觸發的
+  // 整頁重畫）就打回「只有第 6 名以後捲動、前三名留在頂部」的舊版面。
+  // renderLbFullMarquee() 內部會自己把 #final-leaderboard 頂部卡片隱藏掉。
+  if (!isFirstRender) renderLbFullMarquee(ranked);
   // （三十，音效改進時發現並修正的既有小缺口）這個畫面每 ~1.5-1.8 秒 poll 一次
   // 就整個 innerHTML 重畫，isFirstRender 只有「第一次看到這個 roundId」那一次
   // 是 true——但 animateFinalLeaderboardReveal() 排的動畫序列拖得比一次 poll
@@ -5261,7 +5437,7 @@ function renderSpectateAwardsPodium(state){
       <h1 class="marquee-title">最懂壽星<span class="hl">前三名</span></h1>
       <div class="awards-layout">
         <div class="podium-wrap">
-          <div class="podium" style="--pw:min(58vw,430px)">
+          <div class="podium" style="--pw:min(70vw, calc((100vh - 380px)*1.202), 620px)">
             <img class="riser-img" src="${PODIUM_RISER_IMG}" alt="頒獎台">
             ${top3[1]?podiumCharHtml(2,'spec-ap-2',top3[1][1]):''}
             ${top3[0]?podiumCharHtml(1,'spec-ap-1',top3[0][1]):''}
@@ -5780,6 +5956,7 @@ function updatePlayerTimerUI(state, isSx){
   }
   chip.querySelector('.num').textContent = secs;
   chip.classList.toggle('urgent', urgent);
+  document.body.classList.toggle('countdown-tint', urgent);
   if (nudge){
     if (nudgeText){ nudge.textContent = nudgeText; nudge.style.display = ''; }
     else { nudge.style.display = 'none'; }
