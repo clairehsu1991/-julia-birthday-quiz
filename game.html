@@ -75,6 +75,26 @@
     }
     .bg-veil{ background: rgba(251,246,236,0.32); }
   }
+  /* 2026-09-06：森林光斑——示意圖延伸題，使用者選了「介於現在濃度跟更淡
+     中間，現在濃度降成 80%」這個版本。疊在 .bg-veil 最上面（同一層固定背景，
+     z-index 跟 bg-scene/bg-veil 一樣是 0，只是 DOM 順序排在veil 後面，所以
+     畫在veil 上方；#app 是 z-index:1，永遠蓋在最上面，不會被光斑擋到）。
+     只在頁面載入時 spawn 一次，跟畫面切換（render()）無關，所以全部畫面
+     背後都會有這個緩慢飄動的效果，不只是某一個畫面。 */
+  .sun-layer{ position:fixed; inset:0; z-index:0; pointer-events:none; overflow:hidden; }
+  .sun-blob{
+    position:absolute; left:var(--sx); top:var(--sy); width:var(--sz); height:var(--sz);
+    border-radius:50%;
+    background:radial-gradient(circle, rgba(255,214,110,0.76) 0%, rgba(255,214,110,0.44) 35%, rgba(255,214,110,0) 70%);
+    opacity:var(--op); will-change:transform,opacity;
+    animation:sunBlobDrift var(--dur) ease-in-out var(--delay) infinite;
+  }
+  @keyframes sunBlobDrift{
+    0%{ transform:translate(0,0) scale(0.9); opacity:calc(var(--op) * 0.55); }
+    50%{ transform:translate(var(--dx),var(--dy)) scale(1.15); opacity:var(--op); }
+    100%{ transform:translate(0,0) scale(0.9); opacity:calc(var(--op) * 0.55); }
+  }
+  @media (prefers-reduced-motion: reduce){ .sun-blob{ animation:none; opacity:var(--op); } }
 
 
   .shell{ flex:1; display:flex; flex-direction:column; align-items:center; padding: clamp(16px,4vw,40px); width:100%; }
@@ -146,9 +166,22 @@
   }
   .chip .num{ font-size:22px; line-height:1; }
   .chip.timer{ min-width:84px; justify-content:center; }
-  .chip.timer.urgent{ background: rgba(217,83,79,0.15); border-color: var(--alert); color:#a83a36; animation: pulse 1s infinite; }
+  /* 2026-09-06：最後 5 秒的強調效果——示意圖⑨確認過的方案。同步機制本來就是
+     每個畫面各自照 questionStartAt 這個共同時間點算剩餘秒數（見
+     updateHostTimerUI／updateSpectateTimerUI／updatePlayerTimerUI），投影頁
+     就算晚一兩次輪詢才刷新，算出來的秒數還是對的，所以這裡不用改同步機制，
+     只加強「urgent」這個既有狀態的視覺——數字明顯放大＋外圍加一圈暈光，
+     用專屬的 timerUrgentPulse（跳動幅度比共用的 pulse 更明顯），跟猜拳手勢
+     共用的 pulse 動畫分開，才不會不小心影響到那邊。 */
+  .chip.timer.urgent{
+    background: rgba(217,83,79,0.16); border-color: var(--alert); color:#a83a36;
+    padding:9px 20px; box-shadow:0 0 0 6px rgba(217,83,79,0.16);
+    animation: timerUrgentPulse 0.85s infinite;
+  }
+  .chip.timer.urgent .num{ font-size:32px; font-weight:800; }
   .chip.shouxing{ background: rgba(232,101,75,0.14); border-color:var(--coral); color:#9e3a27; }
   @keyframes pulse{ 0%,100%{ transform:scale(1);} 50%{ transform:scale(1.06);} }
+  @keyframes timerUrgentPulse{ 0%,100%{ transform:scale(1);} 50%{ transform:scale(1.1);} }
 
   .q-header-img{ max-width:100%; max-height:240px; object-fit:contain; border-radius:16px; margin:0 auto 4px; display:block; }
   .qtext{
@@ -289,8 +322,9 @@
   /* （三十五）使用者反映四個選項的實色色塊在暖色系插畫背景上看起來太搶、不
      和諧——改成半透明（0.6 alpha），讓底下 body 的米色跟插畫隱約透出來，
      選項之間還是靠色相區分（金/綠/赭/藍），但不會是四塊完全不透光的色塊。 */
-  .opt-a{ background:rgba(242,193,78,0.6); } .opt-b{ background:rgba(127,178,122,0.6); }
-  .opt-c{ background:rgba(232,161,107,0.6); } .opt-d{ background:rgba(111,179,217,0.6); }
+  /* 2026-09-06：使用者反映選項底色太淡，四色透明度統一從 0.6 提高到 0.66（濃度約 +10%）。 */
+  .opt-a{ background:rgba(242,193,78,0.66); } .opt-b{ background:rgba(127,178,122,0.66); }
+  .opt-c{ background:rgba(232,161,107,0.66); } .opt-d{ background:rgba(111,179,217,0.66); }
   .opt-card.has-img{ flex-direction:column; align-items:stretch; padding:10px; gap:8px; }
   /* object-fit:contain (not cover) so the whole uploaded photo is always visible —
      any letterboxing shows the option's own colour (gold/leaf/terracotta/sky)
@@ -905,6 +939,7 @@
 <body>
 <div class="bg-scene" aria-hidden="true"></div>
 <div class="bg-veil" aria-hidden="true"></div>
+<div class="sun-layer" id="sunLayer" aria-hidden="true"></div>
 <div id="app"></div>
 
 <script>
@@ -919,6 +954,37 @@ var qrcode=function(){function r(t,e){if(void 0===t.length)throw new Error(t.len
    No Claude account needed for players — everyone just needs the same WiFi.
    ============================================================ */
 
+/* ---------- 森林光斑（2026-09-06，示意圖延伸題確認後套用） ----------
+   跟畫面切換（render()）無關，頁面載入時 spawn 一次到固定的 #sunLayer，
+   全部畫面背後都會有這個緩慢飄動的效果。濃度是使用者選的「現在濃度
+   降成 80%」版本，只有 opacity／漸層透明度這些跟濃度有關的數字乘了
+   0.8，飄動速度、大小、顆數都跟示意圖的「現在濃度」版本一樣沒有變。 */
+(function spawnSunBlobs(){
+  const layer = document.getElementById('sunLayer');
+  if (!layer) return;
+  const n = 5;
+  for (let i = 0; i < n; i++){
+    const el = document.createElement('div');
+    el.className = 'sun-blob';
+    const sx = 5 + Math.random() * 80;
+    const sy = 5 + Math.random() * 70;
+    const sz = (60 + Math.random() * 70).toFixed(0) + 'px';
+    const dx = (Math.random() * 14 - 7).toFixed(1) + '%';
+    const dy = (Math.random() * 10 - 5).toFixed(1) + '%';
+    const dur = (9 + Math.random() * 7).toFixed(1) + 's';
+    const delay = (-Math.random() * 14).toFixed(1) + 's';
+    const op = ((0.55 + Math.random() * 0.3) * 0.8).toFixed(2); // 現在濃度(0.55–0.85) 再乘 0.8
+    el.style.setProperty('--sx', sx + '%');
+    el.style.setProperty('--sy', sy + '%');
+    el.style.setProperty('--sz', sz);
+    el.style.setProperty('--dx', dx);
+    el.style.setProperty('--dy', dy);
+    el.style.setProperty('--dur', dur);
+    el.style.setProperty('--delay', delay);
+    el.style.setProperty('--op', op);
+    layer.appendChild(el);
+  }
+})();
 
 /* ---------- state ---------- */
 let ROLE = null;
