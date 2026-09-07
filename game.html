@@ -202,6 +202,69 @@
   .field input:focus, .field select:focus{ border-color: var(--coral); }
   .stack{ display:flex; flex-direction:column; gap:10px; }
 
+  /* ================= 主持人設定頁：收合分區＋側邊欄導覽（四十六） =================
+     取代原本 8 個 .panel 一路往下排的長頁面。收合／展開用 display:none/block
+     直接切換（不用 max-height 動畫）——這頁題目列表／題庫清單長度都是不固定、
+     可能很長的真實資料，animation 用 max-height 在內容很長時會很難抓到一個
+     通用的動畫上限值，而且 max-height:0 搭配 overflow:hidden 的子元素在某些
+     自動化測試工具的「可見性」判斷下界線模糊；直接 display 切換兩邊都乾脆。
+     哪些分區目前是展開的，記在 hostSetupOpenPanels 這個模組層級的 Set 裡，
+     不是重新渲染時憑空算出來的——只要維持「使用者互動的 onclick 一律先改
+     這個 Set、再呼叫 renderHostSetup()」這個順序，不管 renderHostSetup() 被
+     叫幾次（新增/刪除/編輯題目、換題庫……到處都有呼叫），使用者手動展開過的
+     分區就會一直維持展開，不會每次操作都被打回全部收合。 */
+  .hs-toolbar{ display:flex; justify-content:flex-end; gap:8px; }
+  .hs-toolbar button{ font-size:12.5px; padding:7px 14px; }
+  .hs-body{ display:flex; gap:0; align-items:flex-start; }
+  .hs-sidebar{
+    flex:none; width:190px; background:var(--cream); border:1px solid var(--line);
+    border-radius:18px 0 0 18px; border-right:none; display:flex; flex-direction:column; padding:12px 8px; gap:3px;
+  }
+  .hs-navitem{
+    display:flex; align-items:center; justify-content:space-between; gap:6px;
+    text-align:left; border:none; background:transparent; border-radius:10px;
+    padding:11px 12px; font-size:13.5px; font-weight:700; color:var(--ink); cursor:pointer;
+    font-family:inherit;
+  }
+  .hs-navitem:hover{ background:rgba(46,36,24,0.06); }
+  .hs-navitem.active{ background:var(--moss); color:#fff; }
+  .hs-navitem .hs-flag{
+    font-size:10px; font-weight:800; padding:2px 7px; border-radius:999px;
+    background:var(--alert); color:#fff; flex:none;
+  }
+  .hs-navitem .hs-flag.soft{ background:var(--terracotta); }
+  .hs-navitem.active .hs-flag{ background:#fff; color:var(--alert); }
+  .hs-main{ flex:1; min-width:0; background:#fff; border:1px solid var(--line); border-left:none; border-radius:0 18px 18px 0; padding:14px; }
+  .hs-panel{ border:1px solid var(--line); border-radius:16px; margin-bottom:10px; background:var(--cream); overflow:hidden; scroll-margin-top:14px; }
+  .hs-panel:last-child{ margin-bottom:0; }
+  .hs-panel.needs{ border-color:var(--alert); border-width:1.5px; }
+  .hs-panel-head{
+    width:100%; display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+    background:none; border:none; cursor:pointer; font-family:inherit;
+    padding:16px 18px; font-size:16px; font-weight:800; color:var(--ink); text-align:left;
+  }
+  .hs-panel-head .hs-need{
+    font-size:11px; font-weight:800; color:var(--alert); background:rgba(217,83,79,0.12);
+    border-radius:999px; padding:3px 10px;
+  }
+  .hs-panel-head .hs-soft{
+    font-size:11px; font-weight:800; color:var(--terracotta); background:rgba(232,161,107,0.15);
+    border-radius:999px; padding:3px 10px;
+  }
+  .hs-caret{ margin-left:auto; transition:transform .2s ease; color:var(--ink-dim); flex:none; }
+  .hs-panel.open .hs-caret{ transform:rotate(180deg); }
+  .hs-panel-body{ display:none; padding:0 18px 20px; }
+  .hs-panel.open .hs-panel-body{ display:block; }
+  .hs-startbar{ display:flex; justify-content:center; margin-top:4px; }
+  @media (max-width:720px){
+    .hs-body{ flex-direction:column; }
+    .hs-sidebar{
+      width:100%; flex-direction:row; flex-wrap:wrap; border-radius:18px 18px 0 0; border-right:1px solid var(--line); border-bottom:none;
+    }
+    .hs-navitem{ flex:1 1 auto; justify-content:center; text-align:center; }
+    .hs-main{ border-radius:0 0 18px 18px; border-left:1px solid var(--line); border-top:none; }
+  }
+
   .topbar{
     width:100%; max-width:1100px; margin:0 auto; display:flex; align-items:center; justify-content:space-between;
     gap:10px; padding: 4px 4px 0; flex-wrap:wrap;
@@ -453,6 +516,17 @@
   .player-pill .dot{ width:8px; height:8px; border-radius:50%; background:var(--leaf); }
   .badge-shouxing{ display:inline-flex; background:var(--coral); color:#fff; font-size:11px; font-weight:800; padding:3px 8px; border-radius:999px; margin-left:6px; white-space:nowrap; }
   .test-badge{ display:inline-flex; background:#8a8a8a; color:#fff; font-size:10.5px; font-weight:800; padding:2px 7px; border-radius:999px; margin-left:6px; white-space:nowrap; vertical-align:1px; }
+
+  /* ---------- （四十六）主持人自己的大廳畫面：精簡版 ---------- */
+  .hl-topline{
+    width:100%; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+  }
+  .hl-qrbtn{ padding:8px 15px; font-size:13px; flex:none; }
+  .hl-qrpop{
+    width:100%; display:flex; align-items:center; gap:14px; background:var(--cream); border:1px solid var(--line);
+    border-radius:16px; padding:12px 16px;
+  }
+  .hl-qrpop .qr-card{ flex:none; }
 
   /* ---------- （三十六）投影頁大廳重新設計 ----------
      使用者參考別人投影頁的呈現方式：QR code 收到畫面右上角、主視覺換成
@@ -1234,6 +1308,30 @@ let PLAYER_AVATAR = (function(){
 let manualPlayerScreen = false;
 let QUESTIONS = [];               // { text, type:'text'|'image', headerImg:null|dataURL, options:[{label,img}] }
 let editingQuestionIndex = null;  // null = 新增題目表單；否則是 QUESTIONS 裡正在編輯的索引
+/* 主持人設定頁（renderHostSetup）目前展開的分區 id（'hs-p1'～'hs-p6'）。
+   （四十六）收合分區＋側邊欄導覽——這個 Set 是唯一的真相來源，renderHostSetup()
+   每次重畫都照這個 Set 決定哪些 .hs-panel 帶 open class，使用者手動展開過的
+   分區在任何觸發重畫的操作（新增/刪除/編輯題目、換題庫……）之後都會維持展開，
+   不會被打回全部收合。 */
+let hostSetupOpenPanels = new Set();
+function hsToggle(id){
+  if (hostSetupOpenPanels.has(id)) hostSetupOpenPanels.delete(id); else hostSetupOpenPanels.add(id);
+  renderHostSetup();
+}
+function hsGoTo(id){
+  hostSetupOpenPanels.add(id);
+  renderHostSetup();
+  const el = document.getElementById(id);
+  if (el) el.scrollIntoView({ behavior:'smooth', block:'start' });
+}
+function hsExpandAll(){
+  ['hs-p1','hs-p2','hs-p3','hs-p4','hs-p5','hs-p6'].forEach(id => hostSetupOpenPanels.add(id));
+  renderHostSetup();
+}
+function hsCollapseAll(){
+  hostSetupOpenPanels.clear();
+  renderHostSetup();
+}
 let TIME_LIMIT_SECONDS = 15;
 let PRIZES = ['', '', ''];        // free-text rewards for 🥇🥈🥉 on the awards podium
 
@@ -2705,6 +2803,15 @@ function renderHostSetup(){
     </div>
   `).join('');
 
+  // （四十六）收合分區＋側邊欄導覽：把原本 8 個一路往下排的 .panel 改成
+  // 6 個側邊欄項目＋收合手風琴（題目列表＋新增/編輯表單合併成一區；主持人
+  // 網址＋壽星連結合併成一區）。哪些分區帶紅／橘色提醒是動態算出來的，跟
+  // party_mockups.html 第 11 節示意圖談好的邏輯一致：題目一題都還沒新增＝
+  // 紅色必看，前三名獎勵永遠是橘色「選填」提示，其他維持一般顏色。
+  const questionsNeedAttention = QUESTIONS.length === 0;
+  const hsOpen = id => hostSetupOpenPanels.has(id) ? ' open' : '';
+  const hsActive = id => hostSetupOpenPanels.has(id) ? ' active' : '';
+
   render(`
     <div class="shell"><div class="col">
       ${hostNav(false)}
@@ -2712,162 +2819,196 @@ function renderHostSetup(){
       <h1 class="marquee-title" style="font-size:clamp(28px,5vw,46px)">開賽<span class="hl">前設定</span></h1>
       <p class="sub">答案不用先設定正確選項——遊戲中壽星選什麼，那就是「正解」！</p>
 
-      <div class="panel">
-        <h2>⏱ 每題作答時間</h2>
-        <div class="btn-row" style="justify-content:flex-start" id="time-row">
-          ${[10,15,20,30].map(s=>`<button class="btn ${s===TIME_LIMIT_SECONDS?'':'secondary'}" data-secs="${s}" onclick="setTimeLimit(${s})">${s} 秒</button>`).join('')}
-        </div>
+      <div class="hs-toolbar">
+        <button class="btn ghost" onclick="hsExpandAll()">⊕ 全部展開</button>
+        <button class="btn ghost" onclick="hsCollapseAll()">⊖ 全部收合</button>
       </div>
 
-      <div class="panel">
-        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
-          <h2>📋 題目（共 ${QUESTIONS.length} 題，建議 10 題）</h2>
-          ${QUESTIONS.some(q=>q.isWarmup) ? '' : '<button class="btn secondary" style="padding:8px 14px;font-size:13px" onclick="addWarmupQuestions()">🔥 加入 2 題範例暖身題</button>'}
-        </div>
-        <div class="qlist" style="margin-top:10px">${rows || '<p class="sub">還沒有題目，往下新增第一題吧！</p>'}</div>
-      </div>
+      <div class="hs-body">
+        <nav class="hs-sidebar">
+          <button class="hs-navitem${hsActive('hs-p1')}" onclick="hsGoTo('hs-p1')"><span>⏱ 作答時間</span></button>
+          <button class="hs-navitem${hsActive('hs-p2')}" onclick="hsGoTo('hs-p2')"><span>📋 題目管理</span>${questionsNeedAttention ? '<span class="hs-flag">未新增</span>' : ''}</button>
+          <button class="hs-navitem${hsActive('hs-p3')}" onclick="hsGoTo('hs-p3')"><span>💾 題庫</span></button>
+          <button class="hs-navitem${hsActive('hs-p4')}" onclick="hsGoTo('hs-p4')"><span>🎲 出題方式</span></button>
+          <button class="hs-navitem${hsActive('hs-p5')}" onclick="hsGoTo('hs-p5')"><span>🏆 前三名獎勵</span><span class="hs-flag soft">選填</span></button>
+          <button class="hs-navitem${hsActive('hs-p6')}" onclick="hsGoTo('hs-p6')"><span>🔐 網址與連結</span></button>
+        </nav>
 
-      <div class="panel" id="add-q-panel">
-        <h2>${editQ ? '✏️ 編輯第 ' + (editingQuestionIndex+1) + ' 題' : '➕ 新增題目'}</h2>
-        <div class="stack" style="margin-top:8px">
-          <div class="field"><label>題目文字（可以按 Enter 換行）</label><textarea id="nq-text" rows="3" placeholder="例如：壽星這趟日本行&#10;最喜歡哪張照片？" style="resize:vertical;line-height:1.5">${esc(editQ ? editQ.text : '')}</textarea></div>
-          <div class="field">
-            <label>章節（選填，例如：圖片題／國文題／情境題——自己打名字，同名的會自動歸在一起；正式遊戲會依章節順序出題，每個章節開始前主持人畫面會先顯示章節名稱）</label>
-            <input id="nq-chapter" list="chapter-options" placeholder="不填就是「未分類」" value="${esc(editQ ? (editQ.chapter||'') : '')}">
-            ${chapterDatalist}
-          </div>
-          <div class="field">
-            <label style="font-weight:400;display:flex;align-items:center;gap:6px">
-              <input type="checkbox" id="nq-align-left" style="width:16px;height:16px" ${editQ && editQ.alignLeft ? 'checked' : ''}>
-              題目換行時靠左對齊（預設置中，多行文字改成靠左比較好讀）
-            </label>
-          </div>
-          <div class="field">
-            <label style="font-weight:400;display:flex;align-items:center;gap:6px;color:var(--gold)">
-              <input type="checkbox" id="nq-warmup" style="width:16px;height:16px" ${editQ && editQ.isWarmup ? 'checked' : ''}>
-              🔥 這是暖身題（練習用，不計分，永遠排在最前面）
-            </label>
-          </div>
-          <div class="field">
-            <label style="font-weight:400;display:flex;align-items:center;gap:6px;color:var(--coral)">
-              <input type="checkbox" id="nq-mustpick" style="width:16px;height:16px" ${editQ && editQ.mustPick ? 'checked' : ''}>
-              ⭐ 這題必出（不管「這一場要出幾題」設定成多少，這題一定會被抽到）
-            </label>
-          </div>
-          <div class="field">
-            <label>題目附圖（選填，會顯示在題目上方）</label>
-            ${editQ && editQ.headerImg ? `
-              <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
-                <img src="${editQ.headerImg}" style="width:56px;height:56px;object-fit:cover;border-radius:8px">
-                <label style="font-size:12.5px;font-weight:400;display:flex;align-items:center;gap:6px">
-                  <input type="checkbox" id="nq-header-img-remove" style="width:16px;height:16px">移除這張附圖
-                </label>
+        <div class="hs-main">
+          <div class="hs-panel${hsOpen('hs-p1')}" id="hs-p1">
+            <button class="hs-panel-head" onclick="hsToggle('hs-p1')"><span>⏱ 每題作答時間</span><span class="hs-caret">⌄</span></button>
+            <div class="hs-panel-body">
+              <div class="btn-row" style="justify-content:flex-start" id="time-row">
+                ${[10,15,20,30].map(s=>`<button class="btn ${s===TIME_LIMIT_SECONDS?'':'secondary'}" data-secs="${s}" onclick="setTimeLimit(${s})">${s} 秒</button>`).join('')}
               </div>
-            ` : ''}
-            <input id="nq-header-img" type="file" accept="image/*">
-            ${editQ && editQ.headerImg ? '<p class="sub" style="font-size:12px">不選新檔案就會保留上面的圖（除非勾選移除）</p>' : ''}
+            </div>
           </div>
-          <div class="field"><label>選項類型</label>
-            <select id="nq-type" onchange="onTypeChange()">
-              <option value="text" ${formType==='text'?'selected':''}>文字選項</option>
-              <option value="image" ${formType==='image'?'selected':''}>圖片選項</option>
-            </select>
-          </div>
-          <div id="nq-text-fields" class="stack" style="display:${formType==='text'?'flex':'none'}">
-            ${[0,1,2,3].map(i=>`<div class="field"><label>選項 ${OPT_LABEL[i]}</label><input id="nq-t-${i}" placeholder="選項 ${OPT_LABEL[i]}" value="${esc(formType==='text' && editQ ? editQ.options[i].label : '')}"></div>`).join('')}
-          </div>
-          <div id="nq-image-fields" class="stack" style="display:${formType==='image'?'flex':'none'}">
-            ${[0,1,2,3].map(i=>{
-              const existingOpt = (formType==='image' && editQ) ? editQ.options[i] : null;
-              return `
-              <div class="field"><label>圖片選項 ${OPT_LABEL[i]}</label>
-                ${existingOpt && existingOpt.img ? `<img src="${existingOpt.img}" style="width:56px;height:56px;object-fit:cover;border-radius:8px;margin-bottom:6px">` : ''}
-                <input id="nq-img-${i}" type="file" accept="image/*">
-                ${existingOpt && existingOpt.img ? '<p class="sub" style="font-size:12px;margin:2px 0 0">不選新檔案就會保留上面的圖</p>' : ''}
-                <input id="nq-cap-${i}" placeholder="小標題（選填）" style="margin-top:6px" value="${esc(existingOpt ? (existingOpt.label||'') : '')}">
+
+          <div class="hs-panel${questionsNeedAttention?' needs':''}${hsOpen('hs-p2')}" id="hs-p2">
+            <button class="hs-panel-head" onclick="hsToggle('hs-p2')">
+              <span>📋 題目管理（共 ${QUESTIONS.length} 題，建議 10 題）</span>
+              ${questionsNeedAttention ? '<span class="hs-need">尚未新增題目</span>' : ''}
+              <span class="hs-caret">⌄</span>
+            </button>
+            <div class="hs-panel-body">
+              <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+                <div class="sub" style="font-weight:700">題目列表</div>
+                ${QUESTIONS.some(q=>q.isWarmup) ? '' : '<button class="btn secondary" style="padding:8px 14px;font-size:13px" onclick="addWarmupQuestions()">🔥 加入 2 題範例暖身題</button>'}
               </div>
-            `;
-            }).join('')}
+              <div class="qlist" style="margin-top:10px">${rows || '<p class="sub">還沒有題目，往下新增第一題吧！</p>'}</div>
+
+              <div id="add-q-panel" style="margin-top:18px;padding-top:18px;border-top:1px solid var(--line)">
+                <h2 style="font-size:17px;margin:0 0 4px">${editQ ? '✏️ 編輯第 ' + (editingQuestionIndex+1) + ' 題' : '➕ 新增題目'}</h2>
+                <div class="stack" style="margin-top:8px">
+                  <div class="field"><label>題目文字（可以按 Enter 換行）</label><textarea id="nq-text" rows="3" placeholder="例如：壽星這趟日本行&#10;最喜歡哪張照片？" style="resize:vertical;line-height:1.5">${esc(editQ ? editQ.text : '')}</textarea></div>
+                  <div class="field">
+                    <label>章節（選填，例如：圖片題／國文題／情境題——自己打名字，同名的會自動歸在一起；正式遊戲會依章節順序出題，每個章節開始前主持人畫面會先顯示章節名稱）</label>
+                    <input id="nq-chapter" list="chapter-options" placeholder="不填就是「未分類」" value="${esc(editQ ? (editQ.chapter||'') : '')}">
+                    ${chapterDatalist}
+                  </div>
+                  <div class="field">
+                    <label style="font-weight:400;display:flex;align-items:center;gap:6px">
+                      <input type="checkbox" id="nq-align-left" style="width:16px;height:16px" ${editQ && editQ.alignLeft ? 'checked' : ''}>
+                      題目換行時靠左對齊（預設置中，多行文字改成靠左比較好讀）
+                    </label>
+                  </div>
+                  <div class="field">
+                    <label style="font-weight:400;display:flex;align-items:center;gap:6px;color:var(--gold)">
+                      <input type="checkbox" id="nq-warmup" style="width:16px;height:16px" ${editQ && editQ.isWarmup ? 'checked' : ''}>
+                      🔥 這是暖身題（練習用，不計分，永遠排在最前面）
+                    </label>
+                  </div>
+                  <div class="field">
+                    <label style="font-weight:400;display:flex;align-items:center;gap:6px;color:var(--coral)">
+                      <input type="checkbox" id="nq-mustpick" style="width:16px;height:16px" ${editQ && editQ.mustPick ? 'checked' : ''}>
+                      ⭐ 這題必出（不管「這一場要出幾題」設定成多少，這題一定會被抽到）
+                    </label>
+                  </div>
+                  <div class="field">
+                    <label>題目附圖（選填，會顯示在題目上方）</label>
+                    ${editQ && editQ.headerImg ? `
+                      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
+                        <img src="${editQ.headerImg}" style="width:56px;height:56px;object-fit:cover;border-radius:8px">
+                        <label style="font-size:12.5px;font-weight:400;display:flex;align-items:center;gap:6px">
+                          <input type="checkbox" id="nq-header-img-remove" style="width:16px;height:16px">移除這張附圖
+                        </label>
+                      </div>
+                    ` : ''}
+                    <input id="nq-header-img" type="file" accept="image/*">
+                    ${editQ && editQ.headerImg ? '<p class="sub" style="font-size:12px">不選新檔案就會保留上面的圖（除非勾選移除）</p>' : ''}
+                  </div>
+                  <div class="field"><label>選項類型</label>
+                    <select id="nq-type" onchange="onTypeChange()">
+                      <option value="text" ${formType==='text'?'selected':''}>文字選項</option>
+                      <option value="image" ${formType==='image'?'selected':''}>圖片選項</option>
+                    </select>
+                  </div>
+                  <div id="nq-text-fields" class="stack" style="display:${formType==='text'?'flex':'none'}">
+                    ${[0,1,2,3].map(i=>`<div class="field"><label>選項 ${OPT_LABEL[i]}</label><input id="nq-t-${i}" placeholder="選項 ${OPT_LABEL[i]}" value="${esc(formType==='text' && editQ ? editQ.options[i].label : '')}"></div>`).join('')}
+                  </div>
+                  <div id="nq-image-fields" class="stack" style="display:${formType==='image'?'flex':'none'}">
+                    ${[0,1,2,3].map(i=>{
+                      const existingOpt = (formType==='image' && editQ) ? editQ.options[i] : null;
+                      return `
+                      <div class="field"><label>圖片選項 ${OPT_LABEL[i]}</label>
+                        ${existingOpt && existingOpt.img ? `<img src="${existingOpt.img}" style="width:56px;height:56px;object-fit:cover;border-radius:8px;margin-bottom:6px">` : ''}
+                        <input id="nq-img-${i}" type="file" accept="image/*">
+                        ${existingOpt && existingOpt.img ? '<p class="sub" style="font-size:12px;margin:2px 0 0">不選新檔案就會保留上面的圖</p>' : ''}
+                        <input id="nq-cap-${i}" placeholder="小標題（選填）" style="margin-top:6px" value="${esc(existingOpt ? (existingOpt.label||'') : '')}">
+                      </div>
+                    `;
+                    }).join('')}
+                  </div>
+                  <div class="btn-row" style="margin-top:0">
+                    <button class="btn secondary${editQ? '' : ' block'}" id="nq-submit-btn" onclick="saveQuestionFromForm()">${editQ ? '💾 儲存這題' : '➕ 新增這題'}</button>
+                    ${editQ ? '<button class="btn ghost" onclick="cancelEditQuestion()">取消編輯</button>' : ''}
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
-          <div class="btn-row" style="margin-top:0">
-            <button class="btn secondary${editQ? '' : ' block'}" id="nq-submit-btn" onclick="saveQuestionFromForm()">${editQ ? '💾 儲存這題' : '➕ 新增這題'}</button>
-            ${editQ ? '<button class="btn ghost" onclick="cancelEditQuestion()">取消編輯</button>' : ''}
+
+          <div class="hs-panel${hsOpen('hs-p3')}" id="hs-p3">
+            <button class="hs-panel-head" onclick="hsToggle('hs-p3')"><span>💾 題庫</span><span class="hs-caret">⌄</span></button>
+            <div class="hs-panel-body">
+              <p class="sub">存起來下次直接載入，不用重打。題庫存在跑 server.py 的那台機器上；想換電腦或備份就用匯出檔。<br>
+              <b>放在 Render 等雲端的話</b>：免費方案每次重啟都會清空題庫，請把「⬇ 匯出題庫檔」下載到的檔案改名成 <code>seed_banks.json</code>，跟 server.py 一起 commit 進 repo，之後每次啟動都會自動載回來。</p>
+              <div class="stack" style="margin-top:12px">
+                <div style="display:flex;gap:8px;flex-wrap:wrap">
+                  <input id="bank-name" placeholder="題庫名稱，例如：Julia 35 生日場" style="flex:1;min-width:190px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:15px;font-family:inherit;color:var(--ink)">
+                  <button class="btn secondary" onclick="saveBankAsNew()" ${QUESTIONS.length? '':'disabled'}>💾 存成新題庫</button>
+                </div>
+                ${bankRows ? `<div class="stack">${bankRows}</div>`
+                           : '<p class="sub">還沒有存過題庫。先在上面新增幾題，再按「存成新題庫」。</p>'}
+                <p class="sub" style="font-size:12px">「覆蓋存檔」和「改名」會套用到那一列的題庫；改名前請先在上面的欄位打新名字。</p>
+                <div class="btn-row" style="justify-content:flex-start">
+                  <button class="btn ghost" onclick="exportBanks()">⬇ 匯出題庫檔</button>
+                  <button class="btn ghost" onclick="document.getElementById('bank-import').click()">⬆ 匯入題庫檔</button>
+                  <input id="bank-import" type="file" accept="application/json,.json" style="display:none" onchange="importBanksFile(this)">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="hs-panel${hsOpen('hs-p4')}" id="hs-p4">
+            <button class="hs-panel-head" onclick="hsToggle('hs-p4')"><span>🎲 出題方式</span><span class="hs-caret">⌄</span></button>
+            <div class="hs-panel-body">
+              <div class="stack" style="margin-top:12px">
+                <div class="checkbox-row">
+                  <input type="checkbox" id="rnd-order" ${RANDOM_ORDER?'checked':''} onchange="toggleRandomOrder(this)">
+                  <label for="rnd-order">隨機打亂題目順序（同一批人再玩一次也不會膩；有分章節的話只在各章節內打亂，延伸題會整包一起動）</label>
+                </div>
+                <div class="checkbox-row">
+                  <input type="checkbox" id="rnd-opts" ${RANDOM_OPTIONS?'checked':''} onchange="toggleRandomOptions(this)">
+                  <label for="rnd-opts">選項 A～D 也隨機排序（注意：你自己也不會知道哪個在哪）</label>
+                </div>
+                <div class="field">
+                  <label>這一場要出幾題（留空 = 全部 ${QUESTIONS.length} 題都出）</label>
+                  <input id="draw-count" type="number" min="0" max="${QUESTIONS.length}" inputmode="numeric"
+                         value="${DRAW_COUNT || ''}" placeholder="全部" onchange="setDrawCount(this)">
+                </div>
+                <p class="sub" id="draw-hint" style="font-weight:700;color:var(--moss)">${esc(drawHintText())}</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="hs-panel${hsOpen('hs-p5')}" id="hs-p5">
+            <button class="hs-panel-head" onclick="hsToggle('hs-p5')"><span>🏆 前三名獎勵</span><span class="hs-soft">選填</span><span class="hs-caret">⌄</span></button>
+            <div class="hs-panel-body">
+              <p class="sub">遊戲結束後的頒獎台會顯示在對應名次下面，選填。</p>
+              <div class="stack" style="margin-top:10px">
+                <div class="field"><label>🥇 第一名</label><input id="prize-0" value="${esc(PRIZES[0]||'')}" placeholder="例如：神秘小禮物" oninput="setPrize(0,this.value)"></div>
+                <div class="field"><label>🥈 第二名</label><input id="prize-1" value="${esc(PRIZES[1]||'')}" placeholder="選填" oninput="setPrize(1,this.value)"></div>
+                <div class="field"><label>🥉 第三名</label><input id="prize-2" value="${esc(PRIZES[2]||'')}" placeholder="選填" oninput="setPrize(2,this.value)"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="hs-panel${hsOpen('hs-p6')}" id="hs-p6">
+            <button class="hs-panel-head" onclick="hsToggle('hs-p6')"><span>🔐 網址與連結</span><span class="hs-caret">⌄</span></button>
+            <div class="hs-panel-body">
+              <h2 style="font-size:17px;margin:0 0 4px">🔐 你的主持人專屬網址</h2>
+              <p class="sub">只有這組網址進得了主持人頁面，其他人打開遊戲網址只會看到「加入遊戲」。<b>不要投影、不要傳給別人。</b>建議加到書籤——金鑰不會變，下次開場用同一組就好。忘記了也沒關係，跑 server.py 的那個終端機視窗裡有印出來。</p>
+              <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px">
+                <div class="join-url" style="text-align:left;flex:1;min-width:200px">${esc(hostUrl())}</div>
+                <button class="btn secondary" onclick="copyHostLink(this)">📋 複製網址</button>
+              </div>
+
+              <h2 style="font-size:17px;margin:20px 0 4px">🎂 壽星專屬連結</h2>
+              <p class="sub">這組連結只有你（主持人）看得到，請私下傳給壽星本人（例如用 LINE），不要投影出來——用這組連結加入的人會自動被標記成壽星，其他人掃大家共用的 QR code 不會有這個選項。下一頁「等待加入」開始就會投影在電視上了，記得先在這一頁把連結傳給她。</p>
+              <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-top:10px">
+                <div class="qr-card">${qrSvgHtml(starJoinUrl(), 'sm')}</div>
+                <div style="flex:1;min-width:200px">
+                  <div class="join-url" style="text-align:left">${esc(starJoinUrl())}</div>
+                  <button class="btn secondary" style="margin-top:8px" onclick="copyStarLink(this)">📋 複製連結</button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      <div class="panel">
-        <h2>💾 題庫</h2>
-        <p class="sub">存起來下次直接載入，不用重打。題庫存在跑 server.py 的那台機器上；想換電腦或備份就用匯出檔。<br>
-        <b>放在 Render 等雲端的話</b>：免費方案每次重啟都會清空題庫，請把「⬇ 匯出題庫檔」下載到的檔案改名成 <code>seed_banks.json</code>，跟 server.py 一起 commit 進 repo，之後每次啟動都會自動載回來。</p>
-        <div class="stack" style="margin-top:12px">
-          <div style="display:flex;gap:8px;flex-wrap:wrap">
-            <input id="bank-name" placeholder="題庫名稱，例如：Julia 35 生日場" style="flex:1;min-width:190px;background:#fff;border:1px solid var(--line);border-radius:12px;padding:12px 14px;font-size:15px;font-family:inherit;color:var(--ink)">
-            <button class="btn secondary" onclick="saveBankAsNew()" ${QUESTIONS.length? '':'disabled'}>💾 存成新題庫</button>
-          </div>
-          ${bankRows ? `<div class="stack">${bankRows}</div>`
-                     : '<p class="sub">還沒有存過題庫。先在上面新增幾題，再按「存成新題庫」。</p>'}
-          <p class="sub" style="font-size:12px">「覆蓋存檔」和「改名」會套用到那一列的題庫；改名前請先在上面的欄位打新名字。</p>
-          <div class="btn-row" style="justify-content:flex-start">
-            <button class="btn ghost" onclick="exportBanks()">⬇ 匯出題庫檔</button>
-            <button class="btn ghost" onclick="document.getElementById('bank-import').click()">⬆ 匯入題庫檔</button>
-            <input id="bank-import" type="file" accept="application/json,.json" style="display:none" onchange="importBanksFile(this)">
-          </div>
-        </div>
-      </div>
-
-      <div class="panel">
-        <h2>🎲 出題方式</h2>
-        <div class="stack" style="margin-top:12px">
-          <div class="checkbox-row">
-            <input type="checkbox" id="rnd-order" ${RANDOM_ORDER?'checked':''} onchange="toggleRandomOrder(this)">
-            <label for="rnd-order">隨機打亂題目順序（同一批人再玩一次也不會膩；有分章節的話只在各章節內打亂，延伸題會整包一起動）</label>
-          </div>
-          <div class="checkbox-row">
-            <input type="checkbox" id="rnd-opts" ${RANDOM_OPTIONS?'checked':''} onchange="toggleRandomOptions(this)">
-            <label for="rnd-opts">選項 A～D 也隨機排序（注意：你自己也不會知道哪個在哪）</label>
-          </div>
-          <div class="field">
-            <label>這一場要出幾題（留空 = 全部 ${QUESTIONS.length} 題都出）</label>
-            <input id="draw-count" type="number" min="0" max="${QUESTIONS.length}" inputmode="numeric"
-                   value="${DRAW_COUNT || ''}" placeholder="全部" onchange="setDrawCount(this)">
-          </div>
-          <p class="sub" id="draw-hint" style="font-weight:700;color:var(--moss)">${esc(drawHintText())}</p>
-        </div>
-      </div>
-
-      <div class="panel">
-        <h2>🏆 前三名獎勵</h2>
-        <p class="sub">遊戲結束後的頒獎台會顯示在對應名次下面，選填。</p>
-        <div class="stack" style="margin-top:10px">
-          <div class="field"><label>🥇 第一名</label><input id="prize-0" value="${esc(PRIZES[0]||'')}" placeholder="例如：神秘小禮物" oninput="setPrize(0,this.value)"></div>
-          <div class="field"><label>🥈 第二名</label><input id="prize-1" value="${esc(PRIZES[1]||'')}" placeholder="選填" oninput="setPrize(1,this.value)"></div>
-          <div class="field"><label>🥉 第三名</label><input id="prize-2" value="${esc(PRIZES[2]||'')}" placeholder="選填" oninput="setPrize(2,this.value)"></div>
-        </div>
-      </div>
-
-      <div class="panel">
-        <h2>🔐 你的主持人專屬網址</h2>
-        <p class="sub">只有這組網址進得了主持人頁面，其他人打開遊戲網址只會看到「加入遊戲」。<b>不要投影、不要傳給別人。</b>建議加到書籤——金鑰不會變，下次開場用同一組就好。忘記了也沒關係，跑 server.py 的那個終端機視窗裡有印出來。</p>
-        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px">
-          <div class="join-url" style="text-align:left;flex:1;min-width:200px">${esc(hostUrl())}</div>
-          <button class="btn secondary" onclick="copyHostLink(this)">📋 複製網址</button>
-        </div>
-      </div>
-
-      <div class="panel">
-        <h2>🎂 壽星專屬連結</h2>
-        <p class="sub">這組連結只有你（主持人）看得到，請私下傳給壽星本人（例如用 LINE），不要投影出來——用這組連結加入的人會自動被標記成壽星，其他人掃大家共用的 QR code 不會有這個選項。下一頁「等待加入」開始就會投影在電視上了，記得先在這一頁把連結傳給她。</p>
-        <div style="display:flex;gap:16px;align-items:center;flex-wrap:wrap;margin-top:10px">
-          <div class="qr-card">${qrSvgHtml(starJoinUrl(), 'sm')}</div>
-          <div style="flex:1;min-width:200px">
-            <div class="join-url" style="text-align:left">${esc(starJoinUrl())}</div>
-            <button class="btn secondary" style="margin-top:8px" onclick="copyStarLink(this)">📋 複製連結</button>
-          </div>
-        </div>
-      </div>
-
-      <div class="btn-row" style="margin-top:6px">
+      <div class="hs-startbar">
         <button class="btn block" style="max-width:360px" onclick="startLobby()" ${QUESTIONS.length? '' : 'disabled'}>🚀 開始遊戲 →</button>
       </div>
     </div></div>
@@ -2926,6 +3067,7 @@ function deleteQuestion(i){
    place, rather than deleting + retyping it from scratch. */
 function editQuestion(i){
   editingQuestionIndex = i;
+  hostSetupOpenPanels.add('hs-p2'); // （四十六）題目管理分區可能還沒展開過，強制展開才看得到表單
   renderHostSetup();
   const panel = document.getElementById('add-q-panel');
   if (panel) panel.scrollIntoView({ behavior:'smooth', block:'start' });
@@ -3255,6 +3397,17 @@ async function startLobby(){
   renderHostLobby();
   startHostPolling();
 }
+/* （四十六）開始遊戲後的主持人畫面精簡：這頁是主持人自己筆電上看的，不是
+   投影頁——之前完全比照投影頁的裝飾風格（大標題、大 QR code、森林背景走的
+   是 hostNav(true) 之外全部共用 marquee-title／qr-card 的排版），使用者
+   反映「只需要知道誰參加、參加狀態、名字」，QR code／連結收進一顆可以展開
+   的按鈕，不用一直佔著畫面正中央。lobbyQrOpen 只是這顆按鈕展開/收合的
+   UI 狀態，不需要存進 hostState、也不需要跨裝置同步。 */
+let lobbyQrOpen = false;
+function toggleLobbyQr(){
+  lobbyQrOpen = !lobbyQrOpen;
+  renderHostLobby();
+}
 function renderHostLobby(){
   const url = joinUrl();
   dropMissingShouxing(hostState);
@@ -3262,26 +3415,35 @@ function renderHostLobby(){
   const total = hostState.questions.length;
   const sxReady = !!(hostState.shouxingId && hostState.players[hostState.shouxingId]);
   render(`
-    <div class="shell"><div class="col" style="align-items:center;text-align:center">
+    <div class="shell"><div class="col">
       ${hostNav(true)}
-      <span class="eyebrow">📶 等待加入</span>
-      <h1 class="marquee-title" style="font-size:clamp(28px,5vw,48px)">掃碼<span class="hl">加入猜猜</span></h1>
-      <div class="qr-card">${qrSvgHtml(url, '')}</div>
-      <div class="join-url">${esc(url)}</div>
-      <p class="sub" style="font-size:13px;margin-top:-4px">本場共 ${total} 題${RANDOM_ORDER?'．順序已隨機':''}${RANDOM_OPTIONS?'．選項已隨機':''}</p>
+      <div class="hl-topline">
+        <span class="eyebrow" style="margin:0">📶 等待加入．本場共 ${total} 題${RANDOM_ORDER?'．順序已隨機':''}${RANDOM_OPTIONS?'．選項已隨機':''}</span>
+        <button class="btn ghost hl-qrbtn" onclick="toggleLobbyQr()">${lobbyQrOpen ? '收起連結 ▴' : '顯示加入連結 ▾'}</button>
+      </div>
 
-      <div style="margin-top:6px;width:100%">
-        <div class="chip" style="margin:0 auto 10px;width:fit-content">
+      ${lobbyQrOpen ? `
+      <div class="hl-qrpop">
+        <div class="qr-card">${qrSvgHtml(url, 'sm')}</div>
+        <div style="flex:1;min-width:160px;text-align:left">
+          <div class="join-url" style="text-align:left">${esc(url)}</div>
+          <p class="sub" style="font-size:12px;margin-top:2px">給大家掃碼加入，投影頁上也看得到大一點的 QR code</p>
+        </div>
+      </div>
+      ` : ''}
+
+      <div style="width:100%;text-align:center">
+        <div class="chip" style="margin:0 auto 8px;width:fit-content">
           <span>👥 已加入</span><span class="num">${players.length}</span><span>人</span>
         </div>
+        <p class="sub" style="font-size:13px;margin-bottom:8px">${sxReady? '點名字可以改指定壽星' : '壽星還沒加入，或請確認她是用你私下傳給她的專屬連結加入的（也可以直接點名字手動指定）'}</p>
         <div class="players-grid">
           ${players.length ? players.map(([id,p])=>`
             <button class="player-pill ${id===hostState.shouxingId?'is-shouxing':''}" onclick="setShouxing('${id}')">
               <span class="dot"></span>${avatarSpan(p.avatar)}${nameTag(p)}${id===hostState.shouxingId? '<span class=\"badge-shouxing\">🎂 壽星</span>' : ''}
             </button>
-          `).join('') : '<p class="sub">還沒有人加入，請大家掃上面的 QR code</p>'}
+          `).join('') : '<p class="sub">還沒有人加入，請大家掃加入連結</p>'}
         </div>
-        <p class="sub" style="margin-top:8px">${sxReady? '點其他人的名字可以改指定壽星' : '壽星還沒加入，或請確認她是用你私下傳給她的專屬連結加入的（也可以直接點名字手動指定）'}</p>
       </div>
 
       <div class="btn-row" style="margin-top:8px">
@@ -3290,7 +3452,7 @@ function renderHostLobby(){
         <button class="btn ghost" onclick="addTestPlayers()">🧪 加入測試玩家</button>
         <button class="btn" onclick="nextQuestion()" ${sxReady? '' : 'disabled'}>▶ 開始第一題</button>
       </div>
-      <p class="sub" style="font-size:12px;margin-top:6px">一個人也想測試？「🧪 加入測試玩家」一次補滿 7 位假玩家（1 位當壽星、6 位猜猜的人，湊得出頒獎典禮最後三名猜拳的人數），
+      <p class="sub" style="font-size:12px;margin-top:6px;text-align:center">一個人也想測試？「🧪 加入測試玩家」一次補滿 7 位假玩家（1 位當壽星、6 位猜猜的人，湊得出頒獎典禮最後三名猜拳的人數），
       出題畫面上會多一顆「讓測試玩家作答」讓你自己一個人也能跑完整場、包含頒獎典禮的猜拳畫面。回設定重開一場真的遊戲時會自動清掉，不用另外整理。</p>
     </div></div>
   `);
@@ -6191,18 +6353,14 @@ function renderPlayerReveal(state){
   const isFirstRender = _lastPlayerRevealKey !== key;
   _lastPlayerRevealKey = key;
 
-  // Vote-tally bar chart — identical math to the host's reveal panel (exclude
-  // the 壽星's own pick; it defines the answer rather than guessing it).
-  const counts = [0,0,0,0];
-  Object.entries(state.currentAnswers).forEach(([id,a])=>{ if (id!==sx && a.choice!=null) counts[a.choice]++; });
-  const totalAnswered = counts.reduce((a,b)=>a+b, 0);
-
+  // （四十六）比賽進行中沒時間細看「大家怎麼選」長條圖跟累積排行榜面板，
+  // 那些留給主持人的大投影／大螢幕就好——玩家自己的畫面只留猜對猜錯、壽星
+  // 選的、自己選的，維持一頁看完不用滑動。排名追逐的比較話術照樣保留，只
+  // 是從原本排行榜面板底下拉出來，單獨顯示。
   const rankedFull = rankedGuessers(state.players, sx);
-  const ranked = rankedFull.slice(0, 5);
-  const inTop5 = ranked.some(([id])=> id === PLAYER_ID);
   // （三十二）排名追逐：用完整名次（不是只有前 5 名）算「我前面／並列的是誰、
   // 差幾分」，排名在 5 名以外的玩家才也看得到自己的追分目標。暖身題不計分，
-  // 這裡也不算——跟排行榜面板本身的 !isWarmup 閘門保持一致。
+  // 這裡也不算——跟原本排行榜面板的 !isWarmup 閘門保持一致。
   const chaseInfo = isWarmup ? null : computeChaseInfo(rankedFull, PLAYER_ID);
 
   // Cache the encouragement line + 排名追逐 話術 on the first render of THIS
@@ -6237,60 +6395,14 @@ function renderPlayerReveal(state){
       ${gotIt ? `<div class="chip"><span>+</span><span class="num">${mine.points}</span><span>分</span></div>` : ''}
       ${(!isWarmup && streak>=2) ? `<p class="sub" style="font-weight:700;color:var(--gold)">🔥 連續答對 ${streak} 題！</p>` : ''}
       <p class="sub" style="font-weight:600">${esc(_cachedEncourageMsg || '')}</p>
-      <div class="panel" style="margin-top:6px;width:100%;max-width:320px">
-        <div class="sub" style="text-align:left">📊 大家怎麼選</div>
-        <div class="options-grid" style="margin-top:6px">
-          ${q.options.map((o,i)=> revealRowHtml(o, i, counts[i], !isFirstRender && shouxingChoice!=null && i===shouxingChoice, 'preveal-opt-'+i, totalAnswered, i===myChoice)).join('')}
-        </div>
+      ${chaseInfo ? `
+      <div class="chase" style="margin-top:4px">
+        <div class="chase-eyebrow">${CHASE_EYEBROW[chaseInfo.cat]}</div>
+        <div class="chase-line">${_cachedChaseMsg}</div>
       </div>
-      <!-- （三十五）這塊面板原本整個用 !isWarmup 擋掉——host／spectate 的
-           對應面板從來沒有這個閘門，暖身題一樣會顯示排行榜（只是大家都還是
-           0 分），玩家手機卻整塊消失，三個畫面不一致。改成暖身題也照樣顯示
-           （反正 rankedGuessers() 本來就是照 state.players 目前的真實分數
-           排，暖身題不計分所以自然全部是 0，不用另外造假資料），只是把「還
-           沒擠進前5／排名追逐」那段換成一句清楚的提醒：暖身題不算數，正式
-           題開始分數才會重新從 0 起跳，不然玩家看到自己 0 分、別人也 0 分，
-           容易誤會排行榜壞了或是自己已經落後。 -->
-      <div class="panel" style="margin-top:8px;width:100%;max-width:320px">
-        <div class="sub" style="text-align:left">🏆 累積排行榜（前 5 名）</div>
-        <div class="stack" style="margin-top:8px">
-          ${ranked.map(([id,p],i)=>`
-            <div class="lb-row ${id===PLAYER_ID?'me':''}">
-              <div class="lb-rank ${i===0?'top1':i===1?'top2':i===2?'top3':''}">${i+1}</div>
-              <div class="lb-name">${avatarSpan(p.avatar)}${nameTag(p)}</div>
-              <div class="lb-score num">${p.score}</div>
-            </div>
-          `).join('') || '<p class="sub">還沒有排名</p>'}
-        </div>
-        ${isWarmup
-          ? `<p class="warmup-note" style="margin-top:6px">🔥 暖身題不計分，大家先都是 0 分——正式題開始後分數會重新算喔！</p>`
-          : `
-            ${!inTop5 ? `<p class="sub" style="margin-top:6px">目前總分：<b>${me ? me.score : 0}</b>（還沒擠進前 5，加油！）</p>` : ''}
-            ${chaseInfo ? `
-            <div class="chase">
-              <div class="chase-eyebrow">${CHASE_EYEBROW[chaseInfo.cat]}</div>
-              <div class="chase-line">${_cachedChaseMsg}</div>
-            </div>
-            ` : ''}
-          `}
-      </div>
+      ` : ''}
     </div></div>
   `);
-  animateOptionBars(document, 150, !isFirstRender);
-
-  // Sync the same "suspense then glow" reveal beat the host's own screen
-  // uses (see renderHostReveal): on the FIRST render of this question's
-  // reveal, hold the highlight back for a beat then pop it in, so the
-  // player's phone doesn't just sit there dim while the projector lights up.
-  // Later re-renders from subsequent polls skip this — revealRowHtml above
-  // already draws the row glowing directly once isFirstRender is false, so
-  // there's nothing left to animate in.
-  if (isFirstRender && shouxingChoice != null){
-    setTimeout(()=>{
-      const el = document.getElementById('preveal-opt-' + shouxingChoice);
-      if (el){ el.classList.remove('dim'); el.classList.add('shouxing-glow', 'reveal-pop'); }
-    }, 900);
-  }
 }
 function renderPlayerFinal(state){
   const sx = state.shouxingId;
