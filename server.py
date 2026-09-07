@@ -40,6 +40,7 @@ from urllib.parse import urlparse, parse_qs
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 HTML_PATH = os.path.join(HERE, 'game.html')
+WISHES_HTML_PATH = os.path.join(HERE, 'wishes.html')
 DATA_PATH = os.path.join(HERE, 'game_data.json')
 HOST_KEY_PATH = os.path.join(HERE, 'host_key.txt')
 SEED_BANKS_PATH = os.path.join(HERE, 'seed_banks.json')
@@ -188,6 +189,23 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _serve_wishes_html(self):
+        # 生日祝福投稿站：完全靜態的頁面，資料直接從瀏覽器送去 Cloudinary，
+        # 這個伺服器只負責把 wishes.html 這個檔案原封不動吐出來，不涉及任何儲存。
+        try:
+            with open(WISHES_HTML_PATH, 'rb') as f:
+                body = f.read()
+        except FileNotFoundError:
+            self.send_response(500)
+            self.end_headers()
+            self.wfile.write('找不到 wishes.html，請確認它跟 server.py 放在同一個資料夾。'.encode('utf-8'))
+            return
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/html; charset=utf-8')
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_GET(self):
         parsed = urlparse(self.path)
         path = parsed.path
@@ -238,6 +256,11 @@ class Handler(BaseHTTPRequestHandler):
                     _cond.wait(remaining)
                 current_rev = _rev
             self._send_json({'rev': current_rev})
+        elif path == '/wishes' or path == '/wishes.html' or path == '/wishes/':
+            # 生日祝福投稿站的網址：julia-birthday-quiz.onrender.com/wishes
+            # 跟遊戲本身完全分開的一個靜態頁面，放在這裡只是為了共用同一個 Render 服務、
+            # 同一個網域，不用另外申請新的雲端主機。
+            self._serve_wishes_html()
         elif not path.startswith('/api/'):
             # SPA-style fallback: any non-API path (/, /host, /join, ...) serves
             # the same game.html — the page's own JS decides what to show based
