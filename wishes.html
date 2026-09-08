@@ -104,11 +104,33 @@
     border:1.5px dashed rgba(63,92,51,0.45); border-radius:999px; padding:9px 20px; cursor:pointer; font-family:inherit;
   }
   [hidden]{ display:none !important; }
+
+  .inapp-banner{
+    display:flex; align-items:flex-start; gap:9px; background:rgba(217,83,79,0.12);
+    border:1px solid rgba(217,83,79,0.35); border-radius:14px; padding:11px 13px;
+    margin-bottom:14px; font-size:12.5px; line-height:1.6; color:var(--ink);
+  }
+  .inapp-banner .icon{ font-size:16px; flex:none; line-height:1.4; }
+  .inapp-banner .body b{ color:var(--alert); }
+  .inapp-banner .copybtn{
+    margin-top:7px; display:inline-flex; align-items:center; gap:5px; background:#fff;
+    border:1px solid rgba(217,83,79,0.4); color:var(--alert); font-weight:800; font-size:12px;
+    border-radius:999px; padding:6px 12px; cursor:pointer; font-family:inherit;
+  }
+  .inapp-banner .copybtn.copied{ background:var(--alert); color:#fff; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <div id="formScreen">
+    <div class="inapp-banner" id="inappBanner" hidden>
+      <span class="icon">⚠️</span>
+      <div class="body">
+        <b>偵測到你可能是用 LINE／FB 等 App 內建的瀏覽器打開這個頁面。</b>
+        這種內建瀏覽器有時候會讓照片、卡片上傳失敗。建議點畫面右上角「⋯」或分享圖示，選「用瀏覽器開啟」；或直接複製連結，貼到 Safari／Chrome 打開再填寫：<br>
+        <button type="button" class="copybtn" id="copyLinkBtn">📋 複製這個頁面的連結</button>
+      </div>
+    </div>
     <header>
       <span class="eyebrow">🎁 悄悄準備的生日驚喜</span>
       <h1>寫一張給 <span class="hl">Julia</span> 的生日祝福卡</h1>
@@ -465,6 +487,37 @@ document.getElementById('writeAnotherBtn').addEventListener('click', () => {
 renderPicker();
 updateCounter();
 ensureFonts().then(redrawCard);
+
+// 偵測 LINE／FB／IG／Messenger 這類 App 內建瀏覽器（WebView）——這類環境有時候會讓
+// 打去 Cloudinary 的上傳請求直接失敗（fetch 拋出 "Failed to fetch"，不是 Cloudinary
+// 拒絕，是連線本身出不去），偵測到就在畫面最上面提醒使用者換成手機的瀏覽器 App 開啟。
+(function detectInAppBrowser(){
+  var ua = navigator.userAgent || '';
+  var isInApp = /Line\//i.test(ua) || /FBAN|FBAV/i.test(ua) || /Instagram/i.test(ua) || /MicroMessenger/i.test(ua) || /\bMessenger\b/i.test(ua);
+  if (!isInApp) return;
+  var banner = document.getElementById('inappBanner');
+  if (banner) banner.hidden = false;
+  var btn = document.getElementById('copyLinkBtn');
+  if (!btn) return;
+  btn.addEventListener('click', function(){
+    var url = location.href.split('#')[0].split('?')[0];
+    var done = function(){
+      btn.textContent = '✅ 已複製，貼到瀏覽器打開';
+      btn.classList.add('copied');
+      setTimeout(function(){
+        btn.textContent = '📋 複製這個頁面的連結';
+        btn.classList.remove('copied');
+      }, 2500);
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(url).then(done).catch(function(){
+        window.prompt('請手動複製這個連結：', url);
+      });
+    } else {
+      window.prompt('請手動複製這個連結：', url);
+    }
+  });
+})();
 </script>
 </body>
 </html>
