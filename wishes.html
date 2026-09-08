@@ -360,6 +360,38 @@ function canvasToBlob(canvas, type, quality){
   return new Promise(resolve => canvas.toBlob(resolve, type, quality));
 }
 
+// 賓客上傳的照片常常是手機相機直出的大檔案（好幾 MB，甚至 HEIC），在派對現場較弱的
+// wifi／行動網路下很容易上傳逾時或失敗。送出前先在瀏覽器端把照片縮小、轉成 JPEG 壓縮，
+// 大幅降低失敗機率——跟卡片本身用 canvas 合成的做法是同一個概念。任何一步失敗（例如
+// 瀏覽器不支援解碼某些格式）就直接退回原始檔案，不讓壓縮本身變成新的失敗點。
+function compressImageFile(file, maxDim = 1600, quality = 0.82){
+  return new Promise((resolve) => {
+    let objUrl;
+    try { objUrl = URL.createObjectURL(file); } catch (e){ resolve(file); return; }
+    const img = new Image();
+    const done = (result) => { URL.revokeObjectURL(objUrl); resolve(result); };
+    img.onload = () => {
+      try {
+        const scale = Math.min(1, maxDim / Math.max(img.naturalWidth, img.naturalHeight));
+        const w = Math.max(1, Math.round(img.naturalWidth * scale));
+        const h = Math.max(1, Math.round(img.naturalHeight * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        canvas.toBlob((blob) => {
+          done((blob && blob.size > 0 && blob.size < file.size) ? blob : file);
+        }, 'image/jpeg', quality);
+      } catch (e){
+        done(file);
+      }
+    };
+    img.onerror = () => done(file);
+    img.src = objUrl;
+  });
+}
+
 async function handleSubmit(e){
   e.preventDefault();
   const nameVal = document.getElementById('fName').value.trim();
@@ -390,13 +422,18 @@ async function handleSubmit(e){
     await uploadToCloudinary(cardBlob, { tags: 'card', context });
 
     for (const file of selectedPhotos){
-      await uploadToCloudinary(file, { tags: 'photo', context: `name=${escapeContextValue(nameVal)}`, preset: UPLOAD_PRESET_PHOTO });
+      const uploadFile = await compressImageFile(file);
+      await uploadToCloudinary(uploadFile, { tags: 'photo', context: `name=${escapeContextValue(nameVal)}`, preset: UPLOAD_PRESET_PHOTO });
     }
 
     document.getElementById('formScreen').hidden = true;
     document.getElementById('doneScreen').hidden = false;
   } catch (err){
-    statusEl.textContent = '送出失敗：' + err.message + '（可以再試一次）';
+    let hint = err.message;
+    if (hint === 'Failed to fetch'){
+      hint = '網路連線出現問題。如果你是從 LINE、Messenger 等 App 裡面點連結打開這個頁面，建議改用手機內建的瀏覽器（Safari／Chrome）重新開啟這個網址再試一次';
+    }
+    statusEl.textContent = '送出失敗：' + hint + '（可以再試一次）';
     statusEl.className = 'status err';
     submitBtn.disabled = false;
   }
