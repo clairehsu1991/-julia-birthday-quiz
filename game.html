@@ -935,8 +935,17 @@
   }
   .podium-label .name{ font-weight:800; font-size:13px; overflow-wrap:anywhere; }
   .podium-label .score{ font-family:'Fredoka',sans-serif; font-size:20px; color:var(--moss); }
-  .podium-label .prize-line{ opacity:0; transform:translateY(6px); transition:opacity .45s ease, transform .45s ease; font-size:10.5px; margin-top:2px; }
+  /* （四十一）原本這行只有 10.5px、印使用者填的原始 % 數字，使用者反饋
+     看不清楚——改成兩行：金額用跟 .score 同量級（甚至更粗更醒目）的字級，
+     百分比降級成小字附註，一眼先看到「能拿多少錢」。 */
+  .podium-label .prize-line{ opacity:0; transform:translateY(6px); transition:opacity .45s ease, transform .45s ease; margin-top:4px; }
   .podium-label .prize-line.show{ opacity:1; transform:translateY(0); }
+  .podium-label .prize-amt{ font-family:'Fredoka',sans-serif; font-weight:700; font-size:clamp(15px,2.6vw,21px); color:var(--terracotta); }
+  .podium-label .prize-note{ font-size:9.5px; color:var(--ink-dim); margin-top:1px; }
+  /* 「獎金分配結果」畫面（allCoop 才會出現的那張分配明細）同樣放大金額——
+     跟上面 .podium-label 的處理同一個原則，數字是主角、% 只是附註。 */
+  .coop-amt{ font-family:'Fredoka',sans-serif; font-weight:700; font-size:clamp(18px,2.8vw,24px); color:var(--terracotta); }
+  .coop-pct{ font-family:'Noto Sans TC',sans-serif; font-weight:500; font-size:12px; color:var(--ink-dim); margin-left:2px; }
 
   /* 凸台（左）＋右側其餘排名面板：並排、垂直置中對齊、整組水平置中；版面
      不夠寬（手機直式主持人視窗、平板）就自動疊成一欄，面板掉到凸台下面。
@@ -1122,12 +1131,20 @@
   .lp-inner{ position:relative; z-index:1; width:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; }
   .lp-eyebrow{ font-size:clamp(11px,1.4vw,13px); font-weight:800; color:var(--moss); background:rgba(255,255,255,0.65); border:1.3px dashed rgba(63,92,51,0.4); border-radius:999px; padding:4px 14px; margin-bottom:12px; }
 
-  .lp-rules-card{ background:rgba(251,246,236,0.88); border-radius:20px; padding:clamp(16px,3vw,28px) clamp(20px,4vw,36px); max-width:min(520px,92%); box-shadow:0 14px 34px rgba(46,36,24,0.16); }
-  .lp-rules-title{ font-family:'Fredoka',sans-serif; font-weight:600; font-size:clamp(18px,3vw,25px); margin:0 0 14px; }
-  .lp-rules-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:9px; text-align:left; }
-  .lp-rules-list li{ display:flex; gap:10px; align-items:flex-start; font-size:clamp(12px,1.6vw,13.5px); line-height:1.55; color:var(--ink); }
-  .lp-rules-list .ico{ flex:none; font-size:15px; }
-  .lp-rules-list li.stake{ background:rgba(242,193,78,0.24); border:1.3px dashed rgba(200,150,30,0.6); border-radius:12px; padding:8px 12px; font-weight:800; }
+  /* （四十一）使用者反饋這張卡在投影頁上看起來太小、飄在畫面中間——原本
+     max-width 封在 520px，跟其他「滿版」的頁面（例如 .chapter-intro 直接
+     填滿整個 .col）比起來明顯迷你。改成不設 max-width（跟著 .col 最寬
+     920px 走），呼叫端（renderHostRules()/renderSpectateRules()）另外用
+     inline style="flex:1" 把外層 .lp-inner 撐滿整個畫面高度，卡片本身垂直
+     置中——這樣「大」跟「滿版」兩個方向一起補足，不用另外開一個新的
+     class。字級也一併放大一輪（標題／條列／押金提示都是），確保投影在
+     大螢幕上還是看得清楚。*/
+  .lp-rules-card{ background:rgba(251,246,236,0.92); border-radius:28px; padding:clamp(28px,5vh,56px) clamp(28px,6vw,72px); width:100%; box-shadow:0 18px 46px rgba(46,36,24,0.18); }
+  .lp-rules-title{ font-family:'Fredoka',sans-serif; font-weight:600; font-size:clamp(26px,4.6vw,44px); margin:0 0 24px; text-align:center; }
+  .lp-rules-list{ list-style:none; margin:0 auto; padding:0; display:flex; flex-direction:column; gap:clamp(14px,2.4vh,22px); text-align:left; max-width:680px; }
+  .lp-rules-list li{ display:flex; gap:14px; align-items:flex-start; font-size:clamp(16px,2.4vw,22px); line-height:1.6; color:var(--ink); }
+  .lp-rules-list .ico{ flex:none; font-size:clamp(21px,3vw,28px); }
+  .lp-rules-list li.stake{ background:rgba(242,193,78,0.26); border:1.5px dashed rgba(200,150,30,0.65); border-radius:16px; padding:14px 18px; font-weight:800; font-size:clamp(17px,2.6vw,24px); }
 
   .lp-modal{ background:rgba(46,36,24,0.46); position:fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:40; }
   .lp-modal-card{ background:var(--cream); border-radius:22px; padding:clamp(18px,3vw,28px) clamp(22px,4vw,32px); text-align:center; box-shadow:0 20px 48px rgba(46,36,24,0.32); max-width:min(320px,86%); }
@@ -3035,7 +3052,7 @@ function renderHostSetup(){
           <div class="hs-panel${hsOpen('hs-p5')}" id="hs-p5">
             <button class="hs-panel-head" onclick="hsToggle('hs-p5')"><span>🏆 全部合作時，各名次拿到的獎金比例（%）</span><span class="hs-soft">選填</span><span class="hs-caret">⌄</span></button>
             <div class="hs-panel-body">
-              <p class="sub">頒獎典禮的合作／背叛考驗如果三人都選合作，獎金就照這裡設定的比例分給前三名（單位是 %，選填，留空或全部是 0 會平均分）。</p>
+              <p class="sub">頒獎典禮的「一分鐘囚徒談判」如果三人都選合作，獎金就照這裡設定的比例分給前三名（單位是 %，選填，留空或全部是 0 會平均分）。</p>
               <div class="stack" style="margin-top:10px">
                 <div class="field"><label>🥇 第一名 %</label><input id="prize-0" type="number" min="0" max="100" value="${esc(PRIZES[0]||'')}" placeholder="例如：50" oninput="setPrize(0,this.value)"></div>
                 <div class="field"><label>🥈 第二名 %</label><input id="prize-1" type="number" min="0" max="100" value="${esc(PRIZES[1]||'')}" placeholder="選填" oninput="setPrize(1,this.value)"></div>
@@ -3513,7 +3530,7 @@ function renderHostLobby(){
         <button class="btn" onclick="goRules()" ${sxReady? '' : 'disabled'}>▶ 開始第一題</button>
       </div>
       <p class="sub" style="font-size:12px;margin-top:6px;text-align:center">一個人也想測試？「🧪 加入測試玩家」一次補滿 7 位假玩家（1 位當壽星、6 位猜猜的人，湊得出頒獎典禮前三名＋最後一名需要的人數），
-      出題畫面上會多一顆「讓測試玩家作答」讓你自己一個人也能跑完整場、包含頒獎典禮的合作／背叛賽局跟最後一名海帶拳畫面。回設定重開一場真的遊戲時會自動清掉，不用另外整理。</p>
+      出題畫面上會多一顆「讓測試玩家作答」讓你自己一個人也能跑完整場、包含頒獎典禮的「一分鐘囚徒談判」跟最後一名海帶拳畫面。回設定重開一場真的遊戲時會自動清掉，不用另外整理。</p>
     </div></div>
   `);
 }
@@ -3549,8 +3566,8 @@ function goRules(){
 }
 const RULES_BULLETS = [
   { ico:'🎯', text:'每一題都是「猜猜看壽星會怎麼選」，跟壽星選的一樣才會得分。' },
-  { ico:'🥇', text:'分數最高的前三名，遊戲結束會公開頒獎——但獎金要通過一關合作／背叛的考驗才能真的拿到。' },
-  { ico:'😅', text:'分數最後一名要接受「最後一名」的罵名——或是挑戰獎金最高的人，討回面子。' }
+  { ico:'🥇', text:'取前三名進入獎金挑戰賽——最後要通過一分鐘的「囚徒談判」，獎金才真的到手。' },
+  { ico:'😅', text:'分數最後一名？準備好被公開處刑，除非你有種去踢館獎金最高者討回面子！' }
 ];
 function rulesCardHtml(){
   return `
@@ -3567,11 +3584,11 @@ function renderHostRules(){
   render(`
     <div class="shell"><div class="col">
       ${hostNav(true)}
-      <div class="lp-inner">
+      <div class="lp-inner" style="flex:1">
         ${rulesCardHtml()}
-        <div class="btn-row" style="margin-top:16px">
-          <button class="btn" onclick="nextQuestion()">▶ 開始暖身題</button>
-        </div>
+      </div>
+      <div class="btn-row" style="margin-top:16px">
+        <button class="btn" onclick="nextQuestion()">▶ 開始暖身題</button>
       </div>
     </div></div>
   `);
@@ -4616,7 +4633,11 @@ function renderHostAwardsPodium(){
   // Prize text starts hidden (.prize-line, no .show) — animatePodiumReveal() fades
   // it in a beat AFTER the character/score land, so "誰得獎" and "獎品是什麼"
   // read as two separate suspense beats instead of dumping everything at once.
-  const prizeLine = (i, elId) => prizes[i] ? `<div class="sub prize-line" id="${elId}">🎁 ${esc(prizes[i])}</div>` : '';
+  // （四十一）改成算出實際金額顯示（原本只印使用者填的原始 % 數字，字又小，
+  // 使用者反饋看不清楚也不知道實際能拿多少）——每格是否顯示仍然照原本的
+  // 邏輯，只看「這個名次自己有沒有填數字」，跟其他兩格填了沒無關。
+  const prizeAmounts = coopPrizeAmountsFrom(prizes, hostState.players);
+  const prizeLine = (i, elId) => prizes[i] ? `<div class="prize-line" id="${elId}"><div class="prize-amt">💰 ${prizeAmounts[i]} 元</div><div class="prize-note">全部合作可拿・佔 ${esc(prizes[i])}%</div></div>` : '';
   render(`
     <div class="shell"><div class="col" style="align-items:center;text-align:center">
       ${hostNav(true)}
@@ -4638,7 +4659,7 @@ function renderHostAwardsPodium(){
       </div>
       ${top3.length? '' : '<p class="sub">這場沒有人猜，先跳過頒獎</p>'}
       <div class="btn-row" style="margin-top:6px">
-        <button class="btn" onclick="goAwardsCoop()">🤝🏻😈 合作／背叛考驗 →</button>
+        <button class="btn" onclick="goAwardsCoop()">🤝🏻😈 一分鐘囚徒談判 →</button>
       </div>
     </div></div>
   `);
@@ -4732,7 +4753,7 @@ function renderHostAwardsCoop(){
     <div class="shell"><div class="col" style="align-items:center;text-align:center">
       ${hostNav(true)}
       <div class="lp-inner">
-        <span class="lp-eyebrow">🤝🏻😈 前三名的獎金考驗</span>
+        <span class="lp-eyebrow">🤝🏻😈 一分鐘囚徒談判</span>
         <div class="lp-trio">
           ${ids.map((id,i)=>{
             const p = hostState.players[id]; if (!p) return '';
@@ -4846,17 +4867,34 @@ async function processCoopChoices(){
   if (ids.length && Object.keys(hostState.coopChoices).length === ids.length) evaluateCoopRound();
 }
 /* Reads hostState.prizes (now "% of the all-cooperate split", see the
-   renderHostSetup hs-p5 panel) as display-only percentages — never a dollar
-   amount, there's no reliable source for the total pool size in-app (the
-   100-currency entry fee is physical cash the host tracks, not stored in
-   hostState). Falls back to an even 34/33/33 split display when all three
-   are blank/zero/NaN rather than showing a broken 0/0/0. */
+   renderHostSetup hs-p5 panel) as percentages. Falls back to an even
+   34/33/33 split display when all three are blank/zero/NaN rather than
+   showing a broken 0/0/0. */
 function coopPrizePercentsFrom(prizes){
   const raw = (prizes || ['','','']).map(v => { const n = parseFloat(v); return (isFinite(n) && n > 0) ? n : 0; });
   const total = raw[0] + raw[1] + raw[2];
   return total > 0 ? raw : [34, 33, 33];
 }
 function coopPrizePercents(){ return coopPrizePercentsFrom(hostState.prizes); }
+/* （四十一）新增：使用者反饋「參加的人包括壽星都要付 100，希望看到設定
+   比例之後實際可以拿到的金額」——原本上面這段註解寫「沒有可靠的獎金池
+   來源」，其實是想多了：hostState.players 本身就是「這場遊戲的全部參與者」
+   （壽星也是其中一筆，見 shouxingId 指向 players 裡的某個 id），每人 100
+   元參賽費，池子大小其實就在 app 裡，只是先前沒有人把它算出來顯示。
+   🧪 測試玩家（isTestBot）也算進池子——主持人拿他們彩排整場流程時，
+   金額才會是接近真實的示意數字，不會排練時看到的永遠是 0 元。 */
+function totalEntryPoolFrom(players){
+  return 100 * Object.keys(players || {}).length;
+}
+/* prizes[] 存的是「%」，不強制加總等於 100（跟 renderHostSetup hs-p5 面板
+   的欄位語意一致：每一欄單純是「這個名次拿獎金池的幾 %」）——這裡不做
+   任何正規化，忠實按每一欄自己的百分比去算，主持人自己填的數字加起來
+   不是 100 也不特別去猜他的意圖調整。 */
+function coopPrizeAmountsFrom(prizes, players){
+  const pcts = coopPrizePercentsFrom(prizes);
+  const pool = totalEntryPoolFrom(players);
+  return pcts.map(p => Math.round(pool * p / 100));
+}
 function coopOutcomeMeta(outcome, champ){
   const champName = champ ? nameTag(champ) : '—';
   const META = {
@@ -4929,6 +4967,7 @@ function renderHostAwardsCoopResult(){
   const champ = hostState.players[hostState.prizeChampionId];
   const meta = coopOutcomeMeta(outcome, champ);
   const pcts = coopPrizePercents();
+  const amounts = coopPrizeAmountsFrom(hostState.prizes, hostState.players);
   render(`
     <div class="shell"><div class="col" style="align-items:center;text-align:center">
       ${hostNav(true)}
@@ -4950,7 +4989,7 @@ function renderHostAwardsCoopResult(){
       ${outcome === 'allCoop' ? `
       <div class="panel" style="margin-top:14px;max-width:420px;width:100%">
         <div class="stack">
-          ${ids.map((id,i)=>{ const p = hostState.players[id]; if (!p) return ''; return `<div class="lb-row"><div class="lb-name">${avatarSpan(p.avatar)}${nameTag(p)}</div><div class="sub">${pcts[i]}%</div></div>`; }).join('')}
+          ${ids.map((id,i)=>{ const p = hostState.players[id]; if (!p) return ''; return `<div class="lb-row"><div class="lb-name">${avatarSpan(p.avatar)}${nameTag(p)}</div><div class="coop-amt">💰 ${amounts[i]} 元<span class="coop-pct">（${pcts[i]}%）</span></div></div>`; }).join('')}
         </div>
       </div>` : ''}
       <div class="btn-row" style="margin-top:14px">
@@ -5435,7 +5474,7 @@ function renderSpectateRules(state){
   clearSpectateCountdown();
   render(`
     <div class="shell"><div class="col">
-      <div class="lp-inner">
+      <div class="lp-inner" style="flex:1">
         ${rulesCardHtml()}
       </div>
     </div></div>
@@ -5713,7 +5752,8 @@ function renderSpectateAwardsPodium(state){
   clearSpectateCountdown();
   const top3 = (state.topIds||[]).map(id=>[id, state.players[id]]).filter(([,p])=>p);
   const prizes = state.prizes || ['','',''];
-  const prizeLine = (i, elId) => prizes[i] ? `<div class="sub prize-line" id="${elId}">🎁 ${esc(prizes[i])}</div>` : '';
+  const prizeAmounts = coopPrizeAmountsFrom(prizes, state.players);
+  const prizeLine = (i, elId) => prizes[i] ? `<div class="prize-line" id="${elId}"><div class="prize-amt">💰 ${prizeAmounts[i]} 元</div><div class="prize-note">全部合作可拿・佔 ${esc(prizes[i])}%</div></div>` : '';
   // (二十九) 第一次進到這個畫面時，跟主持人頁一樣播「3rd→2nd→1st 依序跳出＋
   // 撒花」；之後同一輪的每次 poll 重新渲染（分數／許願卡等其他狀態變化都會
   // 觸發整頁重畫）就跳過動畫、直接顯示最終狀態，避免動畫一直重播閃爍——同一套
@@ -5758,7 +5798,7 @@ function renderSpectateAwardsCoop(state){
   render(`
     <div class="shell"><div class="col" style="align-items:center;text-align:center">
       <div class="lp-inner">
-        <span class="lp-eyebrow">🤝🏻😈 前三名的獎金考驗</span>
+        <span class="lp-eyebrow">🤝🏻😈 一分鐘囚徒談判</span>
         <div class="lp-trio">
           ${ids.map((id,i)=>{
             const p = state.players[id]; if (!p) return '';
@@ -5806,6 +5846,7 @@ function renderSpectateAwardsCoopResult(state){
   const champ = state.players[state.prizeChampionId];
   const meta = coopOutcomeMeta(outcome, champ);
   const pcts = coopPrizePercentsFrom(state.prizes);
+  const amounts = coopPrizeAmountsFrom(state.prizes, state.players);
   const key = (state.roundId||'') + '_coopresult';
   const isFirstRender = _lastSpecCoopResultKey !== key;
   _lastSpecCoopResultKey = key;
@@ -5830,7 +5871,7 @@ function renderSpectateAwardsCoopResult(state){
         ${outcome === 'allCoop' ? `
         <div class="panel" style="margin-top:14px;max-width:420px;width:100%">
           <div class="stack">
-            ${ids.map((id,i)=>{ const p = state.players[id]; if (!p) return ''; return `<div class="lb-row"><div class="lb-name">${avatarSpan(p.avatar)}${nameTag(p)}</div><div class="sub">${pcts[i]}%</div></div>`; }).join('')}
+            ${ids.map((id,i)=>{ const p = state.players[id]; if (!p) return ''; return `<div class="lb-row"><div class="lb-name">${avatarSpan(p.avatar)}${nameTag(p)}</div><div class="coop-amt">💰 ${amounts[i]} 元<span class="coop-pct">（${pcts[i]}%）</span></div></div>`; }).join('')}
           </div>
         </div>` : ''}
       </div>
@@ -6488,7 +6529,7 @@ function renderPlayerCoopChoice(state){
   const submitted = coopChoiceSubmittedToken === state.coopRoundToken;
   render(`
     <div class="shell"><div class="center">
-      <span class="eyebrow">🤝🏻😈 獎金考驗</span>
+      <span class="eyebrow">🤝🏻😈 一分鐘囚徒談判</span>
       <h1 class="marquee-title" style="font-size:clamp(22px,6vw,32px)">${esc(PLAYER_NAME)}，你選？</h1>
       <div class="lp-countdown" id="player-coop-countdown">01:00</div>
       ${submitted ? `
@@ -6556,7 +6597,7 @@ function renderPlayerAwards(state){
     render(`
       <div class="shell"><div class="center">
         <div style="font-size:54px">🤝🏻😈</div>
-        <h1 class="marquee-title" style="font-size:clamp(22px,6vw,32px)">前三名的獎金考驗進行中</h1>
+        <h1 class="marquee-title" style="font-size:clamp(22px,6vw,32px)">前三名的「一分鐘囚徒談判」進行中</h1>
         <p class="sub">看主畫面，倒數結束就會公布結果</p>
       </div></div>
     `);
