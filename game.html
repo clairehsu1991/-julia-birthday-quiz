@@ -960,33 +960,6 @@
   .rest-rank-dots span{ width:6px; height:6px; border-radius:50%; background:var(--line); transition:background .3s ease; }
   .rest-rank-dots span.on{ background:var(--moss); }
 
-  /* ---------- 猜拳抽籤 ---------- */
-  .rps-hand{ font-size:20px; margin-left:6px; display:inline-block; }
-  /* runRpsDraw() swaps the hand emoji every ~180ms, but a plain text swap alone
-     is easy to miss (especially projected at a distance) — it reads as "nothing
-     is happening" even though the draw is running correctly. While shuffling,
-     wiggle the whole pill and pulse the hand glyph in the same rhythm as the
-     JS ticks, so the draw visibly feels like an animation. */
-  .player-pill.shuffling{ animation: rpsWiggle .3s ease-in-out infinite; }
-  .player-pill.shuffling .rps-hand{ font-size:26px; animation: pulse .18s ease-in-out infinite; }
-  @keyframes rpsWiggle{ 0%,100%{ transform:rotate(0deg) scale(1); } 25%{ transform:rotate(-3deg) scale(1.03); } 75%{ transform:rotate(3deg) scale(1.03); } }
-  /* The winning medal pops into place once the draw lands — same beat as the podium reveal. */
-  .rps-hand.landed{ font-size:26px; animation: pulse .5s ease; }
-  /* A player already placed by a solo win/loss (see evaluateRpsRound()) sits out
-     the next throw — dim their pill so it's visually clear they're done. */
-  .player-pill.rps-placed{ opacity:.55; }
-
-  /* ---------- 玩家自己按停的猜拳畫面 ---------- */
-  .my-rps-hand{ font-size:clamp(70px,22vw,110px); margin:10px 0; line-height:1; }
-
-  /* ---------- 許願卡「洗牌」發牌動畫 ---------- */
-  @keyframes cardDeal{
-    0%{ opacity:0; transform:translateY(-36px) rotate(var(--deal-rot,0deg)) scale(.72); }
-    65%{ opacity:1; transform:translateY(5px) rotate(0deg) scale(1.04); }
-    100%{ opacity:1; transform:translateY(0) rotate(0deg) scale(1); }
-  }
-  .opt-card.card-deal{ animation: cardDeal .5s cubic-bezier(.34,1.56,.64,1) both; }
-
   /* ---------- 壽星答案揭曉：先賣關子再翻牌 ---------- */
   @keyframes revealPop{ 0%{ transform:scale(.9); } 55%{ transform:scale(1.05); } 100%{ transform:scale(1); } }
   .opt-card.reveal-pop{ animation: revealPop .5s cubic-bezier(.34,1.56,.64,1); }
@@ -1131,15 +1104,84 @@
     .chip.timer.urgent{ animation:none; }
     .confetti-piece{ animation:none; display:none; }
     .btn, .opt-card{ transition:none; }
-    .player-pill.shuffling, .player-pill.shuffling .rps-hand, .rps-hand.landed{ animation:none; }
     .lb-row{ transition:none; }
-    .opt-card.card-deal, .opt-card.reveal-pop{ animation:none; }
+    .opt-card.reveal-pop{ animation:none; }
     .p.show .rank-crown{ animation:none; }
     .opt-bar-fill{ transition:none; }
     .prize-line{ transition:none; }
     .lb-crown-slot.pop{ animation:none; }
     .rest-rank-page{ transition:none; }
+    .lp-countdown.urgent{ animation:none; }
   }
+
+  /* ===== Awards rewrite: rules screen + coop/betray minigame + last-place
+     duel (ported verbatim from party_mockups.html #lastplace, see game.html
+     dev log). Uses the same :root design tokens already defined above, so
+     these paste straight in without needing their own color variables. */
+  .lp-frame-label{ display:flex; align-items:center; gap:9px; font-size:12.5px; font-weight:800; color:var(--ink-dim); margin:28px 0 10px; }
+  .lp-inner{ position:relative; z-index:1; width:100%; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; }
+  .lp-eyebrow{ font-size:clamp(11px,1.4vw,13px); font-weight:800; color:var(--moss); background:rgba(255,255,255,0.65); border:1.3px dashed rgba(63,92,51,0.4); border-radius:999px; padding:4px 14px; margin-bottom:12px; }
+
+  .lp-rules-card{ background:rgba(251,246,236,0.88); border-radius:20px; padding:clamp(16px,3vw,28px) clamp(20px,4vw,36px); max-width:min(520px,92%); box-shadow:0 14px 34px rgba(46,36,24,0.16); }
+  .lp-rules-title{ font-family:'Fredoka',sans-serif; font-weight:600; font-size:clamp(18px,3vw,25px); margin:0 0 14px; }
+  .lp-rules-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:9px; text-align:left; }
+  .lp-rules-list li{ display:flex; gap:10px; align-items:flex-start; font-size:clamp(12px,1.6vw,13.5px); line-height:1.55; color:var(--ink); }
+  .lp-rules-list .ico{ flex:none; font-size:15px; }
+  .lp-rules-list li.stake{ background:rgba(242,193,78,0.24); border:1.3px dashed rgba(200,150,30,0.6); border-radius:12px; padding:8px 12px; font-weight:800; }
+
+  .lp-modal{ background:rgba(46,36,24,0.46); position:fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:40; }
+  .lp-modal-card{ background:var(--cream); border-radius:22px; padding:clamp(18px,3vw,28px) clamp(22px,4vw,32px); text-align:center; box-shadow:0 20px 48px rgba(46,36,24,0.32); max-width:min(320px,86%); }
+  .lp-modal-kicker{ font-size:10.5px; font-weight:800; color:var(--alert); letter-spacing:.04em; }
+  .lp-modal-avatar{ font-size:clamp(44px,7vw,60px); margin:10px 0 4px; }
+  .lp-modal-name{ font-family:'Fredoka',sans-serif; font-weight:600; font-size:clamp(20px,3.4vw,28px); margin:0; }
+  .lp-modal-sub{ font-size:12px; color:var(--ink-dim); margin-top:6px; line-height:1.6; }
+
+  .lp-choice-row{ display:flex; gap:12px; flex-wrap:wrap; justify-content:center; margin-top:16px; }
+  .lp-choice-btn{ flex:1 1 180px; max-width:210px; border-radius:16px; padding:14px 12px; text-align:center; font-weight:800; border:2px solid var(--line); background:#fff; cursor:pointer; }
+  .lp-choice-btn .big{ font-size:22px; display:block; margin-bottom:5px; }
+  .lp-choice-btn .lbl{ font-size:12.5px; color:var(--ink); }
+  .lp-choice-btn.challenge{ border-color:var(--coral); background:rgba(232,101,75,0.08); }
+  .lp-choice-btn.challenge .lbl{ color:var(--coral); }
+  .lp-hostpanel-note{ font-size:11px; color:var(--ink-dim); margin-top:12px; background:rgba(255,255,255,0.65); border-radius:999px; padding:5px 14px; display:inline-block; }
+
+  .lp-result-card{ background:rgba(251,246,236,0.92); border-radius:22px; padding:clamp(18px,3vw,28px) clamp(22px,4vw,32px); text-align:center; max-width:min(360px,86%); box-shadow:0 16px 38px rgba(46,36,24,0.18); }
+  .lp-result-card.win{ border:2px solid var(--moss); }
+  .lp-result-card.lose{ border:2px solid var(--alert); }
+  .lp-result-title{ font-family:'Fredoka',sans-serif; font-weight:600; font-size:clamp(19px,3.4vw,26px); margin:6px 0 6px; }
+  .lp-result-card.win .lp-result-title{ color:var(--moss); }
+  .lp-result-card.lose .lp-result-title{ color:var(--alert); }
+  .lp-result-sub{ font-size:12.5px; color:var(--ink-dim); }
+  .lp-penalty-box{ margin-top:14px; background:rgba(217,83,79,0.1); border:1.5px dashed var(--alert); border-radius:14px; padding:10px 13px; }
+  .lp-penalty-box .tag{ font-size:9.5px; font-weight:800; color:var(--alert); letter-spacing:.03em; }
+  .lp-penalty-box .txt{ font-size:13.5px; font-weight:800; color:var(--ink); margin-top:4px; line-height:1.5; }
+
+  .lp-trio{ display:flex; justify-content:center; gap:clamp(14px,3vw,32px); margin-bottom:16px; flex-wrap:wrap; }
+  .lp-trio-person{ display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .lp-trio-person .av{ font-size:clamp(34px,5.5vw,48px); }
+  .lp-trio-person .nm{ font-size:11.5px; font-weight:800; }
+  .lp-trio-person .rk{ font-size:9.5px; color:var(--ink-dim); }
+  .lp-trio-cards{ display:flex; justify-content:center; gap:clamp(10px,2.4vw,20px); margin-top:2px; }
+  .lp-trio-card{ width:clamp(46px,7vw,64px); aspect-ratio:3/4; border-radius:10px; background:linear-gradient(160deg,#EADFC4,#F3E7CE); border:1.5px solid var(--line); display:flex; align-items:center; justify-content:center; font-size:20px; color:var(--ink-dim); box-shadow:0 4px 10px rgba(46,36,24,0.12); }
+  .lp-countdown{ margin-top:16px; font-family:'Fredoka',sans-serif; font-weight:600; font-size:clamp(22px,3.6vw,30px); background:#fff; border-radius:999px; padding:6px 24px; border:2px solid var(--line); color:var(--ink); }
+  .lp-countdown.urgent{ border-color:var(--alert); color:var(--alert); animation:pulse .5s ease infinite; }
+  .lp-countdown-note{ font-size:10.5px; color:var(--ink-dim); margin-top:7px; }
+
+  .lp-outcome-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-top:6px; width:100%; max-width:520px; }
+  @media (max-width:560px){ .lp-outcome-grid{ grid-template-columns:1fr; } }
+  .lp-outcome-card{ background:rgba(251,246,236,0.94); border-radius:14px; padding:11px 13px; border:1.5px solid var(--line); }
+  .lp-outcome-card .combo{ font-size:15px; letter-spacing:2px; }
+  .lp-outcome-card .desc{ font-size:11px; color:var(--ink); margin-top:5px; line-height:1.55; font-weight:700; }
+  .lp-outcome-card.happened{ border-color:var(--coral); background:rgba(232,101,75,0.08); }
+  .lp-outcome-card.unknown{ border-style:dashed; border-color:var(--alert); }
+  .lp-outcome-card.unknown .desc{ color:var(--alert); }
+
+  .lp-score-panel{ background:rgba(251,246,236,0.92); border-radius:20px; padding:clamp(16px,3vw,24px); max-width:min(420px,92%); box-shadow:0 14px 34px rgba(46,36,24,0.16); }
+  .lp-score-names{ display:flex; align-items:center; justify-content:center; gap:14px; font-weight:800; font-size:14px; }
+  .lp-score{ margin-top:14px; font-family:'Fredoka',sans-serif; font-size:clamp(19px,3vw,26px); letter-spacing:.06em; }
+  .lp-score-btnrow{ display:flex; gap:10px; margin-top:16px; }
+  .lp-score-btn{ flex:1; border-radius:14px; padding:11px 8px; text-align:center; font-weight:800; font-size:12px; background:#fff; border:2px solid var(--line); cursor:pointer; }
+  .lp-score-btn.lead{ border-color:var(--moss); color:var(--moss); background:rgba(63,92,51,0.08); }
+  .lp-duel-note{ font-size:11px; color:var(--ink-dim); margin-top:10px; }
 </style>
 </head>
 <body>
@@ -1333,7 +1375,16 @@ function hsCollapseAll(){
   renderHostSetup();
 }
 let TIME_LIMIT_SECONDS = 15;
-let PRIZES = ['', '', ''];        // free-text rewards for 🥇🥈🥉 on the awards podium
+// （awards 改版）PRIZES 欄位語意從「前三名自由文字獎品」改成「全部合作時，
+// 各名次拿到的獎金比例（%，數字字串）」——沿用同一個陣列／同一組
+// setPrize()/saveDraft()/startLobby() 既有管線，不新增欄位，只改輸入型態
+// （見 renderHostSetup 的 hs-p5 分區）跟 evaluateCoopRound() 怎麼解讀它。
+let PRIZES = ['', '', ''];        // 🥇🥈🥉 percentage strings for the all-cooperate prize split
+// Coop/betray minigame's own "urgent" cutoff — deliberately a distinctly
+// named constant instead of reusing/renaming the question timer's inline
+// 5000/5 literals (see hostCountdownTick/updateHostTimerUI), which stay
+// exactly as they were. 10s feels right for a 60s window; tune here only.
+const COOP_URGENT_THRESHOLD_MS = 10000;
 
 let HOST_UNLOCKED = false;        // true only after the server confirmed this browser's host key
 let HOST_KEY = '';
@@ -1351,9 +1402,11 @@ let hostPollGen = 0;              // generation counter guarding runHostPollLoop
 let hostQuestionStartLocal = 0;
 let hostGraceStartLocal = 0;      // when the post-timeout 5s grace window for 壽星 started
 let hostPickForShouxingMode = false; // host is tapping an option on 壽星's behalf right now
+let hostCoopCountdownHandle = null; // drives the host-side coop/betray 60s countdown — a sibling of hostCountdownHandle, NOT reused, see hostCoopCountdownTick()
 
 let playerPollGen = 0;            // generation counter guarding runPlayerPollLoop() — see startPlayerPolling()
 let playerCountdownHandle = null; // drives the live per-player timer chip between polls
+let playerCoopCountdownHandle = null; // sibling of playerCountdownHandle for the coop/betray countdown — see updatePlayerCoopTimerUI()
 let localSeenQuestionIndex = -1;
 let localQuestionSeenAt = 0;
 let hasAnsweredCurrent = false;
@@ -1381,6 +1434,12 @@ let _lastSpecDoneKey = null;
 // 不需要另外寫一份），之後同一輪的重畫維持靜態顯示最終結果，不重播。
 let _lastSpecFinalKey = null;
 let _lastSpecWarmupChimeKey = null; // guards playWarmupChime() so a warmup question's start sound only plays once per question, not on every poll re-render — see renderSpectateQuestion()
+// (awards 改版) 合作／背叛倒數 + 揭曉音效的「只播一次」鍵值，跟上面幾個
+// _lastSpecXxxKey 同一套寫法。倒數本身是新的 sibling timer（跟題目倒數各自
+// 獨立，不共用 spectateCountdownHandle），揭曉音效只在投影頁播——見
+// renderSpectateAwardsCoopResult() 的文件註解。
+let spectateCoopCountdownHandle = null;
+let _lastSpecCoopResultKey = null;
 
 /* ---------- generic helpers ---------- */
 function esc(s){
@@ -2218,6 +2277,7 @@ async function resumeLiveGameIfAny(){
   }
   const renderers = {
     lobby: renderHostLobby,
+    rules: renderHostRules,
     chapterIntro: renderHostChapterIntro,
     reveal: renderHostReveal,
     final: renderHostFinal,
@@ -2276,7 +2336,7 @@ function stopHostTimers(){
   if (hostCountdownHandle) clearInterval(hostCountdownHandle);
   hostCountdownHandle = null;
   hostPollGen++; // invalidates any in-flight runHostPollLoop(), which exits after its current await
-  stopHostRpsSpin();
+  stopHostCoopCountdown();
 }
 /* Park the game so players' phones fall back to a friendly "host stepped away" screen
    instead of freezing on whatever they were last shown. */
@@ -2830,7 +2890,7 @@ function renderHostSetup(){
           <button class="hs-navitem${hsActive('hs-p2')}" onclick="hsGoTo('hs-p2')"><span>📋 題目管理</span>${questionsNeedAttention ? '<span class="hs-flag">未新增</span>' : ''}</button>
           <button class="hs-navitem${hsActive('hs-p3')}" onclick="hsGoTo('hs-p3')"><span>💾 題庫</span></button>
           <button class="hs-navitem${hsActive('hs-p4')}" onclick="hsGoTo('hs-p4')"><span>🎲 出題方式</span></button>
-          <button class="hs-navitem${hsActive('hs-p5')}" onclick="hsGoTo('hs-p5')"><span>🏆 前三名獎勵</span><span class="hs-flag soft">選填</span></button>
+          <button class="hs-navitem${hsActive('hs-p5')}" onclick="hsGoTo('hs-p5')"><span>🏆 獎金比例</span><span class="hs-flag soft">選填</span></button>
           <button class="hs-navitem${hsActive('hs-p6')}" onclick="hsGoTo('hs-p6')"><span>🔐 網址與連結</span></button>
         </nav>
 
@@ -2973,13 +3033,13 @@ function renderHostSetup(){
           </div>
 
           <div class="hs-panel${hsOpen('hs-p5')}" id="hs-p5">
-            <button class="hs-panel-head" onclick="hsToggle('hs-p5')"><span>🏆 前三名獎勵</span><span class="hs-soft">選填</span><span class="hs-caret">⌄</span></button>
+            <button class="hs-panel-head" onclick="hsToggle('hs-p5')"><span>🏆 全部合作時，各名次拿到的獎金比例（%）</span><span class="hs-soft">選填</span><span class="hs-caret">⌄</span></button>
             <div class="hs-panel-body">
-              <p class="sub">遊戲結束後的頒獎台會顯示在對應名次下面，選填。</p>
+              <p class="sub">頒獎典禮的合作／背叛考驗如果三人都選合作，獎金就照這裡設定的比例分給前三名（單位是 %，選填，留空或全部是 0 會平均分）。</p>
               <div class="stack" style="margin-top:10px">
-                <div class="field"><label>🥇 第一名</label><input id="prize-0" value="${esc(PRIZES[0]||'')}" placeholder="例如：神秘小禮物" oninput="setPrize(0,this.value)"></div>
-                <div class="field"><label>🥈 第二名</label><input id="prize-1" value="${esc(PRIZES[1]||'')}" placeholder="選填" oninput="setPrize(1,this.value)"></div>
-                <div class="field"><label>🥉 第三名</label><input id="prize-2" value="${esc(PRIZES[2]||'')}" placeholder="選填" oninput="setPrize(2,this.value)"></div>
+                <div class="field"><label>🥇 第一名 %</label><input id="prize-0" type="number" min="0" max="100" value="${esc(PRIZES[0]||'')}" placeholder="例如：50" oninput="setPrize(0,this.value)"></div>
+                <div class="field"><label>🥈 第二名 %</label><input id="prize-1" type="number" min="0" max="100" value="${esc(PRIZES[1]||'')}" placeholder="選填" oninput="setPrize(1,this.value)"></div>
+                <div class="field"><label>🥉 第三名 %</label><input id="prize-2" type="number" min="0" max="100" value="${esc(PRIZES[2]||'')}" placeholder="選填" oninput="setPrize(2,this.value)"></div>
               </div>
             </div>
           </div>
@@ -3376,22 +3436,22 @@ async function startLobby(){
     currentAnswers: {},
     shouxingId: null,
     prizes: PRIZES.slice(),
-    wishCards: ['', '', ''],
-    wishCardsUpdatedAt: 0,
     awardsStage: null,
     topIds: [],
-    bottomIds: [],
-    pickOrder: [],
-    pickedCards: {},
-    rpsActive: [],
-    rpsPicks: {},
-    rpsRoundToken: null,
-    rpsThrowSeq: 0,
-    rpsEvalSeq: 0,
-    rpsSolo: null,
-    rpsFinalOrder: null,
-    rpsRoundMsg: '',
-    rpsMedalOrder: null
+    lastPlaceId: null,
+    // ---- 合作／背叛賽局（awardsStage 'coop'/'coopResult'） ----
+    coopIds: [],
+    coopChoices: {},
+    coopForfeits: [],
+    coopRoundToken: null,
+    coopEvalSeq: 0,
+    coopStartAt: null,
+    coopDurationMs: 0,
+    coopOutcome: null,
+    prizeChampionId: null,
+    // ---- 最後一名 vs 獎金最高者（awardsStage 'lastplace'/'duel'/'result'） ----
+    duelResult: null,
+    duelScore: null
   };
   await sSet('game:state', hostState);
   renderHostLobby();
@@ -3450,10 +3510,10 @@ function renderHostLobby(){
         <button class="btn secondary" onclick="backToSetupFromLobby()">← 回設定</button>
         <button class="btn ghost" onclick="clearAllPlayers()">🧹 清空名單</button>
         <button class="btn ghost" onclick="addTestPlayers()">🧪 加入測試玩家</button>
-        <button class="btn" onclick="nextQuestion()" ${sxReady? '' : 'disabled'}>▶ 開始第一題</button>
+        <button class="btn" onclick="goRules()" ${sxReady? '' : 'disabled'}>▶ 開始第一題</button>
       </div>
-      <p class="sub" style="font-size:12px;margin-top:6px;text-align:center">一個人也想測試？「🧪 加入測試玩家」一次補滿 7 位假玩家（1 位當壽星、6 位猜猜的人，湊得出頒獎典禮最後三名猜拳的人數），
-      出題畫面上會多一顆「讓測試玩家作答」讓你自己一個人也能跑完整場、包含頒獎典禮的猜拳畫面。回設定重開一場真的遊戲時會自動清掉，不用另外整理。</p>
+      <p class="sub" style="font-size:12px;margin-top:6px;text-align:center">一個人也想測試？「🧪 加入測試玩家」一次補滿 7 位假玩家（1 位當壽星、6 位猜猜的人，湊得出頒獎典禮前三名＋最後一名需要的人數），
+      出題畫面上會多一顆「讓測試玩家作答」讓你自己一個人也能跑完整場、包含頒獎典禮的合作／背叛賽局跟最後一名海帶拳畫面。回設定重開一場真的遊戲時會自動清掉，不用另外整理。</p>
     </div></div>
   `);
 }
@@ -3473,6 +3533,51 @@ function setShouxing(id){
 }
 
 /* ============================================================
+   HOST/SPECTATE/PLAYER: 遊戲說明頁 (status: 'rules')
+   New status inserted between 'lobby' and 'chapterIntro'/'question' — the
+   lobby's "▶ 開始第一題" button now lands here instead of calling
+   nextQuestion() directly; this screen's own host button calls
+   nextQuestion() (the original call site). Modelled on the chapterIntro
+   trio of render functions (renderHostChapterIntro / renderSpectateChapterIntro /
+   renderPlayerChapterWait) — same "full-screen card between phases" shape,
+   just with a static rules card instead of chapter info. Content is the
+   user-approved copy from party_mockups.html #lastplace 畫面 A, verbatim. */
+function goRules(){
+  hostState.status = 'rules';
+  sSet('game:state', hostState);
+  renderHostRules();
+}
+const RULES_BULLETS = [
+  { ico:'🎯', text:'每一題都是「猜猜看壽星會怎麼選」，跟壽星選的一樣才會得分。' },
+  { ico:'🥇', text:'分數最高的前三名，遊戲結束會公開頒獎——但獎金要通過一關合作／背叛的考驗才能真的拿到。' },
+  { ico:'😅', text:'分數最後一名要接受「最後一名」的罵名——或是挑戰獎金最高的人，討回面子。' }
+];
+function rulesCardHtml(){
+  return `
+    <div class="lp-rules-card">
+      <h3 class="lp-rules-title">🎮 開始之前，先看一下規則</h3>
+      <ul class="lp-rules-list">
+        ${RULES_BULLETS.map(b => `<li><span class="ico">${b.ico}</span><span>${esc(b.text)}</span></li>`).join('')}
+        <li class="stake"><span class="ico">💰</span><span>開始之前，麻煩每個人先拿出 <b>100 元</b>放在桌上，當作這次的參賽費用！</span></li>
+      </ul>
+    </div>
+  `;
+}
+function renderHostRules(){
+  render(`
+    <div class="shell"><div class="col">
+      ${hostNav(true)}
+      <div class="lp-inner">
+        ${rulesCardHtml()}
+        <div class="btn-row" style="margin-top:16px">
+          <button class="btn" onclick="nextQuestion()">▶ 開始暖身題</button>
+        </div>
+      </div>
+    </div></div>
+  `);
+}
+
+/* ============================================================
    HOST: solo-testing helpers ("🧪 加入測試玩家" in the lobby)
    Lets a host with nobody around to help rehearse a whole game alone —
    including the awards podium / 最後三名猜拳, which only look right with
@@ -3486,11 +3591,11 @@ function setShouxing(id){
    resets hostState.players to {} (see startLobby()), which drops the bots
    along with everything else from the test round.
    ============================================================ */
-// 7, not 6: one bot becomes 壽星, leaving 6 guessers — the minimum needed for
-// the awards podium's top 3 and the 最後三名猜拳's bottom 3 to be two disjoint
-// groups of real (well, fake) people instead of the RPS stage having nobody
-// left to draw with and silently skipping itself (see the "少於三位" branch
-// in renderHostAwardsRps()).
+// 7, not 6: one bot becomes 壽星, leaving 6 guessers — comfortably clears
+// goAwardsCoop()'s ranked.length<4 "too few players" guard (which would
+// otherwise auto-skip straight past the whole coop/last-place/duel chain
+// into finishAwardsSimple()) with room to spare, and still leaves someone
+// clearly separate from the top-3 podium to land on as hostState.lastPlaceId.
 const TEST_BOT_COUNT = 7;
 function addTestPlayers(){
   if (!hostState) return;
@@ -3629,35 +3734,10 @@ async function hostPollTick(){
   if (!hostState || pollBusy) return;
   pollBusy = true;
   try{
-    if (['lobby','chapterIntro','question','reveal'].includes(hostState.status)) await processJoins();
+    if (['lobby','rules','chapterIntro','question','reveal'].includes(hostState.status)) await processJoins();
     if (hostState.status === 'question') await processAnswers();
-    // （三十五）頒獎台（awards/podium）也要繼續收壽星那邊的許願卡更新——
-    // 「要不要出最後三名任務」這個開關可能到頒獎台才臨時決定／改變主意，
-    // 只到 final 為止會錯過這種最後一刻的調整。一旦真的進了猜拳／選卡
-    // （awardsStage 不是 podium），卡片內容已經在發放，就不要再中途換牌。
-    if (['lobby','chapterIntro','question','reveal','final'].includes(hostState.status)
-      || (hostState.status === 'awards' && hostState.awardsStage === 'podium')) await processStarCards();
-    if (hostState.status === 'awards' && hostState.awardsStage === 'rps') await processRpsThrows();
-    if (hostState.status === 'awards' && hostState.awardsStage === 'picking') await processCardPicks();
+    if (hostState.status === 'awards' && hostState.awardsStage === 'coop') await processCoopChoices();
   } finally { pollBusy = false; }
-}
-/* The 壽星 writes her 3 wish cards to her own storage key from her phone; pick it
-   up here and fold it into the authoritative state, same pattern as processJoins().
-   （三十五）多帶一個 hasWishTasks 布林值：壽星在編輯畫面勾選「這次要不要出
-   最後三名任務」，這裡原樣收進 hostState.wishTasksEnabled，供 goAwardsRps()
-   判斷要不要整個跳過猜拳／選卡／公布任務那三個畫面。舊資料（沒有這個欄位的
-   info，理論上只會出現在還沒重新整理過網頁的舊分頁）預設當作 true，維持
-   這個功能加上去之前「一律都出任務」的行為，不會突然把人嚇到。 */
-async function processStarCards(){
-  const sx = hostState.shouxingId;
-  if (!sx) return;
-  const info = await sGet('starcards:' + sx);
-  if (!info || !Array.isArray(info.text)) return;
-  if ((info.updatedAt || 0) === (hostState.wishCardsUpdatedAt || 0)) return;
-  hostState.wishCards = [info.text[0]||'', info.text[1]||'', info.text[2]||''];
-  hostState.wishCardsUpdatedAt = info.updatedAt || 0;
-  hostState.wishTasksEnabled = info.hasWishTasks !== false;
-  await sSet('game:state', hostState);
 }
 async function processJoins(){
   const keys = await sList('join:');
@@ -4461,23 +4541,21 @@ function restartSameGame(){
   hostState.roundId = 'r_' + Date.now().toString(36);
   hostState.questionIndex = -1;
   hostState.currentAnswers = {};
-  // A fresh round needs a fresh podium/RPS — the 壽星's wish cards carry over, though,
-  // since they're generic tasks rather than tied to this particular round.
+  // A fresh round needs a fresh podium/coop-duel chain.
   hostState.awardsStage = null;
   hostState.topIds = [];
-  hostState.bottomIds = [];
-  hostState.pickOrder = [];
-  hostState.pickedCards = {};
-  hostState.rpsActive = [];
-  hostState.rpsPicks = {};
-  hostState.rpsRoundToken = null;
-  hostState.rpsThrowSeq = 0;
-  hostState.rpsEvalSeq = 0;
-  hostState.rpsSolo = null;
-  hostState.rpsFinalOrder = null;
-  hostState.rpsRoundMsg = '';
-  hostState.rpsMedalOrder = null;
-  _lastPickingAnimId = null;
+  hostState.lastPlaceId = null;
+  hostState.coopIds = [];
+  hostState.coopChoices = {};
+  hostState.coopForfeits = [];
+  hostState.coopRoundToken = null;
+  hostState.coopEvalSeq = 0;
+  hostState.coopStartAt = null;
+  hostState.coopDurationMs = 0;
+  hostState.coopOutcome = null;
+  hostState.prizeChampionId = null;
+  hostState.duelResult = null;
+  hostState.duelScore = null;
   // Re-roll so a second round isn't a repeat of the first.
   if (RANDOM_ORDER || RANDOM_OPTIONS || DRAW_COUNT) hostState.questions = buildPlayList();
   sSet('game:state', hostState);
@@ -4500,27 +4578,30 @@ function spawnConfetti(){
 }
 
 /* ============================================================
-   HOST: AWARDS — podium → 猜拳 → 選許願卡 → 結果
-   awardsStage: 'podium' -> 'rps' -> 'picking' -> 'done'
+   HOST: AWARDS — podium → 合作／背叛 → 獎金結果 → 最後一名 → 海帶拳 → 結果 → done
+   awardsStage: 'podium' -> 'coop' -> 'coopResult' -> 'lastplace' -> ('duel' ->) 'result' -> 'done'
+   （見 party_mockups.html #lastplace 一節，規則已跟使用者確認定案。）
    ============================================================ */
 function goAwards(){
   const sx = hostState.shouxingId;
   const ranked = rankedGuessers(hostState.players, sx);
-  const nonTop = ranked.slice(3);
   hostState.status = 'awards';
   hostState.awardsStage = 'podium';
   hostState.topIds = ranked.slice(0,3).map(([id])=>id);
-  // Lowest-scoring up to 3 guessers who aren't already on the podium.
-  hostState.bottomIds = nonTop.slice(-3).map(([id])=>id);
-  hostState.pickOrder = [];
-  hostState.pickedCards = {};
+  // Computed unconditionally here (not inside goAwardsCoop()) so it's ready
+  // regardless of which path comes next — finishAwardsSimple() (too few
+  // players) never gets a chance to compute it otherwise.
+  hostState.lastPlaceId = ranked.length ? ranked[ranked.length-1][0] : null;
   sSet('game:state', hostState);
   renderHostAwardsPodium();
 }
 function renderHostAwards(){
   const stage = hostState.awardsStage;
-  if (stage === 'rps') return renderHostAwardsRps();
-  if (stage === 'picking') return renderHostAwardsPicking();
+  if (stage === 'coop') return renderHostAwardsCoop();
+  if (stage === 'coopResult') return renderHostAwardsCoopResult();
+  if (stage === 'lastplace') return renderHostAwardsLastplace();
+  if (stage === 'duel') return renderHostAwardsDuel();
+  if (stage === 'result') return renderHostAwardsResult();
   if (stage === 'done') return renderHostAwardsDone();
   return renderHostAwardsPodium();
 }
@@ -4557,9 +4638,7 @@ function renderHostAwardsPodium(){
       </div>
       ${top3.length? '' : '<p class="sub">這場沒有人猜，先跳過頒獎</p>'}
       <div class="btn-row" style="margin-top:6px">
-        ${hostState.wishTasksEnabled === false
-          ? `<button class="btn" onclick="goAwardsRps()">🎉 查看最終結果 →</button>`
-          : `<button class="btn" onclick="goAwardsRps()">🃏 最後三名 & 許願卡 →</button>`}
+        <button class="btn" onclick="goAwardsCoop()">🤝🏻😈 合作／背叛考驗 →</button>
       </div>
     </div></div>
   `);
@@ -4604,500 +4683,457 @@ function animatePodiumReveal(prefix, playSound){
     }, delay);
   });
 }
-/* ---------- 最後三名的真猜拳（每人自己手機按停決定手勢） ----------
-   Each real player in hostState.rpsActive spins their own hand on their own
-   phone and taps "出拳" to lock it in (renderPlayerRpsThrow/submitPlayerRpsHand,
-   below in the PLAYER section) — writing it to rpsthrow:<id>. The host polls for
-   those (processRpsThrows) and, once everyone active has thrown, evaluates the
-   round with ordinary roshambo rules:
-     - 2 players: differing hands → winner/loser; same hand → tie, re-throw.
-     - 3 players, all same OR all three different (rock/paper/scissors, a 3-way
-       cycle with no winner) → tie, re-throw all three.
-     - 3 players, exactly 2 distinct hands → the winning hand's side wins. If
-       only 1 player holds the winning hand, THEY are the sole winner and go
-       straight to the front of the final order; the other two re-throw for the
-       remaining two spots. If 2 players hold the winning hand, the lone loser
-       goes straight to the back of the final order; the other two re-throw for
-       the remaining two spots.
-   This can only ever produce at most one "solo" placement before the field is
-   down to 2 (3 → 2 removes exactly one), so hostState.rpsSolo only ever needs
-   to hold a single {id, place} — see finalize() inside evaluateRpsRound(). */
-const HAND_EMOJI = { rock:'✊', paper:'✋', scissors:'✌️' };
-function rpsBeats(a, b){ return (a==='rock'&&b==='scissors') || (a==='scissors'&&b==='paper') || (a==='paper'&&b==='rock'); }
-let hostRpsSpinHandle = null;
-function stopHostRpsSpin(){
-  if (hostRpsSpinHandle){ clearInterval(hostRpsSpinHandle); hostRpsSpinHandle = null; }
-}
-/* Purely cosmetic — cycles the emoji on any pill that's active and hasn't
-   locked in yet, so the projector shows the same "still deciding" energy the
-   old host-only draw had. It never touches hostState; the real result only
-   ever comes from processRpsThrows()/hostForceRps(). */
-function startHostRpsSpin(){
-  stopHostRpsSpin();
-  const hands = ['✊','✋','✌️'];
-  hostRpsSpinHandle = setInterval(()=>{
-    const active = (hostState && hostState.rpsActive) || [];
-    const picks = (hostState && hostState.rpsPicks) || {};
-    active.forEach(id=>{
-      if (picks[id]) return;
-      const el = document.getElementById('rps-hand-' + id);
-      if (el) el.textContent = hands[Math.floor(Math.random()*3)];
-    });
-  }, 150);
-}
-function goAwardsRps(){
-  // （三十五）壽星這輪勾掉「要不要出最後三名任務」的話，整段猜拳／選卡／
-  // 公布任務都不用跑——直接借用 finishAwardsNoBottom() 那條「沒有東西可以
-  // 公布」的乾淨結尾路徑（pickOrder 留空，renderHostAwardsDone() 本來就會
-  // 因為 hasWishes=false 自動不出現「公布許願任務」按鈕，直接是「再玩一輪／
-  // 回設定改題目」）。
-  if (hostState.wishTasksEnabled === false) return finishAwardsNoBottom();
-  const bottom = (hostState.bottomIds||[]).filter(id=>hostState.players[id]);
-  hostState.awardsStage = 'rps';
-  hostState.rpsRoundMsg = '';
-  hostState.rpsMedalOrder = null;
-  if (bottom.length >= 2){
-    hostState.rpsActive = bottom.slice();
-    hostState.rpsSolo = null;
-    hostState.rpsFinalOrder = null;
-    hostState.rpsThrowSeq = 0;
-    hostState.rpsEvalSeq = 0;
-    startRpsThrow();
-  } else {
-    // 0 or 1 people in "最後三名" — nothing to compare, nothing to draw.
-    hostState.rpsActive = [];
-    hostState.rpsFinalOrder = bottom.slice();
-    hostState.pickOrder = bottom.slice();
-    sSet('game:state', hostState);
-    renderHostAwardsRps();
-  }
-}
-function startRpsThrow(){
-  hostState.rpsThrowSeq = (hostState.rpsThrowSeq||0) + 1;
-  hostState.rpsRoundToken = hostState.roundId + '_rps' + hostState.rpsThrowSeq;
-  hostState.rpsPicks = {};
-  hostState.rpsRoundMsg = '';
+/* ============================================================
+   HOST: 合作／背叛賽局 (awardsStage 'coop' -> 'coopResult')
+   Ported from party_mockups.html #lastplace 畫面 B/B-1/B-2 (rules confirmed
+   with the user, see that section's 「規則已確認」recommendation box).
+   Each of the 3 podium players chooses on their own phone
+   (renderPlayerCoopChoice/submitPlayerCoopChoice, PLAYER section below) —
+   writing the literal string 'cooperate'/'betray' to coopchoice:<id>. The
+   host polls for those (processCoopChoices) and, once all 3 have chosen OR
+   the 60s window runs out, evaluates the round (evaluateCoopRound()).
+   Unlike the old RPS sub-system this never re-throws/restarts — it resolves
+   exactly once per ceremony — but the SAME staleness-guard shape (a round
+   token + an unconditionally-bumped eval sequence, both re-checked after
+   every await) is reused here on purpose: processCoopChoices() is an async
+   for-loop that awaits a network round-trip per player, and the host's own
+   synchronous "⏭ 還有人沒選，直接公布" force button (hostForceCoopResolve())
+   — or the local 60s timer itself firing — can call evaluateCoopRound() in
+   between two of those awaits, exactly the RPS freeze's shape (see the old
+   evaluateRpsRound()/processRpsThrows() pattern this was carried over from,
+   in game.html's pre-awards-rewrite history). */
+function goAwardsCoop(){
+  const sx = hostState.shouxingId;
+  const ranked = rankedGuessers(hostState.players, sx);
+  // 人數不夠湊出獨立的「前三名＋最後一名」時，整套新流程自動跳過，退回
+  // 現有的排行榜公布方式 — mirrors the old renderHostAwardsRps()'s
+  // bottom.length === 0/1 "too few people" branches, just decided earlier
+  // (at this dispatch point) against a different threshold.
+  if (ranked.length < 4){ finishAwardsSimple(); return; }
+  hostState.coopIds = (hostState.topIds || []).slice();
+  hostState.coopChoices = {};
+  hostState.coopForfeits = [];
+  hostState.coopRoundToken = (hostState.coopRoundToken || 0) + 1;
+  hostState.coopEvalSeq = 0;
+  hostState.coopStartAt = Date.now();
+  hostState.coopDurationMs = 60000;
+  hostState.awardsStage = 'coop';
+  // Clear any stray coopchoice: leftovers for these same ids from an earlier
+  // round — same precedent as proceedToPickingFromRps()'s pickOrder cleanup.
+  hostState.coopIds.forEach(id => sDel('coopchoice:' + id));
   sSet('game:state', hostState);
-  renderHostAwardsRps();
-  startHostRpsSpin();
+  renderHostAwardsCoop();
 }
-function renderHostAwardsRps(){
-  const bottom = (hostState.bottomIds||[]).map(id=>[id, hostState.players[id]]).filter(([,p])=>p);
-  if (!bottom.length){
-    render(`
-      <div class="shell"><div class="col" style="align-items:center;text-align:center">
-        ${hostNav(true)}
-        <span class="eyebrow">🃏 最後三名 & 許願卡</span>
-        <h1 class="marquee-title" style="font-size:clamp(26px,5vw,42px)">誰先選<span class="hl">許願卡</span>？</h1>
-        <p class="sub">這場人數不到三位猜猜的人，這次先跳過猜拳環節。</p>
-        <div class="btn-row" style="margin-top:10px"><button class="btn" onclick="finishAwardsNoBottom()">下一步 →</button></div>
-      </div></div>
-    `);
-    return;
-  }
-  if (bottom.length === 1){
-    render(`
-      <div class="shell"><div class="col" style="align-items:center;text-align:center">
-        ${hostNav(true)}
-        <span class="eyebrow">🃏 最後三名 & 許願卡</span>
-        <h1 class="marquee-title" style="font-size:clamp(26px,5vw,42px)">誰先選<span class="hl">許願卡</span>？</h1>
-        <p class="sub">這場只有一位最後一名，不用猜拳，直接選卡！</p>
-        <div class="players-grid">${avatarSpan(bottom[0][1].avatar)}${nameTag(bottom[0][1])}</div>
-        <div class="btn-row" style="margin-top:10px"><button class="btn" onclick="proceedToPickingFromRps()">下一步 →</button></div>
-      </div></div>
-    `);
-    return;
-  }
-  const active = hostState.rpsActive || [];
-  const picks = hostState.rpsPicks || {};
+function renderHostAwardsCoop(){
+  const ids = hostState.coopIds || [];
   const medal = ['🥇','🥈','🥉'];
-  const medalOrder = hostState.rpsMedalOrder || [];
-  const defaultMsg = active.length === 3
-    ? '三人猜拳！三人同手勢或三人各出一種都算重來；兩人同手勢、一人不同，看那個不同手勢的輸贏決定他排最前面還是排最後面。'
-    : '最後兩人猜拳，贏的排前面！';
+  const submitted = Object.keys(hostState.coopChoices || {}).length;
   render(`
     <div class="shell"><div class="col" style="align-items:center;text-align:center">
       ${hostNav(true)}
-      <span class="eyebrow">🃏 最後三名 & 許願卡</span>
-      <h1 class="marquee-title" style="font-size:clamp(26px,5vw,42px)">猜拳決定<span class="hl">選卡順序</span></h1>
-      <p class="sub" id="rps-status-msg">${esc(hostState.rpsRoundMsg || defaultMsg)}</p>
-      <div class="players-grid" id="rps-players">
-        ${bottom.map(([id,p])=>{
-          const isActive = active.includes(id);
-          const thrown = !!picks[id];
-          const solo = hostState.rpsSolo && hostState.rpsSolo.id===id ? hostState.rpsSolo.place : null;
-          const medalIdx = medalOrder.indexOf(id);
-          let hand;
-          if (medalIdx >= 0) hand = medal[medalIdx] || '';
-          else if (thrown) hand = HAND_EMOJI[picks[id]];
-          else if (isActive) hand = '✊';
-          else hand = solo === 'front' ? '⏫' : solo === 'back' ? '⏬' : '—';
-          return `<div class="player-pill ${isActive && !thrown ? 'shuffling' : ''} ${solo?'rps-placed':''}" id="rps-p-${id}">
-            ${avatarSpan(p.avatar)}${nameTag(p)}
-            <span class="rps-hand ${thrown||medalIdx>=0?'landed':''}" id="rps-hand-${id}">${hand}</span>
-          </div>`;
-        }).join('')}
+      <div class="lp-inner">
+        <span class="lp-eyebrow">🤝🏻😈 前三名的獎金考驗</span>
+        <div class="lp-trio">
+          ${ids.map((id,i)=>{
+            const p = hostState.players[id]; if (!p) return '';
+            return `<div class="lp-trio-person">${avatarSpan(p.avatar)}<span class="nm">${nameTag(p)}</span><span class="rk">${medal[i]||''} 第${i+1}名</span></div>`;
+          }).join('')}
+        </div>
+        <div class="lp-trio-cards">
+          <div class="lp-trio-card">？</div>
+          <div class="lp-trio-card">？</div>
+          <div class="lp-trio-card">？</div>
+        </div>
+        <p class="sub" style="margin-top:6px">已送出：${submitted} / ${ids.length}</p>
+        <div class="lp-countdown" id="coop-countdown">01:00</div>
+        <div class="lp-countdown-note">最後 ${Math.round(COOP_URGENT_THRESHOLD_MS/1000)} 秒開始強調（跟答題倒數同一套特效＋音效，秒數各自獨立）；三人的選擇在公布前都蓋著，跟頒獎台先蓋牌再一起掀的懸念感一樣。</div>
+        <div class="btn-row" style="margin-top:14px">
+          <button class="btn ghost" id="coop-force-btn" hidden onclick="hostForceCoopResolve()">⏭ 還有人沒選，直接公布</button>
+        </div>
       </div>
-      <div class="btn-row" style="margin-top:10px">
-        <button class="btn ghost" onclick="hostForceRps()">⏭ 還有人沒出拳？幫他們隨機出拳</button>
-      </div>
-      ${active.some(id => hostState.players[id] && hostState.players[id].isTestBot) ? `
-      <div class="btn-row" style="margin-top:6px">
-        <button class="btn ghost" style="font-size:13px;opacity:0.85" onclick="simulateBotRealRpsThrows()">🧪 讓測試玩家真的延遲猜拳（模擬真人手機網路延遲，可以拿來測「急救按鈕」會不會卡住）</button>
-      </div>` : ''}
     </div></div>
   `);
+  stopHostCoopCountdown();
+  hostCoopCountdownTick();
+  hostCoopCountdownHandle = setInterval(hostCoopCountdownTick, 200);
 }
-/* Fallback for a phone that's gone quiet (or a solo test player with no phone
-   at all) — force a random hand for every active player who hasn't thrown yet
-   this round, then evaluate immediately if that completes the round. */
-function hostForceRps(){
-  const active = hostState.rpsActive || [];
-  const shapes = ['rock','paper','scissors'];
-  let changed = false;
-  active.forEach(id=>{
-    if (hostState.rpsPicks[id]) return;
-    hostState.rpsPicks[id] = shapes[Math.floor(Math.random()*3)];
-    changed = true;
-  });
-  if (!changed) return;
-  sSet('game:state', hostState);
-  renderHostAwardsRps();
-  if (active.every(id => hostState.rpsPicks[id])) evaluateRpsRound();
+function stopHostCoopCountdown(){
+  if (hostCoopCountdownHandle){ clearInterval(hostCoopCountdownHandle); hostCoopCountdownHandle = null; }
 }
-/* （三十一，猜拳當機修正）"🧪 讓測試玩家真的延遲猜拳" —— 使用者實際反映「猜拳決定
-   選卡順序後面很容易當機，但測試玩家很難測到這段」。問題根源是真人手機提交猜拳
-   （submitPlayerRpsHand() 把 rpsthrow:<id> 寫進 storage，主持人再靠 processRpsThrows()
-   非同步輪詢讀回來）跟主持人不耐煩點「還有人沒出拳？幫他們隨機出拳」幾乎同時發生
-   時的競態——🧪 測試玩家原本完全不會寫 rpsthrow: storage（見 addTestPlayers() 上方
-   的說明：他們背後沒有手機，只能被強制代打），所以這段真人 timing 相關的行為，一個
-   人拿著單一瀏覽器測試時完全模擬不出來、也就永遠點不到「急救按鈕跟真人手機晚一點
-   才送到的猜拳」同時發生的那個瞬間。
-   這個按鈕讓每一位 🧪 測試玩家，用跟真人手機完全相同的路徑（sSet('rpsthrow:'+id,
-   {hand,token})，不是直接改 hostState.rpsPicks），各自等一個隨機的 0.4-3 秒「網路
-   延遲」才送出猜拳——刻意留一段夠長的空檔，讓使用者可以自己抓時機去點「還有人沒
-   出拳」，實際重現＋驗證這個場景是否還會卡住，不用真的找好幾支手機才能測。 */
-function simulateBotRealRpsThrows(){
-  const active = hostState.rpsActive || [];
-  const token = hostState.rpsRoundToken;
-  const shapes = ['rock','paper','scissors'];
-  const bots = active.filter(id => hostState.players[id] && hostState.players[id].isTestBot);
-  if (!bots.length){ toast('這一輪的猜拳名單裡沒有 🧪 測試玩家'); return; }
-  bots.forEach(id=>{
-    const delayMs = 400 + Math.random() * 2600;
-    setTimeout(()=>{
-      // 送出前重新檢查一次，避免這一輪已經結束後，遲來的模擬延遲又送出一筆過時的猜拳。
-      if (hostState.rpsRoundToken !== token || hostState.awardsStage !== 'rps') return;
-      if (!(hostState.rpsActive||[]).includes(id)) return;
-      const hand = shapes[Math.floor(Math.random()*3)];
-      sSet('rpsthrow:' + id, { hand, token });
-    }, delayMs);
-  });
-  toast('🧪 ' + bots.length + ' 位測試玩家已經開始模擬真人延遲猜拳，這時候可以試著點「還有人沒出拳」看看會不會卡住');
-}
-/* Purely synchronous — like goToReveal(), nothing here awaits, so nothing can
-   interleave and see a half-updated hostState. The async bits (persisting,
-   and moving on after a short suspense pause) happen in the scheduled
-   continuations below, each re-checking rpsRoundToken/awardsStage first in
-   case the host force-filled the rest of a round that a real submission was
-   also mid-flight for — same discipline as processAnswers().
-
-   （三十一，猜拳當機修正）hostState.rpsEvalSeq is bumped every single time this
-   function runs, on every branch, unconditionally — unlike rpsRoundToken,
-   which restart()/advanceSolo() deliberately leave UNCHANGED for their own
-   1.7-1.9s display window (see the comment further down). That's exactly
-   the gap processRpsThrows() falls into: it's an async for-loop that awaits
-   a network round-trip per player, and hostForceRps() (the host's own "還有
-   人沒出拳？幫他們隨機出拳" rescue button) is a fully synchronous function
-   that can run to completion in between two of those awaits — while a real
-   submission is still in flight for player X, the host taps the rescue
-   button, which fills in everyone ELSE and calls evaluateRpsRound() itself.
-   That call can restart()/advanceSolo() the round and (critically) RESET
-   hostState.rpsPicks = {} for the next sub-round. When processRpsThrows()'s
-   own loop then resumes, its token/awardsStage checks still pass (neither
-   changed), so it writes player X's now-STALE throw straight into the reset
-   rpsPicks as if it were their throw for the sub-round that hasn't even
-   started yet, and can go on to call evaluateRpsRound() a SECOND time using
-   an `active` array that's stale by then too. Depending on exactly how far
-   evaluateRpsRound() had already narrowed hostState.rpsActive, that second,
-   spurious call could run with active.length === 0 — falling through the
-   old code's unguarded "not 2, so must be 3" branch, destructuring [a,b,c]
-   out of an empty array (all undefined), and spuriously calling restart()
-   AGAIN on an already-decided round. That's the freeze the user hit at a
-   real party ("猜拳決定選卡順序後面很容易當機") — real phones are slow/janky
-   enough that a real throw is very often still in flight exactly when an
-   impatient host taps the rescue button, but on localhost the same await
-   resolves in a millisecond, which is why no earlier test (all sequential,
-   all on localhost) ever tripped over it.
-   The fix has two independent layers:
-     1. Below, processRpsThrows() captures rpsEvalSeq alongside the token and
-        re-checks it after every await, right next to the existing token/
-        awardsStage check — so the moment ANY evaluateRpsRound() call (from
-        hostForceRps() or a genuinely overlapping poll) has run while we were
-        awaiting, we bail out instead of acting on data that round has since
-        moved past. This is strictly finer-grained than the token check,
-        since it also catches restart()/advanceSolo()'s "same token, new
-        sub-round" case that the token check alone was blind to.
-     2. Just below, active.length is validated up front — if it's neither 2
-        nor 3 (i.e. the round was already decided out from under this call),
-        this returns immediately instead of falling into the 3-way branch on
-        an empty array. Belt-and-suspenders: even if some future caller ever
-        slips past the seq guard, this can no longer corrupt state. */
-function evaluateRpsRound(){
-  hostState.rpsEvalSeq = (hostState.rpsEvalSeq || 0) + 1;
-  const token = hostState.rpsRoundToken;
-  const active = hostState.rpsActive.slice();
-  const picks = hostState.rpsPicks;
-  const stillCurrent = () => hostState.rpsRoundToken === token && hostState.awardsStage === 'rps';
-  if (active.length !== 2 && active.length !== 3) return; // already decided/reset elsewhere — nothing to evaluate
-
-  /* restart()/advanceSolo() both keep hostState.rpsRoundToken UNCHANGED until
-     their own setTimeout below calls startRpsThrow() (the only place that
-     actually mints a new token), so there's a ~1.7-1.9s window — the message
-     display time — where a player still in rpsActive (the 2 who tied, or the
-     2 who remain after one is eliminated) is, token-wise, still "in the same
-     round" they just threw for. The rpsthrow:<id> key that round's throw was
-     read from is deleted the moment processRpsThrows() consumes it (see that
-     function's own comment) specifically so nothing is left on the server
-     for a poll landing inside this window to misread as a fresh throw for
-     what is semantically the NEXT sub-round — without that, an instant
-     long-poll landing here would immediately re-read the same still-present
-     rpsthrow: values (same token, so they'd pass the staleness check) back
-     into a freshly narrowed/reused rpsActive and re-evaluate on data nobody
-     actually threw for this sub-round (e.g. two players who both threw rock
-     to eliminate a third would then be told they tied against EACH OTHER on
-     those same two rocks). The rpsPicks={} resets below are a second,
-     redundant layer on top of that — harmless, and correct regardless, since
-     a new sub-round should start with nobody's pick recorded yet either way.
-     This was always a latent race (the old ~1.8s fixed poll could in
-     principle land in the same gap), it just needed a poll landing inside a
-     ~1.7-1.9s window to ever surface — instant long-polling made that window
-     (and the bug) hit every time instead of almost never. */
-  const restart = (msg) => {
-    hostState.rpsPicks = {};
-    hostState.rpsRoundMsg = msg;
-    sSet('game:state', hostState);
-    renderHostAwardsRps();
-    setTimeout(()=>{ if (stillCurrent()) startRpsThrow(); }, 1700);
-  };
-  const finalize = (order) => {
-    hostState.rpsFinalOrder = order;
-    hostState.pickOrder = order;
-    hostState.rpsMedalOrder = order;
-    hostState.rpsActive = [];
-    hostState.rpsRoundMsg = '🏆 順序決定了！';
-    sSet('game:state', hostState);
-    renderHostAwardsRps();
-    setTimeout(()=>{ if (stillCurrent()) proceedToPickingFromRps(); }, 1700);
-  };
-  const advanceSolo = (soloId, place, nextActive) => {
-    const name = hostState.players[soloId] ? hostState.players[soloId].name : '';
-    hostState.rpsSolo = { id: soloId, place };
-    hostState.rpsActive = nextActive;
-    hostState.rpsPicks = {};
-    hostState.rpsRoundMsg = place === 'front'
-      ? ('🎉 ' + name + ' 手氣最好，直接排最前面！剩下兩人再猜一輪')
-      : ('😅 ' + name + ' 手氣最背，直接墊底！剩下兩人再猜一輪');
-    sSet('game:state', hostState);
-    renderHostAwardsRps();
-    setTimeout(()=>{ if (stillCurrent()) startRpsThrow(); }, 1900);
-  };
-
-  if (active.length === 2){
-    const [a, b] = active;
-    if (picks[a] === picks[b]){ restart('🤝 平手！重新猜拳一次'); return; }
-    const aWins = rpsBeats(picks[a], picks[b]);
-    const winner = aWins ? a : b, loser = aWins ? b : a;
-    let order;
-    if (hostState.rpsSolo && hostState.rpsSolo.place === 'front') order = [hostState.rpsSolo.id, winner, loser];
-    else if (hostState.rpsSolo && hostState.rpsSolo.place === 'back') order = [winner, loser, hostState.rpsSolo.id];
-    else order = [winner, loser];
-    finalize(order);
-    return;
+function hostCoopCountdownTick(){
+  if (!hostState || hostState.awardsStage !== 'coop'){ stopHostCoopCountdown(); return; }
+  const remainMs = Math.max(0, (hostState.coopStartAt||0) + (hostState.coopDurationMs||0) - Date.now());
+  updateHostCoopTimerUI(remainMs);
+  if (remainMs <= 0){
+    stopHostCoopCountdown();
+    evaluateCoopRound();
   }
-  // active.length === 3
-  const [a, b, c] = active;
-  const uniqShapes = [...new Set([picks[a], picks[b], picks[c]])];
-  if (uniqShapes.length === 1 || uniqShapes.length === 3){ restart('🤝 平手！三人重新猜拳'); return; }
-  const [s1, s2] = uniqShapes;
-  const winningShape = rpsBeats(s1, s2) ? s1 : s2;
-  const winners = active.filter(id => picks[id] === winningShape);
-  const losers = active.filter(id => picks[id] !== winningShape);
-  if (winners.length === 1) advanceSolo(winners[0], 'front', losers);
-  else advanceSolo(losers[0], 'back', winners);
 }
-/* Poll-driven pickup of real players' rpsthrow:<id> submissions for the
-   CURRENT round token — same "recheck before acting" shape as processAnswers(),
-   since evaluateRpsRound()/startRpsThrow() (triggered by the host tapping the
-   force button) can run in between two awaits here.
-   Deletes (and awaits the delete of) rpsthrow:<id> the moment it's consumed
-   into hostState.rpsPicks[id] — same cleanup proceedToPickingFromRps()
-   already does once a round is fully done, just per-throw and immediate
-   instead of batched at the very end. NOT just cosmetic tidying.
-   restart()/advanceSolo() (see evaluateRpsRound()) both keep rpsRoundToken
-   unchanged for the ~1.7-1.9s message-display window before the NEXT sub-
-   round's startRpsThrow() actually mints a new one; a player who is still
-   active going into that next sub-round (the 2 who tied, or the 2 who
-   remain after one is eliminated) still has their OLD throw for THIS same
-   token sitting in storage otherwise, and an instant long-poll landing
-   inside that window re-reads it as if it were a fresh throw for the new
-   sub-round — e.g. two players who both threw rock to eliminate a third
-   then immediately get told they tied against each other on those same two
-   rocks. Deleting each throw as soon as it's read closes that: nothing is
-   left on the server for a later poll to mistake as unconsumed. */
-/* （三十一）rpsEvalSeq is captured alongside token/awardsStage and re-checked
-   at every single checkpoint below — see the long comment above
-   evaluateRpsRound() for exactly why the token/awardsStage check alone isn't
-   enough: restart()/advanceSolo() intentionally leave rpsRoundToken UNCHANGED
-   across a sub-round boundary, so a synchronous hostForceRps() click landing
-   in the middle of one of this loop's awaits can reset hostState.rpsPicks and
-   move the round on without either of those two changing — but it always
-   bumps rpsEvalSeq, so that's the one check here that can never be blind to
-   it. The moment we detect a stale seq we bail immediately, before writing
-   anything into hostState.rpsPicks or calling evaluateRpsRound() again. */
-async function processRpsThrows(){
-  const token = hostState.rpsRoundToken;
-  const evalSeq = hostState.rpsEvalSeq;
-  const active = hostState.rpsActive || [];
-  const stale = () => hostState.rpsRoundToken !== token || hostState.awardsStage !== 'rps' || hostState.rpsEvalSeq !== evalSeq;
+function updateHostCoopTimerUI(remainMs){
+  const el = document.getElementById('coop-countdown');
+  const urgent = remainMs <= COOP_URGENT_THRESHOLD_MS;
+  if (el){
+    const secs = Math.max(0, Math.ceil(remainMs/1000));
+    const mm = String(Math.floor(secs/60)).padStart(2,'0');
+    const ss = String(secs%60).padStart(2,'0');
+    el.textContent = mm + ':' + ss;
+    el.classList.toggle('urgent', urgent);
+  }
+  const forceBtn = document.getElementById('coop-force-btn');
+  if (forceBtn) forceBtn.hidden = !urgent;
+  // 倒數嗶聲只在主持人畫面播——跟題目倒數的 tickCountdownSound() 同一個
+  // 理由（見該函式與 playCountdownTick() 上方的說明），這裡刻意重新做一份
+  // 獨立的 sibling 而不是直接呼叫 tickCountdownSound()，因為那個函式綁死
+  // 題目倒數自己的 _timerAudio 狀態跟固定 5 秒門檻，不是這裡要重用的對象。
+  tickCoopCountdownSound(remainMs);
+}
+let _coopLastBeepAt = 0;
+function coopBeepIntervalMs(remainMs){
+  if (remainMs > COOP_URGENT_THRESHOLD_MS) return Infinity;
+  if (remainMs > 5000) return 900;
+  if (remainMs > 2000) return 500;
+  return 250;
+}
+function tickCoopCountdownSound(remainMs){
+  if (remainMs <= 0) return;
+  const interval = coopBeepIntervalMs(remainMs);
+  if (interval === Infinity) return;
+  const now = Date.now();
+  if (now - _coopLastBeepAt >= interval){ _coopLastBeepAt = now; playCountdownTick(); }
+}
+/* Host's own "還有人沒選，直接公布" rescue button — only visible once the
+   countdown is inside COOP_URGENT_THRESHOLD_MS (see updateHostCoopTimerUI()),
+   mirroring the old hostForceRps() button's role, just gated to the last
+   stretch instead of always-on (coop only ever resolves once, no re-throws,
+   so there's no reason to rush it before the window is nearly up). */
+function hostForceCoopResolve(){
+  if (!hostState || hostState.awardsStage !== 'coop') return;
+  evaluateCoopRound();
+}
+/* Poll-driven pickup of real players' coopchoice:<id> submissions for the
+   CURRENT coop round — same "recheck before acting" shape as
+   processAnswers()/the old processRpsThrows(), since evaluateCoopRound()
+   (triggered by the host's force button OR the local 60s timer firing) can
+   run in between two awaits here. coopEvalSeq is bumped unconditionally at
+   the very top of evaluateCoopRound(), before anything else, specifically
+   so an in-flight poll here can always detect "a resolution already
+   happened while I was awaiting" and bail — see the doc comment above
+   goAwardsCoop() for why this mirrors the old RPS staleness-guard pattern. */
+async function processCoopChoices(){
+  const token = hostState.coopRoundToken;
+  const evalSeq = hostState.coopEvalSeq;
+  const ids = hostState.coopIds || [];
+  const stale = () => hostState.coopRoundToken !== token || hostState.awardsStage !== 'coop' || hostState.coopEvalSeq !== evalSeq;
   let changed = false;
-  for (const id of active){
+  for (const id of ids){
     if (stale()) return;
-    if (hostState.rpsPicks[id]) continue;
-    const info = await sGet('rpsthrow:' + id);
+    if (hostState.coopChoices[id]) continue;
+    const info = await sGet('coopchoice:' + id);
     if (stale()) return;
-    if (hostState.rpsPicks[id]) continue;               // race guard
-    if (!info || info.token !== token) continue;         // stale or not-yet-submitted
-    if (!['rock','paper','scissors'].includes(info.hand)) continue;
-    hostState.rpsPicks[id] = info.hand;
-    await sDel('rpsthrow:' + id); // awaited — a later poll must never be able to re-read this
-    if (stale()) return; // the delete's own await is one more gap the rescue button could land in
+    if (hostState.coopChoices[id]) continue; // race guard
+    if (info !== 'cooperate' && info !== 'betray') continue; // stale or not-yet-submitted
+    hostState.coopChoices[id] = info;
+    await sDel('coopchoice:' + id); // awaited — a later poll must never be able to re-read this
+    if (stale()) return;
     changed = true;
   }
   if (stale()) return;
   if (changed){
     await sSet('game:state', hostState);
-    renderHostAwardsRps();
+    renderHostAwardsCoop();
   }
   if (stale()) return;
-  if (active.length && active.every(id => hostState.rpsPicks[id])) evaluateRpsRound();
+  if (ids.length && Object.keys(hostState.coopChoices).length === ids.length) evaluateCoopRound();
 }
-function proceedToPickingFromRps(){
-  stopHostRpsSpin();
-  hostState.awardsStage = 'picking';
-  hostState.pickedCards = {};
-  const order = hostState.pickOrder || [];
-  order.forEach(id => { sDel('rpsthrow:' + id); sDel('cardpick:' + id); });
+/* Reads hostState.prizes (now "% of the all-cooperate split", see the
+   renderHostSetup hs-p5 panel) as display-only percentages — never a dollar
+   amount, there's no reliable source for the total pool size in-app (the
+   100-currency entry fee is physical cash the host tracks, not stored in
+   hostState). Falls back to an even 34/33/33 split display when all three
+   are blank/zero/NaN rather than showing a broken 0/0/0. */
+function coopPrizePercentsFrom(prizes){
+  const raw = (prizes || ['','','']).map(v => { const n = parseFloat(v); return (isFinite(n) && n > 0) ? n : 0; });
+  const total = raw[0] + raw[1] + raw[2];
+  return total > 0 ? raw : [34, 33, 33];
+}
+function coopPrizePercents(){ return coopPrizePercentsFrom(hostState.prizes); }
+function coopOutcomeMeta(outcome, champ){
+  const champName = champ ? nameTag(champ) : '—';
+  const META = {
+    allCoop:   { combo:'🤝🏻🤝🏻🤝🏻', title:'🎉 三人全部合作！', desc:'獎金照設定比例分給前三名。' },
+    oneBetray: { combo:'😈🤝🏻🤝🏻', title:'😈 剛好一人背叛！', desc: champName + ' 獨拿全部獎金。' },
+    starWins:  { combo:'😈😈😈', title:'🎂 獎金全部歸壽星！', desc: champName + ' 拿走這一輪全部獎金。' }
+  };
+  return META[outcome] || META.starWins;
+}
+/* Resolution rules (all confirmed with the user, see party_mockups.html
+   #lastplace's 「規則已確認」box):
+     - 3 real cooperators (coopCount===3) -> 'allCoop', split by the
+       configured ratio among all 3 — this can never overlap with a
+       forfeiter, since a forfeiter can't also be an active cooperator.
+     - Exactly 2 cooperators (coopCount===2), i.e. exactly one betrayer or
+       forfeiter -> if that lone non-cooperator ACTIVELY chose betray,
+       'oneBetray' and THEY get 100%. If instead they simply timed out
+       (a forfeiter, never chose anything) — a forfeiter can never collect
+       the money even though the plain classification math would otherwise
+       hand them 100% — so this redirects to 'starWins' instead, same as the
+       "nobody actively earns it" branches below. This is the trickiest rule
+       in the whole spec; do not simplify it away.
+     - 0 or 1 cooperators (coopCount<=1) -> 'starWins' regardless of whether
+       that's "剛好一人合作" or "全部背叛" — the user confirmed both read as
+       the same outcome, no need to distinguish them further. */
+function evaluateCoopRound(){
+  if (!hostState || hostState.awardsStage !== 'coop') return; // already resolved elsewhere
+  hostState.coopEvalSeq = (hostState.coopEvalSeq || 0) + 1;
+  stopHostCoopCountdown();
+  const ids = (hostState.coopIds || []).slice();
+  const choices = hostState.coopChoices || {};
+  const forfeits = ids.filter(id => choices[id] !== 'cooperate' && choices[id] !== 'betray');
+  hostState.coopForfeits = forfeits;
+  const coopCount = ids.filter(id => choices[id] === 'cooperate').length;
+  let outcome, championId;
+  if (coopCount === 3){
+    outcome = 'allCoop';
+    // "獎金最高者" for an all-cooperate split is whoever's configured share
+    // is numerically largest (ties favour the earlier/higher rank) — needed
+    // so renderHostAwardsLastplace() always has someone to name as the
+    // duel opponent, even when nobody actively betrayed.
+    const pcts = coopPrizePercents();
+    let bestIdx = 0;
+    for (let i = 1; i < ids.length; i++) if (pcts[i] > pcts[bestIdx]) bestIdx = i;
+    championId = ids[bestIdx];
+  } else if (coopCount === 2){
+    const nonCoopId = ids.find(id => choices[id] !== 'cooperate');
+    if (forfeits.includes(nonCoopId)){
+      outcome = 'starWins';
+      championId = hostState.shouxingId;
+    } else {
+      outcome = 'oneBetray';
+      championId = nonCoopId;
+    }
+  } else {
+    outcome = 'starWins';
+    championId = hostState.shouxingId;
+  }
+  hostState.coopOutcome = outcome;
+  hostState.prizeChampionId = championId;
+  hostState.awardsStage = 'coopResult';
   sSet('game:state', hostState);
-  renderHostAwardsPicking();
+  renderHostAwards();
 }
-function finishAwardsNoBottom(){
-  hostState.awardsStage = 'done';
-  sSet('game:state', hostState);
-  renderHostAwardsDone();
-}
-/* Tracks whose turn we last played the card-shuffle entrance animation for, so
-   a poll re-render mid-turn (e.g. another player's stray write, or just the
-   background poll loop) doesn't replay the shuffle on every render — only a
-   genuinely new turn (a fresh currentId) deals the cards back in. */
-let _lastPickingAnimId = null;
-function renderHostAwardsPicking(){
-  const order = hostState.pickOrder || [];
-  const cards = hostState.wishCards || ['','',''];
-  const picked = hostState.pickedCards || {};
-  const pickedIdxs = Object.values(picked);
-  const currentId = order.find(id => picked[id] === undefined);
-  const currentP = currentId ? hostState.players[currentId] : null;
-  const dealCards = currentId !== _lastPickingAnimId;
-  _lastPickingAnimId = currentId;
-  const dealRot = [-9, 7, -5];
+function renderHostAwardsCoopResult(){
+  const ids = hostState.coopIds || [];
+  const choices = hostState.coopChoices || {};
+  const forfeits = hostState.coopForfeits || [];
+  const outcome = hostState.coopOutcome;
+  const champ = hostState.players[hostState.prizeChampionId];
+  const meta = coopOutcomeMeta(outcome, champ);
+  const pcts = coopPrizePercents();
   render(`
     <div class="shell"><div class="col" style="align-items:center;text-align:center">
       ${hostNav(true)}
-      <span class="eyebrow">🃏 選卡中</span>
-      ${currentP ? `
-        <h1 class="marquee-title" style="font-size:clamp(24px,5vw,40px)">輪到 <span class="hl">${nameTag(currentP)}</span> 選卡！</h1>
-        <p class="sub">請她／他看自己的手機，從剩下的許願卡中選一張</p>
-      ` : '<h1 class="marquee-title" style="font-size:clamp(24px,5vw,40px)">都選完了！</h1>'}
-      <div class="options-grid" style="max-width:760px">
-        ${[0,1,2].map(i=> `
-          <div class="opt-card ${OPT_CLASS[i]} ${pickedIdxs.includes(i)?'dim':''} ${dealCards?'card-deal':''}"${dealCards?` style="animation-delay:${i*120}ms;--deal-rot:${dealRot[i]}deg"`:''}>
-            <span class="tag">${i+1}</span>
-            <span>${pickedIdxs.includes(i) ? '（已被選走）' : (cards[i] ? esc(cards[i]) : '（壽星還沒填這張卡）')}</span>
-          </div>
-        `).join('')}
-      </div>
-      <div class="stack" style="width:100%;max-width:420px;margin-top:10px">
-        ${order.map((id,i)=>{
+      <span class="eyebrow">🎁 獎金分配結果</span>
+      <div class="lp-trio">
+        ${ids.map(id=>{
           const p = hostState.players[id]; if (!p) return '';
-          const idx = picked[id];
-          // （二十五）改版：這裡以前選完立刻顯示「拿到：${內容}」，主畫面/投影頁上
-          // 大家都看得到——使用者反饋希望先賣關子，等三位都選完、主持人按「公布
-          // 結果」進到 renderHostAwardsDone()/renderSpectateAwardsDone() 那頁再一起
-          // 公開，這裡改成只顯示「已選好」，不洩漏內容。
-          return `<div class="lb-row"><div class="lb-rank">${i+1}</div><div class="lb-name">${avatarSpan(p.avatar)}${nameTag(p)}</div><div class="sub">${idx!==undefined ? '✅ 已選好，等公布' : '等待中…'}</div></div>`;
+          const isForfeit = forfeits.includes(id);
+          const icon = choices[id]==='cooperate' ? '🤝🏻' : '😈';
+          return `<div class="lp-trio-person">${avatarSpan(p.avatar)}<span class="nm">${nameTag(p)}</span><span class="rk" style="font-size:22px">${icon}</span>${isForfeit? '<span class="rk" style="color:var(--alert)">（時間到，視為背叛）</span>' : ''}</div>`;
         }).join('')}
       </div>
-      <div class="btn-row" style="margin-top:10px">
-        ${currentId ? `<button class="btn ghost" onclick="hostForcePick()">⏭ 沒反應，幫她隨機選一張</button>` : `<button class="btn" onclick="finishPicking()">🎉 公布結果 →</button>`}
+      <div class="lp-outcome-grid" style="grid-template-columns:1fr;max-width:420px">
+        <div class="lp-outcome-card happened">
+          <div class="combo">${meta.combo}</div>
+          <div class="desc">${meta.title}${meta.desc}</div>
+        </div>
+      </div>
+      ${outcome === 'allCoop' ? `
+      <div class="panel" style="margin-top:14px;max-width:420px;width:100%">
+        <div class="stack">
+          ${ids.map((id,i)=>{ const p = hostState.players[id]; if (!p) return ''; return `<div class="lb-row"><div class="lb-name">${avatarSpan(p.avatar)}${nameTag(p)}</div><div class="sub">${pcts[i]}%</div></div>`; }).join('')}
+        </div>
+      </div>` : ''}
+      <div class="btn-row" style="margin-top:14px">
+        <button class="btn" onclick="goAwardsLastplace()">公布最後一名 →</button>
       </div>
     </div></div>
   `);
 }
-/* Player writes their pick to cardpick:<id>; picked up here on the next host poll. */
-async function processCardPicks(){
-  const order = hostState.pickOrder || [];
-  const picked = hostState.pickedCards || {};
-  const nextId = order.find(id => picked[id] === undefined);
-  if (!nextId) return;
-  const info = await sGet('cardpick:' + nextId);
-  if (!info) return;
-  if (picked[nextId] !== undefined) return;         // already resolved (race guard)
-  if (info.forRound !== hostState.roundId) return;   // stale leftover from an earlier game
-  const idx = info.cardIndex;
-  const takenIdxs = Object.values(picked);
-  if (typeof idx !== 'number' || idx < 0 || idx > 2 || takenIdxs.includes(idx)) return;
-  hostState.pickedCards[nextId] = idx;
-  await sDel('cardpick:' + nextId);
-  if (Object.keys(hostState.pickedCards).length >= order.length) hostState.awardsStage = 'done';
-  await sSet('game:state', hostState);
+
+/* ============================================================
+   HOST: 最後一名公布 + 罵名／挑戰 (awardsStage 'lastplace')
+   Ported from party_mockups.html 畫面 C（reveal modal）+ 畫面 D（host-only
+   2-button choice）— combined into ONE render per the user's explicit
+   「控制權回到主持人主控板」requirement: the host reads the reveal and
+   immediately sees their own action buttons, no extra intermediate click.
+   （偏離 mockup 一點：畫面 C 的 .lp-modal 在 mockup 裡是 position:fixed 的
+   全螢幕深色遮罩，用在只顯示彈窗、底下沒有其他要點的東西時沒問題；這裡
+   兩個畫面要疊在同一個渲染裡、且主持人要能點下面那排按鈕，直接套用
+   fixed 遮罩會蓋住按鈕讓它點不到，所以主持人這頁改成用同一套 .lp-modal-card
+   卡片樣式、但用一般文件流排版而不是 fixed 遮罩；投影頁 renderSpectate
+   AwardsLastplace() 因為只需要顯示彈窗本身、不需要跟其他內容共存，仍然
+   照 mockup 原樣使用 fixed 遮罩。） */
+function goAwardsLastplace(){
+  hostState.awardsStage = 'lastplace';
+  sSet('game:state', hostState);
+  renderHostAwardsLastplace();
+}
+function renderHostAwardsLastplace(){
+  const last = hostState.players[hostState.lastPlaceId];
+  const champ = hostState.players[hostState.prizeChampionId];
+  const lastName = last ? nameTag(last) : '（沒有人）';
+  const champName = champ ? nameTag(champ) : '—';
+  render(`
+    <div class="shell"><div class="col" style="align-items:center;text-align:center">
+      ${hostNav(true)}
+      <div class="lp-modal-card">
+        <div class="lp-modal-kicker">😱 本場最後一名</div>
+        <div class="lp-modal-avatar">${last ? avatarSpan(last.avatar) : '🙈'}</div>
+        <h3 class="lp-modal-name">${last ? esc(last.name) : '（沒有人）'}</h3>
+        <p class="lp-modal-sub">分數是全場最後一名……<br>要接受罵名，還是挑戰獎金最高的${champName}討回面子？</p>
+      </div>
+      <div class="lp-inner" style="margin-top:18px">
+        <span class="lp-eyebrow">🎙 主持人主控板</span>
+        <h3 class="lp-modal-name" style="font-size:clamp(17px,2.6vw,22px)">問問${lastName}：要接受罵名，還是挑戰${champName}？</h3>
+        <div class="lp-choice-row">
+          <button class="lp-choice-btn" onclick="chooseDuelPath('accept')"><span class="big">😅</span><span class="lbl">接受最後一名的罵名</span></button>
+          <button class="lp-choice-btn challenge" onclick="chooseDuelPath('challenge')"><span class="big">🥊</span><span class="lbl">挑戰獎金最高者：${champ?esc(champ.name):'—'}</span></button>
+        </div>
+        <div class="lp-hostpanel-note">這兩顆按鈕在你手上，現場問本人選好之後由你點——不是最後一名自己滑手機選。</div>
+      </div>
+    </div></div>
+  `);
+}
+/* choice: 'accept' -> 罵名直接公布，跳過海帶拳；'challenge' -> 進 duel 三戰兩勝。
+   壽星本人剛好就是獎金最高者時一樣照常挑戰她，不特別跳過（使用者已明確
+   確認這是允許、正常的情境）。 */
+function chooseDuelPath(choice){
+  if (choice === 'accept'){
+    hostState.duelResult = 'shame';
+    hostState.awardsStage = 'result';
+  } else if (choice === 'challenge'){
+    hostState.duelScore = { last: 0, champ: 0 };
+    hostState.awardsStage = 'duel';
+  } else {
+    return;
+  }
+  sSet('game:state', hostState);
   renderHostAwards();
 }
-/* Fallback for a phone that's gone quiet mid-ceremony — assign a random remaining card. */
-async function hostForcePick(){
-  const order = hostState.pickOrder || [];
-  const currentId = order.find(id => hostState.pickedCards[id] === undefined);
-  if (!currentId) return;
-  const takenIdxs = Object.values(hostState.pickedCards);
-  const remaining = [0,1,2].filter(i => !takenIdxs.includes(i));
-  const idx = remaining[Math.floor(Math.random()*remaining.length)];
-  hostState.pickedCards[currentId] = idx;
-  await sDel('cardpick:' + currentId);
-  if (Object.keys(hostState.pickedCards).length >= order.length) hostState.awardsStage = 'done';
-  await sSet('game:state', hostState);
+
+/* ============================================================
+   HOST: 海帶拳三戰兩勝 (awardsStage 'duel')
+   No phone-based throw mechanic at all — deliberate simplification the user
+   explicitly requested: two real people rock-paper-scissors face to face,
+   this screen is purely a host-operated scoreboard (mockup 畫面 E). */
+function renderHostAwardsDuel(){
+  const last = hostState.players[hostState.lastPlaceId];
+  const champ = hostState.players[hostState.prizeChampionId];
+  const score = hostState.duelScore || { last:0, champ:0 };
+  const lastLead = score.last > score.champ, champLead = score.champ > score.last;
+  render(`
+    <div class="shell"><div class="col" style="align-items:center;text-align:center">
+      ${hostNav(true)}
+      <div class="lp-inner">
+        <span class="lp-eyebrow">🥊 海帶拳・三戰兩勝</span>
+        <div class="lp-score-panel">
+          <div class="lp-score-names"><span>${last?nameTag(last):'最後一名'}</span><span style="color:var(--coral)">VS</span><span>${champ?nameTag(champ):'獎金最高者'}</span></div>
+          <div class="lp-score">${score.last} : ${score.champ}${lastLead? `<span style="font-size:11px;color:var(--ink-dim)"> ・${last?esc(last.name):''}領先</span>` : champLead? `<span style="font-size:11px;color:var(--ink-dim)"> ・${champ?esc(champ.name):''}領先</span>` : ''}</div>
+          <div class="lp-score-btnrow">
+            <button class="lp-score-btn ${lastLead?'lead':''}" onclick="recordDuelRound('last')">${last?esc(last.name):'最後一名'}贏這局</button>
+            <button class="lp-score-btn ${champLead?'lead':''}" onclick="recordDuelRound('champ')">${champ?esc(champ.name):'獎金最高者'}贏這局</button>
+          </div>
+        </div>
+        <div class="lp-duel-note">兩人當場面對面真的猜拳，你照實際結果點一下，這裡自動累計到三戰兩勝</div>
+      </div>
+    </div></div>
+  `);
+}
+function recordDuelRound(winnerSide){
+  if (winnerSide !== 'last' && winnerSide !== 'champ') return;
+  if (hostState.awardsStage !== 'duel') return;
+  if (!hostState.duelScore) hostState.duelScore = { last:0, champ:0 };
+  hostState.duelScore[winnerSide] = (hostState.duelScore[winnerSide] || 0) + 1;
+  if (hostState.duelScore[winnerSide] >= 2){
+    hostState.duelResult = winnerSide === 'last' ? 'win' : 'lose';
+    hostState.awardsStage = 'result';
+  }
+  sSet('game:state', hostState);
   renderHostAwards();
 }
-function finishPicking(){
+
+/* ============================================================
+   HOST: 結果公布 (awardsStage 'result') — 'shame' / 'win' / 'lose'
+   ============================================================ */
+function resultCardHtml(state, last){
+  const result = state.duelResult;
+  const name = last ? esc(last.name) : '最後一名';
+  const score = state.duelScore || { last:0, champ:0 };
+  if (result === 'win'){
+    return `
+      <div class="lp-result-card win">
+        <div style="font-size:38px">🎉</div>
+        <h3 class="lp-result-title">${name}贏了！</h3>
+        <p class="lp-result-sub">${score.last} : ${score.champ} 拿下海帶拳挑戰，拿回自己付出的 100 元，全身而退！</p>
+      </div>`;
+  }
+  if (result === 'lose'){
+    return `
+      <div class="lp-result-card lose">
+        <div style="font-size:38px">😭</div>
+        <h3 class="lp-result-title">${name}輸了……</h3>
+        <p class="lp-result-sub">${score.last} : ${score.champ} 惜敗，100 元留在桌上，還要接受懲罰</p>
+        <div class="lp-penalty-box">
+          <div class="tag">🎭 直到現在才公開的懲罰</div>
+          <div class="txt">接下來一個月，群組大頭貼要換成一張鬼臉照！</div>
+        </div>
+      </div>`;
+  }
+  // 'shame' — accepted outright, no duel ever played, so don't frame it as a match score.
+  return `
+    <div class="lp-result-card lose">
+      <div style="font-size:38px">😅</div>
+      <h3 class="lp-result-title">${name}接受了罵名</h3>
+      <p class="lp-result-sub">本場最後一名，就是${name}！</p>
+    </div>`;
+}
+function renderHostAwardsResult(){
+  const last = hostState.players[hostState.lastPlaceId];
+  render(`
+    <div class="shell"><div class="col" style="align-items:center;text-align:center">
+      ${hostNav(true)}
+      ${resultCardHtml(hostState, last)}
+      <div class="btn-row" style="margin-top:14px">
+        <button class="btn" onclick="finishAwardsCeremony()">繼續 →</button>
+      </div>
+    </div></div>
+  `);
+}
+function finishAwardsCeremony(){
   hostState.awardsStage = 'done';
   sSet('game:state', hostState);
   renderHostAwardsDone();
 }
-/* （三十八）使用者實測回報：頒獎台（renderHostAwardsPodium）跟點擊「查看
-   最終結果」進到的這頁，畫面根本一模一樣（同一個凸台圖＋角色＋懸疑淡入
-   獎品），她覺得沒有必要公布兩次。凸台的「猜猜看誰得獎」懸疑感只需要在
-   podium 那頁演一次；這頁的任務改成單純把「已經知道的答案」講清楚——不
-   再重畫一次凸台，直接用清單列出前三名的名次／分數／獎品，如果這場有跑
-   猜拳選卡（hasWishes），最後三名抽到的任務也直接接在下面一起顯示，不用
-   再多點一次「公布許願任務」才看得到（原本拆成 renderHostAwardsDone() 跟
-   goAwardsWishes()/renderHostAwardsWishes() 兩頁，現在合併成一頁；
-   awardsStage 的 state machine 仍然是 'podium' -> 'rps' -> 'picking' ->
-   'done'，只是 'done' 不會再轉去 'wishes' 了）。 */
+/* Adapted from the deleted finishAwardsNoBottom() — same "too few people,
+   skip the elaborate sub-flow, land on the same final screen everyone else
+   reaches" shape, just triggered from goAwardsCoop()'s ranked.length<4 guard
+   instead of a bottom.length===0/1 check inside a render function. */
+function finishAwardsSimple(){
+  hostState.awardsStage = 'done';
+  sSet('game:state', hostState);
+  renderHostAwardsDone();
+}
+/* prizes[] used to hold free-text "🎁 獎品" wording per rank; it now holds
+   the all-cooperate % split (see hs-p5), which only actually applied if
+   THIS round's coop outcome was 'allCoop' — that's already shown on the
+   coopResult screen earlier in the ceremony, and isn't reliably true of the
+   top3 as a group any more (oneBetray/starWins hand the whole prize to a
+   single person, not these 3 by rank). Showing a stale per-rank "🎁 X%" line
+   here would misrepresent what actually happened this round, so it's
+   dropped rather than reinterpreted — this final recap just lists the
+   podium itself. */
 function renderHostAwardsDone(){
   const top3 = (hostState.topIds||[]).map(id=>[id, hostState.players[id]]).filter(([,p])=>p);
-  const prizes = hostState.prizes || ['','',''];
-  const order = hostState.pickOrder || [];
-  const cards = hostState.wishCards || ['','',''];
-  const hasWishes = order.length > 0;
   render(`
     <div class="shell"><div class="col" style="align-items:center;text-align:center">
       ${hostNav(true)}
@@ -5105,25 +5141,9 @@ function renderHostAwardsDone(){
       <h1 class="marquee-title">恭喜<span class="hl">得獎名單</span>！</h1>
       <div class="panel" id="awards-done-top3" style="width:100%;max-width:480px">
         <div class="stack">
-          ${top3.length ? top3.map(([id,p],i)=> `
-            <div>
-              ${finalRowHtml(i+1, p, { pid: id })}
-              ${prizes[i] ? `<div class="sub" style="text-align:right;padding-right:10px;margin-top:2px">🎁 ${esc(prizes[i])}</div>` : ''}
-            </div>
-          `).join('') : '<p class="sub">這場沒有人猜</p>'}
+          ${top3.length ? top3.map(([id,p],i)=> finalRowHtml(i+1, p, { pid: id })).join('') : '<p class="sub">這場沒有人猜</p>'}
         </div>
       </div>
-      ${hasWishes ? `
-      <div class="panel" id="awards-done-wishes" style="width:100%;max-width:480px;margin-top:14px">
-        <h3 style="margin:0 0 10px;font-size:14px">🃏 最後三名抽到的任務</h3>
-        <div class="stack">
-          ${order.map(id=>{
-            const p = hostState.players[id]; if (!p) return '';
-            const idx = hostState.pickedCards[id];
-            return `<div class="lb-row"><div class="lb-name">${avatarSpan(p.avatar)}${nameTag(p)}</div><div class="sub" style="flex:2;text-align:right">${idx!=null? esc(cards[idx]||'—') : '—'}</div></div>`;
-          }).join('')}
-        </div>
-      </div>` : ''}
       <div class="btn-row" style="margin-top:14px">
         <button class="btn secondary" onclick="restartSameGame()">🔄 再玩一輪</button>
         <button class="btn ghost" onclick="hostNewGame()">🆕 回設定改題目</button>
@@ -5264,9 +5284,15 @@ function clearSpectateCountdown(){
   if (spectateCountdownHandle){ clearInterval(spectateCountdownHandle); spectateCountdownHandle = null; }
 }
 function renderSpectate(state){
+  // Single choke point for the coop/betray countdown's own interval (a
+  // sibling of clearSpectateCountdown()'s question timer, see spectateCoopCountdownHandle) —
+  // guarantees it's torn down no matter which screen we're leaving it for,
+  // not just the ones that happen to call it themselves too.
+  clearSpectateCoopCountdown();
   if (!state || !state.status || state.status === 'idle'){ renderSpectateIdle(); return; }
   const renderers = {
     lobby: renderSpectateLobby,
+    rules: renderSpectateRules,
     chapterIntro: renderSpectateChapterIntro,
     question: renderSpectateQuestion,
     reveal: renderSpectateReveal,
@@ -5404,6 +5430,16 @@ function spawnLobbyFloatWords(){
     el.style.color = g.c;
     layer.appendChild(el);
   });
+}
+function renderSpectateRules(state){
+  clearSpectateCountdown();
+  render(`
+    <div class="shell"><div class="col">
+      <div class="lp-inner">
+        ${rulesCardHtml()}
+      </div>
+    </div></div>
+  `);
 }
 function renderSpectateChapterIntro(state){
   clearSpectateCountdown();
@@ -5662,10 +5698,16 @@ function renderSpectateFinal(state){
 }
 function renderSpectateAwards(state){
   const stage = state.awardsStage;
-  if (stage === 'rps') return renderSpectateAwardsRps(state);
-  if (stage === 'picking') return renderSpectateAwardsPicking(state);
+  if (stage === 'coop') return renderSpectateAwardsCoop(state);
+  if (stage === 'coopResult') return renderSpectateAwardsCoopResult(state);
+  if (stage === 'lastplace') return renderSpectateAwardsLastplace(state);
+  if (stage === 'duel') return renderSpectateAwardsDuel(state);
+  if (stage === 'result') return renderSpectateAwardsResult(state);
   if (stage === 'done') return renderSpectateAwardsDone(state);
   return renderSpectateAwardsPodium(state);
+}
+function clearSpectateCoopCountdown(){
+  if (spectateCoopCountdownHandle){ clearInterval(spectateCoopCountdownHandle); spectateCoopCountdownHandle = null; }
 }
 function renderSpectateAwardsPodium(state){
   clearSpectateCountdown();
@@ -5707,104 +5749,141 @@ function renderSpectateAwardsPodium(state){
     document.querySelectorAll('.prize-line').forEach(el => el.classList.add('show'));
   }
 }
-function renderSpectateAwardsRps(state){
+function renderSpectateAwardsCoop(state){
   clearSpectateCountdown();
-  const bottom = (state.bottomIds||[]).map(id=>[id, state.players[id]]).filter(([,p])=>p);
-  if (!bottom.length){
-    render(`
-      <div class="shell"><div class="col" style="align-items:center;text-align:center">
-        <span class="eyebrow">🃏 最後三名 & 許願卡</span>
-        <h1 class="marquee-title" style="font-size:clamp(26px,5vw,42px)">誰先選<span class="hl">許願卡</span>？</h1>
-        <p class="sub">這場人數不到三位猜猜的人，這次先跳過猜拳環節。</p>
-      </div></div>
-    `);
-    return;
-  }
-  if (bottom.length === 1){
-    render(`
-      <div class="shell"><div class="col" style="align-items:center;text-align:center">
-        <span class="eyebrow">🃏 最後三名 & 許願卡</span>
-        <h1 class="marquee-title" style="font-size:clamp(26px,5vw,42px)">誰先選<span class="hl">許願卡</span>？</h1>
-        <p class="sub">這場只有一位最後一名，不用猜拳，直接選卡！</p>
-        <div class="players-grid">${avatarSpan(bottom[0][1].avatar)}${nameTag(bottom[0][1])}</div>
-      </div></div>
-    `);
-    return;
-  }
-  const active = state.rpsActive || [];
-  const picks = state.rpsPicks || {};
+  clearSpectateCoopCountdown();
+  const ids = state.coopIds || [];
   const medal = ['🥇','🥈','🥉'];
-  const medalOrder = state.rpsMedalOrder || [];
-  const defaultMsg = active.length === 3
-    ? '三人猜拳！三人同手勢或三人各出一種都算重來；兩人同手勢、一人不同，看那個不同手勢的輸贏決定他排最前面還是排最後面。'
-    : '最後兩人猜拳，贏的排前面！';
+  const submitted = Object.keys(state.coopChoices || {}).length;
   render(`
     <div class="shell"><div class="col" style="align-items:center;text-align:center">
-      <span class="eyebrow">🃏 最後三名 & 許願卡</span>
-      <h1 class="marquee-title" style="font-size:clamp(26px,5vw,42px)">猜拳決定<span class="hl">選卡順序</span></h1>
-      <p class="sub">${esc(state.rpsRoundMsg || defaultMsg)}</p>
-      <div class="players-grid">
-        ${bottom.map(([id,p])=>{
-          const isActive = active.includes(id);
-          const thrown = !!picks[id];
-          const solo = state.rpsSolo && state.rpsSolo.id===id ? state.rpsSolo.place : null;
-          const medalIdx = medalOrder.indexOf(id);
-          let hand;
-          if (medalIdx >= 0) hand = medal[medalIdx] || '';
-          else if (thrown) hand = HAND_EMOJI[picks[id]];
-          else if (isActive) hand = '✊';
-          else hand = solo === 'front' ? '⏫' : solo === 'back' ? '⏬' : '—';
-          return `<div class="player-pill ${isActive && !thrown ? 'shuffling' : ''} ${solo?'rps-placed':''}">
-            ${avatarSpan(p.avatar)}${nameTag(p)}
-            <span class="rps-hand ${thrown||medalIdx>=0?'landed':''}">${hand}</span>
-          </div>`;
-        }).join('')}
+      <div class="lp-inner">
+        <span class="lp-eyebrow">🤝🏻😈 前三名的獎金考驗</span>
+        <div class="lp-trio">
+          ${ids.map((id,i)=>{
+            const p = state.players[id]; if (!p) return '';
+            return `<div class="lp-trio-person">${avatarSpan(p.avatar)}<span class="nm">${nameTag(p)}</span><span class="rk">${medal[i]||''} 第${i+1}名</span></div>`;
+          }).join('')}
+        </div>
+        <div class="lp-trio-cards">
+          <div class="lp-trio-card">？</div>
+          <div class="lp-trio-card">？</div>
+          <div class="lp-trio-card">？</div>
+        </div>
+        <p class="sub" style="margin-top:6px">已送出：${submitted} / ${ids.length}</p>
+        <div class="lp-countdown" id="spec-coop-countdown">01:00</div>
+        <div class="lp-countdown-note">三人的選擇在公布前都蓋著，跟頒獎台先蓋牌再一起掀的懸念感一樣。</div>
+      </div>
+    </div></div>
+  `);
+  updateSpectateCoopTimerUI(state);
+  spectateCoopCountdownHandle = setInterval(()=> updateSpectateCoopTimerUI(lastSpectateState || state), 200);
+}
+/* 只更新畫面，不呼叫 tickCoopCountdownSound() 之類的——倒數嗶聲只在主持人
+   畫面播，跟題目倒數的既有規則一樣（見 renderHostAwardsCoop 上方文件）。 */
+function updateSpectateCoopTimerUI(state){
+  const el = document.getElementById('spec-coop-countdown');
+  if (!el || !state || !state.coopStartAt) return;
+  const remainMs = Math.max(0, state.coopStartAt + (state.coopDurationMs||0) - Date.now());
+  const secs = Math.ceil(remainMs/1000);
+  const mm = String(Math.floor(secs/60)).padStart(2,'0');
+  const ss = String(secs%60).padStart(2,'0');
+  el.textContent = mm + ':' + ss;
+  el.classList.toggle('urgent', remainMs <= COOP_URGENT_THRESHOLD_MS);
+}
+/* 這裡是揭曉合作／背叛結果的那一刻，撒花＋音效只在投影頁播（跟頒獎台
+   podium-pop/card-flip 同一個既有理由：主持人自己點擊觸發的畫面是瞬間的，
+   投影頁天生要晚一個 poll 週期才追得上，兩邊都播反而先聽到主持人端的
+   聲音、投影頁畫面卻還沒切過來）。isFirstRender 用同一套 _lastSpecXxxKey
+   一次性播放閘門，同一輪重複 poll 重新渲染不會重播。 */
+function renderSpectateAwardsCoopResult(state){
+  clearSpectateCountdown();
+  clearSpectateCoopCountdown();
+  const ids = state.coopIds || [];
+  const choices = state.coopChoices || {};
+  const forfeits = state.coopForfeits || [];
+  const outcome = state.coopOutcome;
+  const champ = state.players[state.prizeChampionId];
+  const meta = coopOutcomeMeta(outcome, champ);
+  const pcts = coopPrizePercentsFrom(state.prizes);
+  const key = (state.roundId||'') + '_coopresult';
+  const isFirstRender = _lastSpecCoopResultKey !== key;
+  _lastSpecCoopResultKey = key;
+  render(`
+    <div class="shell"><div class="col" style="align-items:center;text-align:center">
+      <div class="lp-inner">
+        <span class="lp-eyebrow">🎁 獎金分配結果</span>
+        <div class="lp-trio">
+          ${ids.map(id=>{
+            const p = state.players[id]; if (!p) return '';
+            const isForfeit = forfeits.includes(id);
+            const icon = choices[id]==='cooperate' ? '🤝🏻' : '😈';
+            return `<div class="lp-trio-person">${avatarSpan(p.avatar)}<span class="nm">${nameTag(p)}</span><span class="rk" style="font-size:22px">${icon}</span>${isForfeit? '<span class="rk" style="color:var(--alert)">（時間到，視為背叛）</span>' : ''}</div>`;
+          }).join('')}
+        </div>
+        <div class="lp-outcome-grid" style="grid-template-columns:1fr;max-width:420px">
+          <div class="lp-outcome-card happened">
+            <div class="combo">${meta.combo}</div>
+            <div class="desc">${meta.title}${meta.desc}</div>
+          </div>
+        </div>
+        ${outcome === 'allCoop' ? `
+        <div class="panel" style="margin-top:14px;max-width:420px;width:100%">
+          <div class="stack">
+            ${ids.map((id,i)=>{ const p = state.players[id]; if (!p) return ''; return `<div class="lb-row"><div class="lb-name">${avatarSpan(p.avatar)}${nameTag(p)}</div><div class="sub">${pcts[i]}%</div></div>`; }).join('')}
+          </div>
+        </div>` : ''}
+      </div>
+    </div></div>
+  `);
+  if (isFirstRender) playCardFlipSound();
+}
+/* 公開版的畫面 C（見 renderHostAwardsLastplace 上方文件）——這裡沒有其他
+   內容要跟彈窗共存，所以照 mockup 原樣用 .lp-modal 的 fixed 全螢幕遮罩。
+   沒有選擇按鈕：控制權在主持人主控板，不是這個唯讀投影頁。 */
+function renderSpectateAwardsLastplace(state){
+  clearSpectateCountdown();
+  clearSpectateCoopCountdown();
+  const last = state.players[state.lastPlaceId];
+  const champ = state.players[state.prizeChampionId];
+  render(`
+    <div class="shell"><div class="col">
+      <div class="lp-modal">
+        <div class="lp-modal-card">
+          <div class="lp-modal-kicker">😱 本場最後一名</div>
+          <div class="lp-modal-avatar">${last ? avatarSpan(last.avatar) : '🙈'}</div>
+          <h3 class="lp-modal-name">${last ? esc(last.name) : '（沒有人）'}</h3>
+          <p class="lp-modal-sub">分數是全場最後一名……<br>要接受罵名，還是挑戰獎金最高的${champ?nameTag(champ):'—'}討回面子？</p>
+        </div>
       </div>
     </div></div>
   `);
 }
-// (二十九) 跟主持人頁的 _lastPickingAnimId 同一套寫法：換到新的人選卡時
-// （currentId 變了）播一次發牌動畫，同一個人選卡途中的其他 poll 重新渲染
-// 不重播。host/spectate 是不同裝置各自跑一份 script，變數本來就不會互相
-// 干擾，這裡另外宣告一個是為了語意清楚。
-let _lastSpecPickingAnimId = null;
-function renderSpectateAwardsPicking(state){
+function renderSpectateAwardsDuel(state){
   clearSpectateCountdown();
-  const order = state.pickOrder || [];
-  const cards = state.wishCards || ['','',''];
-  const picked = state.pickedCards || {};
-  const pickedIdxs = Object.values(picked);
-  const currentId = order.find(id => picked[id] === undefined);
-  const currentP = currentId ? state.players[currentId] : null;
-  const dealCards = currentId !== _lastSpecPickingAnimId;
-  _lastSpecPickingAnimId = currentId;
-  const dealRot = [-9, 7, -5];
+  clearSpectateCoopCountdown();
+  const last = state.players[state.lastPlaceId];
+  const champ = state.players[state.prizeChampionId];
+  const score = state.duelScore || { last:0, champ:0 };
   render(`
     <div class="shell"><div class="col" style="align-items:center;text-align:center">
-      <span class="eyebrow">🃏 選卡中</span>
-      ${currentP ? `
-        <h1 class="marquee-title" style="font-size:clamp(24px,5vw,40px)">輪到 <span class="hl">${nameTag(currentP)}</span> 選卡！</h1>
-        <p class="sub">請她／他看自己的手機，從剩下的許願卡中選一張</p>
-      ` : '<h1 class="marquee-title" style="font-size:clamp(24px,5vw,40px)">都選完了！</h1>'}
-      <div class="options-grid" style="max-width:760px">
-        ${[0,1,2].map(i=> `
-          <div class="opt-card ${OPT_CLASS[i]} ${pickedIdxs.includes(i)?'dim':''} ${dealCards?'card-deal':''}"${dealCards?` style="animation-delay:${i*120}ms;--deal-rot:${dealRot[i]}deg"`:''}>
-            <span class="tag">${i+1}</span>
-            <span>${pickedIdxs.includes(i) ? '（已被選走）' : (cards[i] ? esc(cards[i]) : '（壽星還沒填這張卡）')}</span>
-          </div>
-        `).join('')}
+      <div class="lp-inner">
+        <span class="lp-eyebrow">🥊 海帶拳・三戰兩勝</span>
+        <div class="lp-score-panel">
+          <div class="lp-score-names"><span>${last?nameTag(last):'最後一名'}</span><span style="color:var(--coral)">VS</span><span>${champ?nameTag(champ):'獎金最高者'}</span></div>
+          <div class="lp-score">${score.last} : ${score.champ}</div>
+        </div>
       </div>
-      <div class="stack" style="width:100%;max-width:420px;margin-top:10px">
-        ${order.map((id,i)=>{
-          const p = state.players[id]; if (!p) return '';
-          const idx = picked[id];
-          // （二十五）改版：這裡以前選完立刻顯示「拿到：${內容}」，主畫面/投影頁上
-          // 大家都看得到——使用者反饋希望先賣關子，等三位都選完、主持人按「公布
-          // 結果」進到 renderHostAwardsDone()/renderSpectateAwardsDone() 那頁再一起
-          // 公開，這裡改成只顯示「已選好」，不洩漏內容。
-          return `<div class="lb-row"><div class="lb-rank">${i+1}</div><div class="lb-name">${avatarSpan(p.avatar)}${nameTag(p)}</div><div class="sub">${idx!==undefined ? '✅ 已選好，等公布' : '等待中…'}</div></div>`;
-        }).join('')}
-      </div>
+    </div></div>
+  `);
+}
+function renderSpectateAwardsResult(state){
+  clearSpectateCountdown();
+  clearSpectateCoopCountdown();
+  const last = state.players[state.lastPlaceId];
+  render(`
+    <div class="shell"><div class="col" style="align-items:center;text-align:center">
+      ${resultCardHtml(state, last)}
     </div></div>
   `);
 }
@@ -5819,10 +5898,6 @@ function renderSpectateAwardsPicking(state){
 function renderSpectateAwardsDone(state){
   clearSpectateCountdown();
   const top3 = (state.topIds||[]).map(id=>[id, state.players[id]]).filter(([,p])=>p);
-  const prizes = state.prizes || ['','',''];
-  const order = state.pickOrder || [];
-  const cards = state.wishCards || ['','',''];
-  const hasWishes = order.length > 0;
   const key = (state.roundId||'') + '_done';
   const isFirstRender = _lastSpecDoneKey !== key;
   _lastSpecDoneKey = key;
@@ -5832,30 +5907,14 @@ function renderSpectateAwardsDone(state){
       <h1 class="marquee-title">恭喜<span class="hl">得獎名單</span>！</h1>
       <div class="panel" id="awards-done-top3" style="width:100%;max-width:480px">
         <div class="stack">
-          ${top3.length ? top3.map(([id,p],i)=> `
-            <div>
-              ${finalRowHtml(i+1, p, { pid: id })}
-              ${prizes[i] ? `<div class="sub" style="text-align:right;padding-right:10px;margin-top:2px">🎁 ${esc(prizes[i])}</div>` : ''}
-            </div>
-          `).join('') : '<p class="sub">這場沒有人猜</p>'}
+          ${top3.length ? top3.map(([id,p],i)=> finalRowHtml(i+1, p, { pid: id })).join('') : '<p class="sub">這場沒有人猜</p>'}
         </div>
       </div>
-      ${hasWishes ? `
-      <div class="panel" id="awards-done-wishes" style="width:100%;max-width:480px;margin-top:14px">
-        <h3 style="margin:0 0 10px;font-size:14px">🃏 最後三名抽到的任務</h3>
-        <div class="stack">
-          ${order.map(id=>{
-            const p = state.players[id]; if (!p) return '';
-            const idx = state.pickedCards[id];
-            return `<div class="lb-row"><div class="lb-name">${avatarSpan(p.avatar)}${nameTag(p)}</div><div class="sub" style="flex:2;text-align:right">${idx!=null? esc(cards[idx]||'—') : '—'}</div></div>`;
-          }).join('')}
-        </div>
-      </div>` : ''}
     </div></div>
   `);
   if (isFirstRender){
     spawnConfetti();
-    if (hasWishes) playCardFlipSound(); else playPodiumFanfare();
+    playPodiumFanfare();
   }
 }
 
@@ -6020,8 +6079,10 @@ function renderPlayerReconnecting(){
 }
 function renderPlayerView(state){
   clearPlayerCountdown();
+  clearPlayerCoopCountdown();
   if (state.status === 'idle'){ renderPlayerParked(state); return; }
   if (state.status === 'lobby'){ renderPlayerWaiting(state); return; }
+  if (state.status === 'rules'){ renderPlayerRules(state); return; }
   if (state.status === 'chapterIntro'){ renderPlayerChapterWait(state); return; }
   if (state.status === 'question'){ renderPlayerQuestionOrWaiting(state); return; }
   if (state.status === 'reveal'){ renderPlayerReveal(state); return; }
@@ -6055,7 +6116,16 @@ function renderPlayerWaiting(state){
       <h1 class="marquee-title" style="font-size:clamp(24px,7vw,38px)">已加入！</h1>
       <p class="sub">${isSx? '等等大家會猜你每題會選什麼喔～' : '等待主持人開始遊戲'}<span class="waiting-dots"><span>.</span><span>.</span><span>.</span></span></p>
       ${count!=null ? `<div class="chip"><span>👥</span><span class="num">${count}</span><span>人已加入</span></div>` : ''}
-      ${isSx ? renderStarWishCardsEntry() : ''}
+    </div></div>
+  `);
+}
+/* 遊戲說明頁（status 'rules'，見 renderHostRules）——玩家手機這邊直接顯示
+   跟主畫面／投影頁一樣的規則卡片，同一份 rulesCardHtml()。 */
+function renderPlayerRules(state){
+  render(`
+    <div class="shell"><div class="center">
+      ${rulesCardHtml()}
+      <p class="sub">看主畫面，主持人唸完規則就會開始<span class="waiting-dots"><span>.</span><span>.</span><span>.</span></span></p>
     </div></div>
   `);
 }
@@ -6078,67 +6148,6 @@ function renderPlayerChapterWait(state){
       </div>
     </div></div>
   `);
-}
-/* ---------- 壽星: 三張許願卡 ---------- */
-function renderStarWishCardsEntry(){
-  return `<button class="btn secondary" style="margin-top:10px" onclick="renderStarWishCardsEditor()">🎁 填寫／編輯三張許願卡</button>`;
-}
-let _wishDraft = ['', '', ''];
-/* （三十五）壽星可以自己決定「這次要不要出最後三名任務」——不是每一輪都
-   想準備任務／講懲罰遊戲，勾掉之後主持人那邊點「最後三名 & 許願卡」會直接
-   跳過猜拳／選卡／公布任務三個畫面，直接進結算（見 goAwardsRps() 的判斷）。
-   預設 true（沒動過這個開關的話維持這個功能加上去之前「一律都出任務」的
-   舊行為），從 lastPlayerState.wishTasksEnabled 帶入既有選擇，跟三張卡片
-   文字一樣是「編輯中的草稿」，存檔前純本地狀態。 */
-let _wishTasksEnabled = true;
-/* A manual screen (see manualPlayerScreen) — free-typing textareas must not
-   get blown away by a background poll's re-render landing mid-edit. */
-function renderStarWishCardsEditor(){
-  manualPlayerScreen = true;
-  const existing = (lastPlayerState && lastPlayerState.wishCards) || ['', '', ''];
-  _wishDraft = [existing[0]||'', existing[1]||'', existing[2]||''];
-  _wishTasksEnabled = (lastPlayerState && lastPlayerState.wishTasksEnabled) !== false;
-  render(`
-    <div class="shell"><div class="center">
-      <span class="eyebrow">🎁 三張許願卡</span>
-      <h1 class="marquee-title" style="font-size:clamp(22px,6vw,34px)">給最後三名的<span class="hl">任務</span></h1>
-      <p class="sub">結算時，最不懂你的三個人會猜拳決定順序，輪流挑一張卡——選到的內容就是他們要完成的任務！</p>
-      <div class="checkbox-row" style="width:100%;max-width:400px">
-        <input type="checkbox" id="wish-tasks-on" ${_wishTasksEnabled?'checked':''} onchange="onToggleWishTasksEnabled(this.checked)">
-        <label for="wish-tasks-on">這次要幫最後三名出任務（不勾的話，頒獎典禮會直接跳過猜拳選卡，不出任務）</label>
-      </div>
-      <div class="stack" id="wish-cards-stack" style="width:100%;max-width:400px${_wishTasksEnabled?'':';opacity:.45;pointer-events:none'}">
-        ${[0,1,2].map(i=>`
-          <div class="field"><label>許願卡 ${i+1}</label>
-            <textarea rows="2" style="resize:vertical" oninput="_wishDraft[${i}]=this.value">${esc(_wishDraft[i])}</textarea>
-          </div>
-        `).join('')}
-      </div>
-      <div class="btn-row" style="margin-top:10px">
-        <button class="btn secondary" onclick="exitManualScreen()">← 返回</button>
-        <button class="btn" onclick="saveWishCards()">💾 儲存</button>
-      </div>
-    </div></div>
-  `);
-}
-/* Toggling the checkbox must NOT call renderStarWishCardsEditor() again — that
-   function re-derives _wishTasksEnabled from lastPlayerState (the last SAVED
-   value) at its top, so a full re-render here would immediately stomp the
-   very change the checkbox just made, back to whatever was last saved. Same
-   reasoning as _wishDraft's oninput not re-rendering: just update the JS
-   variable and patch the one bit of DOM that needs to visually react. */
-function onToggleWishTasksEnabled(checked){
-  _wishTasksEnabled = checked;
-  const stack = document.getElementById('wish-cards-stack');
-  if (stack){
-    stack.style.opacity = checked ? '1' : '.45';
-    stack.style.pointerEvents = checked ? '' : 'none';
-  }
-}
-async function saveWishCards(){
-  await sSet('starcards:' + PLAYER_ID, { text: _wishDraft.slice(), hasWishTasks: _wishTasksEnabled, updatedAt: Date.now() });
-  toast(_wishTasksEnabled ? '許願卡已儲存！' : '已儲存：這次不出最後三名任務');
-  exitManualScreen();
 }
 function renderPlayerQuestionOrWaiting(state){
   const isNew = state.questionIndex !== localSeenQuestionIndex;
@@ -6421,7 +6430,6 @@ function renderPlayerFinal(state){
       <div class="btn-row" style="margin-top:12px">
         ${PLAYER_ID!==sx ? '<button class="btn secondary" onclick="renderPlayerAnswerLog()">📜 查看我的作答紀錄</button>' : ''}
       </div>
-      ${PLAYER_ID===sx ? renderStarWishCardsEntry() : ''}
       <p class="sub" style="font-size:12.5px;margin-top:4px">等主持人開始頒獎典禮，這裡會自動接上</p>
     </div></div>
   `);
@@ -6455,59 +6463,60 @@ function renderPlayerAnswerLog(){
   `);
 }
 /* ---------- PLAYER: 頒獎典禮 ---------- */
-/* rpsThrownToken remembers which rpsRoundToken THIS phone has already thrown
-   for. As long as it matches the state's current token, we've submitted and
-   should show the "waiting" view; the moment the host starts a new throw
-   (a tie re-do, or the follow-up 2-person round) the token changes and this
-   phone automatically falls back into the spin/stop screen on the next poll —
-   no special "round changed" handling needed beyond this one comparison.
-   _lastPlayerPickAnimId is the picking-stage equivalent for the card-deal
-   entrance animation (see renderPlayerAwards' 'picking' branch). */
-let rpsThrownToken = null;
-let rpsSpinHandle = null;
-let _lastPlayerPickAnimId = null;
-/* A manual screen (see manualPlayerScreen) so a background poll's re-render
-   can't rip out the running spin interval mid-throw — same reasoning as the
-   wish-card editor. The background poll (playerPollTick) keeps refreshing
-   lastPlayerState the whole time, so once we submit and drop back out of
-   manual mode, everything is already in sync. */
-function renderPlayerRpsThrow(state){
-  manualPlayerScreen = true;
-  const hands = ['✊', '✋', '✌️'];
-  let idx = 0;
+/* coopChoiceSubmittedToken remembers which coopRoundToken THIS phone has
+   already submitted a choice for — same "compare against the current round
+   token" pattern the old rpsThrownToken used for the deleted RPS throw
+   screen. As long as it matches the state's current token, we've submitted
+   and should show the "已送出，等其他人" view instead of the two buttons. */
+let coopChoiceSubmittedToken = null;
+function clearPlayerCoopCountdown(){
+  if (playerCoopCountdownHandle){ clearInterval(playerCoopCountdownHandle); playerCoopCountdownHandle = null; }
+}
+function updatePlayerCoopTimerUI(state){
+  const el = document.getElementById('player-coop-countdown');
+  if (!el || !state || !state.coopStartAt) return;
+  const remainMs = Math.max(0, state.coopStartAt + (state.coopDurationMs||0) - Date.now());
+  const secs = Math.ceil(remainMs/1000);
+  const mm = String(Math.floor(secs/60)).padStart(2,'0');
+  const ss = String(secs%60).padStart(2,'0');
+  el.textContent = mm + ':' + ss;
+  el.classList.toggle('urgent', remainMs <= COOP_URGENT_THRESHOLD_MS);
+}
+/* Only the 3 podium players in coopIds ever see this — renderPlayerAwards()'s
+   'coop' branch below gates the call. */
+function renderPlayerCoopChoice(state){
+  const submitted = coopChoiceSubmittedToken === state.coopRoundToken;
   render(`
     <div class="shell"><div class="center">
-      <span class="eyebrow">🃏 猜拳決定順序</span>
-      <h1 class="marquee-title" style="font-size:clamp(24px,7vw,36px)">剪刀石頭布！</h1>
-      <p class="sub">按下面的按鈕，停在哪個手勢就出那個</p>
-      <div class="my-rps-hand" id="my-rps-hand">✊</div>
-      <button class="btn" style="max-width:280px;width:100%" onclick="submitPlayerRpsHand()">✋ 出拳！</button>
+      <span class="eyebrow">🤝🏻😈 獎金考驗</span>
+      <h1 class="marquee-title" style="font-size:clamp(22px,6vw,32px)">${esc(PLAYER_NAME)}，你選？</h1>
+      <div class="lp-countdown" id="player-coop-countdown">01:00</div>
+      ${submitted ? `
+        <p class="sub" style="font-weight:700;margin-top:14px">已送出，等其他人…</p>
+      ` : `
+        <p class="sub">選好後不能反悔，倒數結束才會一起公布</p>
+        <div class="lp-choice-row">
+          <button class="lp-choice-btn" onclick="submitPlayerCoopChoice('cooperate')"><span class="big">🤝🏻</span><span class="lbl">合作</span></button>
+          <button class="lp-choice-btn challenge" onclick="submitPlayerCoopChoice('betray')"><span class="big">😈</span><span class="lbl">背叛</span></button>
+        </div>
+      `}
     </div></div>
   `);
-  if (rpsSpinHandle) clearInterval(rpsSpinHandle);
-  rpsSpinHandle = setInterval(()=>{
-    const el = document.getElementById('my-rps-hand');
-    if (!el){ clearInterval(rpsSpinHandle); rpsSpinHandle = null; return; }
-    idx = (idx + 1) % 3;
-    el.textContent = hands[idx];
-  }, 110);
+  updatePlayerCoopTimerUI(state);
+  clearPlayerCoopCountdown();
+  playerCoopCountdownHandle = setInterval(()=> updatePlayerCoopTimerUI(lastPlayerState || state), 200);
 }
-/* forceHand lets tests drive a specific outcome deterministically instead of
-   racing real spin timing — see test10.js. Real taps always go through the
-   no-arg path and read whatever hand is currently on screen. */
-async function submitPlayerRpsHand(forceHand){
-  const emojiToHand = { '✊':'rock', '✋':'paper', '✌️':'scissors' };
-  let hand = forceHand;
-  if (!hand){
-    const el = document.getElementById('my-rps-hand');
-    hand = emojiToHand[el ? el.textContent : '✊'] || 'rock';
-  }
-  if (rpsSpinHandle){ clearInterval(rpsSpinHandle); rpsSpinHandle = null; }
-  const token = lastPlayerState ? lastPlayerState.rpsRoundToken : null;
-  rpsThrownToken = token;
-  await sSet('rpsthrow:' + PLAYER_ID, { hand, token });
-  manualPlayerScreen = false;
-  renderPlayerAwards(lastPlayerState || { awardsStage:'rps', rpsActive:[] });
+/* Optimistic-then-persist, exactly the shape the deleted submitPlayerRpsHand()
+   used: mark coopChoiceSubmittedToken and re-render to the "已送出" view
+   BEFORE the network write resolves, so a slow/flaky connection can't leave
+   the buttons tappable twice — same reasoning as that old function's own
+   comment on this exact UX pattern. */
+async function submitPlayerCoopChoice(choice){
+  if (choice !== 'cooperate' && choice !== 'betray') return;
+  const token = lastPlayerState ? lastPlayerState.coopRoundToken : null;
+  coopChoiceSubmittedToken = token;
+  renderPlayerCoopChoice(lastPlayerState || { coopIds:[PLAYER_ID], coopRoundToken: token });
+  await sSet('coopchoice:' + PLAYER_ID, choice);
 }
 function renderPlayerAwards(state){
   const stage = state.awardsStage || 'podium';
@@ -6515,9 +6524,6 @@ function renderPlayerAwards(state){
   const isSx = PLAYER_ID === sx;
   const topIds = state.topIds || [];
   const myTopRank = topIds.indexOf(PLAYER_ID);
-  const bottomIds = state.bottomIds || [];
-  const amBottom = bottomIds.includes(PLAYER_ID);
-  const cards = state.wishCards || ['','',''];
   const medal = ['🥇','🥈','🥉'];
 
   if (stage === 'podium'){
@@ -6537,91 +6543,45 @@ function renderPlayerAwards(state){
           ${top3.map(([id,p],i)=> finalRowHtml(i+1, p, { pid: id, me: id===PLAYER_ID })).join('')}
         </div>` : ''}
         ${(!isSx && myTopRank<0 && myRank>=0) ? `<p class="sub" style="margin-top:8px">你目前的名次：<b>第 ${myRank+1} 名．${me? me.score : 0} 分</b></p>` : ''}
-        ${isSx ? renderStarWishCardsEntry() : ''}
       </div></div>
     `);
     return;
   }
-  if (stage === 'rps'){
-    const active = state.rpsActive || [];
-    const amActive = active.includes(PLAYER_ID);
-    if (amActive && rpsThrownToken !== state.rpsRoundToken){
-      renderPlayerRpsThrow(state);
+  if (stage === 'coop'){
+    const coopIds = state.coopIds || [];
+    if (coopIds.includes(PLAYER_ID)){
+      renderPlayerCoopChoice(state);
       return;
-    }
-    const solo = state.rpsSolo;
-    let title = '猜拳決定順序中', sub = '請看主畫面';
-    if (amBottom){
-      if (amActive){ title = '已出拳！等待其他人…'; sub = '看主畫面公布結果'; }
-      else if (solo && solo.id === PLAYER_ID){
-        title = solo.place === 'front' ? '🎉 手氣最好，直接排最前面！' : '😅 手氣最背，直接墊底！';
-        sub = '等其他兩人猜完，馬上輪到選卡';
-      } else {
-        title = '猜拳決定選卡順序！';
-        sub = '看主畫面，輪到你出拳就會通知你';
-      }
     }
     render(`
       <div class="shell"><div class="center">
-        <div style="font-size:54px">✊✋✌️</div>
-        <h1 class="marquee-title" style="font-size:clamp(22px,6vw,32px)">${title}</h1>
-        <p class="sub">${sub}</p>
+        <div style="font-size:54px">🤝🏻😈</div>
+        <h1 class="marquee-title" style="font-size:clamp(22px,6vw,32px)">前三名的獎金考驗進行中</h1>
+        <p class="sub">看主畫面，倒數結束就會公布結果</p>
       </div></div>
     `);
     return;
   }
-  if (stage === 'picking'){
-    const order = state.pickOrder || [];
-    const picked = state.pickedCards || {};
-    const pickedIdxs = Object.values(picked);
-    const currentId = order.find(id => picked[id] === undefined);
-    if (currentId === PLAYER_ID){
-      const dealCards = _lastPlayerPickAnimId !== currentId;
-      _lastPlayerPickAnimId = currentId;
-      const dealRot = [-9, 7, -5];
-      render(`
-        <div class="shell"><div class="center">
-          <div style="font-size:54px">🎁</div>
-          <h1 class="marquee-title" style="font-size:clamp(22px,6vw,32px)">選一張許願卡！</h1>
-          <p class="sub">選到的內容就是你要完成的任務</p>
-          <div class="stack" style="width:100%;max-width:340px">
-            ${[0,1,2].map(i=> pickedIdxs.includes(i) ? '' : `
-              <button class="opt-card ${OPT_CLASS[i]} ${dealCards?'card-deal':''}" style="text-align:center;justify-content:center${dealCards?`;animation-delay:${i*120}ms;--deal-rot:${dealRot[i]}deg`:''}" onclick="pickWishCard(${i})">${esc(cards[i] || ('神秘任務 ' + (i+1)))}</button>
-            `).join('')}
-          </div>
-        </div></div>
-      `);
-    } else {
-      _lastPlayerPickAnimId = null; // not our turn — reset so the deal replays once it becomes our turn
-      const p = currentId ? state.players[currentId] : null;
-      render(`
-        <div class="shell"><div class="center">
-          <div style="font-size:54px">🃏</div>
-          <h1 class="marquee-title" style="font-size:clamp(22px,6vw,32px)">${p? nameTag(p)+' 選卡中…' : '選卡中'}</h1>
-          <p class="sub">看主畫面囉～</p>
-        </div></div>
-      `);
-    }
+  // coopResult / lastplace / duel / result — all host/spectate-controlled;
+  // nothing for any individual phone to do here, same neutral waiting shot
+  // the old rps/picking stages used for a player not directly involved this
+  // particular beat of the ceremony.
+  if (stage === 'coopResult' || stage === 'lastplace' || stage === 'duel' || stage === 'result'){
+    render(`
+      <div class="shell"><div class="center">
+        <div style="font-size:54px">🎉</div>
+        <h1 class="marquee-title" style="font-size:clamp(22px,6vw,32px)">頒獎典禮進行中</h1>
+        <p class="sub">看主畫面囉～</p>
+      </div></div>
+    `);
     return;
   }
   // stage === 'done'
-  const myIdx = (state.pickedCards||{})[PLAYER_ID];
   render(`
     <div class="shell"><div class="center">
       <span class="eyebrow">🎊 頒獎結束</span>
-      <h1 class="marquee-title" style="font-size:clamp(24px,7vw,38px)">${myTopRank>=0? medal[myTopRank]+' 你最懂壽星！' : (myIdx!=null ? '你的任務來了！' : '謝謝參加！')}</h1>
-      ${myIdx!=null ? `<div class="panel" style="margin-top:8px;max-width:340px"><div class="sub">你抽到的許願任務</div><div style="font-weight:800;margin-top:6px">${esc(cards[myIdx]||'—')}</div></div>` : ''}
+      <h1 class="marquee-title" style="font-size:clamp(24px,7vw,38px)">${myTopRank>=0? medal[myTopRank]+' 你最懂壽星！' : '謝謝參加！'}</h1>
       ${PLAYER_ID!==sx ? '<button class="btn secondary" style="margin-top:12px" onclick="renderPlayerAnswerLog()">📜 查看我的作答紀錄</button>' : ''}
-    </div></div>
-  `);
-}
-async function pickWishCard(i){
-  await sSet('cardpick:' + PLAYER_ID, { cardIndex: i, forRound: lastPlayerState ? lastPlayerState.roundId : null });
-  render(`
-    <div class="shell"><div class="center">
-      <div style="font-size:54px">✅</div>
-      <h1 class="marquee-title" style="font-size:clamp(22px,6vw,32px)">已送出！</h1>
-      <p class="sub">看主畫面公布結果</p>
     </div></div>
   `);
 }
