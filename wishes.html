@@ -118,19 +118,78 @@
     border-radius:999px; padding:6px 12px; cursor:pointer; font-family:inherit;
   }
   .inapp-banner .copybtn.copied{ background:var(--alert); color:#fff; }
+
+  /* ===== 壽星專屬畫面：卡片牆／照片牆／下載（#star= 秘密網址才會顯示）===== */
+  .sv-page-head .sub{ margin:8px 0 0; font-size:13px; color:var(--ink-dim); line-height:1.75; }
+  .sv-status{ text-align:center; padding:44px 12px; font-size:13.5px; color:var(--ink-dim); line-height:1.8; }
+  .sv-status.err{ color:var(--alert); }
+  .sv-toolbar{ margin:20px 0 14px; }
+  .sv-download{
+    width:100%; background:var(--moss); color:#fff; border:none; border-radius:14px;
+    padding:14px 18px; font-weight:800; font-size:14.5px; cursor:pointer;
+    box-shadow:0 10px 22px rgba(63,92,51,0.28); font-family:inherit;
+  }
+  .sv-download:active{ transform:translateY(1px); }
+  .sv-download:disabled{ opacity:0.55; cursor:default; }
+  .sv-tabs{ display:flex; gap:8px; margin-bottom:16px; }
+  .sv-tab{
+    flex:1; padding:9px 14px; border-radius:999px; font-size:12.5px; font-weight:800;
+    border:1px solid var(--line); background:#fff; color:var(--ink-dim); cursor:pointer; font-family:inherit;
+  }
+  .sv-tab.active{ background:var(--moss); color:#fff; border-color:var(--moss); }
+  .sv-cardgrid{ display:grid; grid-template-columns:repeat(2,1fr); gap:12px; }
+  .sv-card{
+    border-radius:16px; overflow:hidden; border:1px solid var(--line); background:#fff;
+    box-shadow:0 4px 12px rgba(46,36,24,0.1); cursor:pointer; transition:transform .15s ease; padding:0;
+  }
+  .sv-card:active{ transform:scale(0.97); }
+  .sv-card .art{ aspect-ratio:4/5; display:block; width:100%; background:var(--sand-2); }
+  .sv-card .art img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .sv-card .sign{ font-size:11px; font-weight:800; color:var(--moss); padding:7px 10px; text-align:right; }
+  .sv-photogrid{ display:grid; grid-template-columns:repeat(2,1fr); gap:24px 14px; padding-top:6px; }
+  .sv-polaroid{ background:#fff; padding:7px 7px 20px; border-radius:3px; box-shadow:0 6px 14px rgba(46,36,24,0.18); cursor:pointer; transition:transform .15s ease; }
+  .sv-polaroid:active{ transform:scale(0.96) !important; }
+  .sv-polaroid:nth-child(3n+1){ transform:rotate(-3deg); }
+  .sv-polaroid:nth-child(3n+2){ transform:rotate(2deg); }
+  .sv-polaroid:nth-child(3n){ transform:rotate(-1.5deg); }
+  .sv-polaroid .ph{ aspect-ratio:1; border-radius:1px; overflow:hidden; background:var(--sand-2); }
+  .sv-polaroid .ph img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .sv-polaroid .cap{
+    margin-top:6px; text-align:center; font-size:10.5px; font-family:'Fredoka',sans-serif;
+    color:var(--ink-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+  }
+  .sv-lightbox{ position:fixed; inset:0; background:rgba(46,36,24,0.68); display:none; align-items:center; justify-content:center; z-index:80; padding:20px; }
+  .sv-lightbox.show{ display:flex; }
+  .sv-lbcard{ background:#fff; border-radius:20px; padding:16px; max-width:360px; width:100%; text-align:center; box-shadow:0 24px 50px rgba(46,36,24,0.35); position:relative; }
+  .sv-lbcard .art{ aspect-ratio:4/5; border-radius:14px; overflow:hidden; margin-bottom:10px; background:var(--sand-2); }
+  .sv-lbcard .art img{ width:100%; height:100%; object-fit:contain; display:block; background:#fff; }
+  .sv-lbcard .ph{ aspect-ratio:1; border-radius:10px; overflow:hidden; margin-bottom:8px; background:var(--sand-2); }
+  .sv-lbcard .ph img{ width:100%; height:100%; object-fit:contain; display:block; background:#fff; }
+  .sv-lbcard .sign{ font-size:13px; font-weight:800; color:var(--moss); }
+  .sv-lbclose{
+    position:absolute; top:-14px; right:-14px; width:34px; height:34px; border-radius:50%;
+    background:var(--ink); color:#fff; border:3px solid var(--cream); font-size:16px; cursor:pointer; line-height:1;
+  }
+  .sv-toast{
+    position:fixed; left:50%; bottom:26px; transform:translate(-50%,20px); background:var(--ink); color:#fff;
+    padding:11px 18px; border-radius:999px; font-size:12.5px; font-weight:700; opacity:0;
+    transition:opacity .3s ease, transform .3s ease; z-index:90; pointer-events:none;
+    max-width:88vw; text-align:center; line-height:1.5;
+  }
+  .sv-toast.show{ opacity:1; transform:translate(-50%,0); }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <div id="formScreen">
-    <div class="inapp-banner" id="inappBanner" hidden>
-      <span class="icon">⚠️</span>
-      <div class="body">
-        <b>偵測到你可能是用 LINE／FB 等 App 內建的瀏覽器打開這個頁面。</b>
-        這種內建瀏覽器有時候會讓照片、卡片上傳失敗。建議點畫面右上角「⋯」或分享圖示，選「用瀏覽器開啟」；或直接複製連結，貼到 Safari／Chrome 打開再填寫：<br>
-        <button type="button" class="copybtn" id="copyLinkBtn">📋 複製這個頁面的連結</button>
-      </div>
+  <div class="inapp-banner" id="inappBanner" hidden>
+    <span class="icon">⚠️</span>
+    <div class="body">
+      <b>偵測到你可能是用 LINE／FB 等 App 內建的瀏覽器打開這個頁面。</b>
+      這種內建瀏覽器有時候會讓照片、卡片上傳失敗。建議點畫面右上角「⋯」或分享圖示，選「用瀏覽器開啟」；或直接複製連結，貼到 Safari／Chrome 打開再填寫：<br>
+      <button type="button" class="copybtn" id="copyLinkBtn">📋 複製這個頁面的連結</button>
     </div>
+  </div>
+  <div id="formScreen">
     <header>
       <span class="eyebrow">🎁 悄悄準備的生日驚喜</span>
       <h1>寫一張給 <span class="hl">Julia</span> 的生日祝福卡</h1>
@@ -178,7 +237,35 @@
     <p>請不要告訴壽星你寫了什麼喔 🤫<br>派對當天會給她一個驚喜。</p>
     <button class="ghost-btn" id="writeAnotherBtn">再寫一張</button>
   </div>
+
+  <div id="starScreen" hidden>
+    <header class="sv-page-head">
+      <span class="eyebrow">🎂 只有妳看得到的秘密頁面</span>
+      <h1>Julia，這是大家偷偷寫給妳的 <span class="hl">祝福</span></h1>
+      <p class="sub" id="svGreetSub">讀取中…</p>
+    </header>
+
+    <div id="svLoading" class="sv-status">🎁 正在把大家的祝福收集起來…</div>
+    <div id="svError" class="sv-status err" hidden></div>
+
+    <div id="svBody" hidden>
+      <div class="sv-toolbar">
+        <button class="sv-download" id="svDownloadBtn">⬇ 下載整面卡片牆</button>
+      </div>
+      <div class="sv-tabs">
+        <button class="sv-tab active" data-tab="card" id="svTabCard">🗂 卡片牆</button>
+        <button class="sv-tab" data-tab="photo" id="svTabPhoto">📸 看我們的回憶</button>
+      </div>
+      <div class="sv-cardgrid" id="svCardGrid"></div>
+      <div class="sv-photogrid" id="svPhotoGrid" style="display:none"></div>
+    </div>
+  </div>
 </div>
+
+<div class="sv-lightbox" id="svLightbox">
+  <div class="sv-lbcard" id="svLbContent"></div>
+</div>
+<div class="sv-toast" id="svToast"></div>
 
 <script>
 // ============ 設定：Cloudinary（照片＋卡片存放）============
@@ -484,9 +571,204 @@ document.getElementById('writeAnotherBtn').addEventListener('click', () => {
   scheduleRedraw();
 });
 
-renderPicker();
-updateCounter();
-ensureFonts().then(redrawCard);
+// ============ 壽星專屬畫面：#star=金鑰 秘密網址才會顯示 ============
+// 網址用 hash（#star=...）而不是一般的網址參數，是刻意的：hash 不會被送到伺服器，
+// 只有瀏覽器自己看得到，金鑰不會出現在伺服器的存取紀錄裡。真正要跟伺服器要資料時，
+// 才把這組金鑰當成查詢參數送到 /api/starview/data，伺服器用它去跟 Cloudinary Admin API
+// 要資料（那組更敏感的 Cloudinary 金鑰只存在伺服器的環境變數，全程不會進到這個網頁）。
+function getStarKey(){
+  var m = location.hash.match(/^#star=([^&]*)/);
+  return m ? decodeURIComponent(m[1]) : '';
+}
+function isStarMode(){
+  return !!getStarKey();
+}
+
+function svShowToast(text, autoHideMs){
+  var toast = document.getElementById('svToast');
+  if (!toast) return;
+  toast.textContent = text;
+  toast.classList.add('show');
+  clearTimeout(svShowToast._t);
+  if (autoHideMs){
+    svShowToast._t = setTimeout(function(){ toast.classList.remove('show'); }, autoHideMs);
+  }
+}
+
+function svEscapeHtml(s){
+  return String(s || '').replace(/[&<>"']/g, function(ch){
+    return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[ch];
+  });
+}
+
+async function initStarView(){
+  document.getElementById('formScreen').hidden = true;
+  document.getElementById('doneScreen').hidden = true;
+  document.getElementById('starScreen').hidden = false;
+
+  var key = getStarKey();
+  var loadingEl = document.getElementById('svLoading');
+  var errorEl = document.getElementById('svError');
+  var bodyEl = document.getElementById('svBody');
+
+  var data;
+  try {
+    const res = await fetch('/api/starview/data?key=' + encodeURIComponent(key));
+    const json = await res.json();
+    if (!res.ok){
+      let msg = json && json.message ? json.message : ('狀態碼 ' + res.status);
+      if (json && json.error === 'forbidden'){
+        msg = '這個連結不太對，麻煩跟準備派對的人確認一下網址有沒有複製完整。';
+      } else if (json && json.error === 'missing_credentials'){
+        msg = '這個頁面還在準備中，晚點再回來看看 🙂';
+      }
+      throw new Error(msg);
+    }
+    data = json;
+  } catch (err){
+    loadingEl.hidden = true;
+    errorEl.hidden = false;
+    errorEl.textContent = '😥 讀取失敗：' + (err.message || '網路連線出現問題，可以重新整理再試一次');
+    return;
+  }
+
+  loadingEl.hidden = true;
+  bodyEl.hidden = false;
+
+  const cards = data.cards || [];
+  const photos = data.photos || [];
+
+  document.getElementById('svGreetSub').textContent =
+    '目前收到 ' + cards.length + ' 則祝福' + (photos.length ? '，還有 ' + photos.length + ' 張回憶照片' : '');
+  document.getElementById('svTabPhoto').textContent = '📸 看我們的回憶（' + photos.length + '）';
+
+  const cardGrid = document.getElementById('svCardGrid');
+  cardGrid.innerHTML = cards.map(function(c, i){
+    return '<div class="sv-card" data-i="' + i + '">' +
+      '<div class="art"><img src="' + svEscapeHtml(c.url) + '" loading="lazy" alt=""></div>' +
+      '<div class="sign">— ' + svEscapeHtml(c.name || '匿名') + '</div>' +
+    '</div>';
+  }).join('') || '<div class="sv-status">還沒有人投稿卡片，晚點再回來看看吧！</div>';
+
+  const photoGrid = document.getElementById('svPhotoGrid');
+  photoGrid.innerHTML = photos.map(function(p, i){
+    return '<div class="sv-polaroid" data-i="' + i + '">' +
+      '<div class="ph"><img src="' + svEscapeHtml(p.url) + '" loading="lazy" alt=""></div>' +
+      '<div class="cap">' + svEscapeHtml(p.name || '匿名') + '</div>' +
+    '</div>';
+  }).join('') || '<div class="sv-status">還沒有人傳照片，晚點再回來看看吧！</div>';
+
+  // ---- 分頁切換 ----
+  const tabCard = document.getElementById('svTabCard');
+  const tabPhoto = document.getElementById('svTabPhoto');
+  tabCard.addEventListener('click', function(){
+    tabCard.classList.add('active'); tabPhoto.classList.remove('active');
+    cardGrid.style.display = ''; photoGrid.style.display = 'none';
+  });
+  tabPhoto.addEventListener('click', function(){
+    tabPhoto.classList.add('active'); tabCard.classList.remove('active');
+    cardGrid.style.display = 'none'; photoGrid.style.display = '';
+  });
+
+  // ---- 燈箱（放大檢視）----
+  const lightbox = document.getElementById('svLightbox');
+  const lbContent = document.getElementById('svLbContent');
+  function closeLb(){ lightbox.classList.remove('show'); }
+  function openCardLb(i){
+    const c = cards[i];
+    lbContent.innerHTML = '<button class="sv-lbclose" id="svLbClose">✕</button>' +
+      '<div class="art"><img src="' + svEscapeHtml(c.url) + '" alt=""></div>' +
+      '<div class="sign">— ' + svEscapeHtml(c.name || '匿名') + '</div>';
+    lightbox.classList.add('show');
+    document.getElementById('svLbClose').addEventListener('click', closeLb);
+  }
+  function openPhotoLb(i){
+    const p = photos[i];
+    lbContent.innerHTML = '<button class="sv-lbclose" id="svLbClose">✕</button>' +
+      '<div class="ph"><img src="' + svEscapeHtml(p.url) + '" alt=""></div>' +
+      '<div class="sign">' + svEscapeHtml(p.name || '匿名') + '</div>';
+    lightbox.classList.add('show');
+    document.getElementById('svLbClose').addEventListener('click', closeLb);
+  }
+  lightbox.addEventListener('click', function(e){ if (e.target === lightbox) closeLb(); });
+  cardGrid.addEventListener('click', function(e){
+    const card = e.target.closest('.sv-card');
+    if (card) openCardLb(Number(card.dataset.i));
+  });
+  photoGrid.addEventListener('click', function(e){
+    const p = e.target.closest('.sv-polaroid');
+    if (p) openPhotoLb(Number(p.dataset.i));
+  });
+
+  // ---- 下載整面卡片牆（前端用 canvas 把所有卡片拼成一張長圖，Cloudinary 的圖片
+  // 有開放跨網域讀取，所以可以直接畫進 canvas 再輸出，不需要伺服器幫忙合成）----
+  function loadImageCrossOrigin(src){
+    return new Promise(function(resolve, reject){
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = function(){ resolve(img); };
+      img.onerror = reject;
+      img.src = src;
+    });
+  }
+
+  document.getElementById('svDownloadBtn').addEventListener('click', async function(){
+    if (!cards.length){
+      svShowToast('還沒有卡片可以下載喔', 2500);
+      return;
+    }
+    const btn = this;
+    btn.disabled = true;
+    svShowToast('🖼️ 產生中，卡片有點多的話會需要幾秒鐘…');
+    try {
+      const cols = 3;
+      const cellW = 400, cellH = 500, gap = 16, pad = 20;
+      const rows = Math.ceil(cards.length / cols);
+      const canvas = document.createElement('canvas');
+      canvas.width = pad * 2 + cols * cellW + (cols - 1) * gap;
+      canvas.height = pad * 2 + rows * cellH + (rows - 1) * gap;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#F3E7CE';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const images = await Promise.all(cards.map(function(c){
+        return loadImageCrossOrigin(c.url).catch(function(){ return null; });
+      }));
+
+      images.forEach(function(img, i){
+        if (!img) return;
+        const col = i % cols, row = Math.floor(i / cols);
+        const x = pad + col * (cellW + gap);
+        const y = pad + row * (cellH + gap);
+        ctx.drawImage(img, x, y, cellW, cellH);
+      });
+
+      const blob = await new Promise(function(resolve){ canvas.toBlob(resolve, 'image/png'); });
+      if (!blob) throw new Error('產生圖片失敗');
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'julia-wishes-wall.png';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+      svShowToast('✅ 已產生 julia-wishes-wall.png，共 ' + cards.length + ' 張卡片', 3500);
+    } catch (err){
+      svShowToast('😥 產生失敗：' + (err.message || '請再試一次'), 3500);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+}
+
+if (isStarMode()) {
+  initStarView();
+} else {
+  renderPicker();
+  updateCounter();
+  ensureFonts().then(redrawCard);
+}
 
 // 偵測 LINE／FB／IG／Messenger 這類 App 內建瀏覽器（WebView）——這類環境有時候會讓
 // 打去 Cloudinary 的上傳請求直接失敗（fetch 拋出 "Failed to fetch"，不是 Cloudinary

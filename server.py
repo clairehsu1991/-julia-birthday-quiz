@@ -29,12 +29,15 @@ Julia 35大壽趴 — 誰最懂壽星？ 本機遊戲伺服器
 遊戲進行中請保持這個視窗開著、電腦不要進入休眠。按 Ctrl+C 可結束伺服器。
 """
 
+import base64
 import json
 import os
 import secrets
 import socket
 import threading
 import time
+import urllib.error
+import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import urlparse, parse_qs
 
@@ -43,6 +46,7 @@ HTML_PATH = os.path.join(HERE, 'game.html')
 WISHES_HTML_PATH = os.path.join(HERE, 'wishes.html')
 DATA_PATH = os.path.join(HERE, 'game_data.json')
 HOST_KEY_PATH = os.path.join(HERE, 'host_key.txt')
+STAR_KEY_PATH = os.path.join(HERE, 'star_key.txt')
 SEED_BANKS_PATH = os.path.join(HERE, 'seed_banks.json')
 
 # ---------------- storage backend: in-memory dict, persisted to a json file ----------------
@@ -161,6 +165,103 @@ def load_or_create_host_key():
 HOST_KEY = load_or_create_host_key()
 
 
+# ---------------- star key: the secret that unlocks 壽星專屬畫面 ----------------
+# 同一套模式再用一次：env var 優先、找不到就看本機檔案、還是沒有就隨機產生一組存起來。
+def load_or_create_star_key():
+    env_key = os.environ.get('STAR_KEY')
+    if env_key:
+        return env_key.strip()
+    if os.path.exists(STAR_KEY_PATH):
+        try:
+            with open(STAR_KEY_PATH, 'r', encoding='utf-8') as f:
+                existing = f.read().strip()
+            if existing:
+                return existing
+        except Exception:
+            pass
+    key = secrets.token_hex(8)
+    try:
+        with open(STAR_KEY_PATH, 'w', encoding='utf-8') as f:
+            f.write(key)
+    except Exception as e:
+        print('警告：無法寫入 star_key.txt，這次的金鑰重開伺服器後會改變：', e)
+    return key
+
+
+STAR_KEY = load_or_create_star_key()
+
+
+# ---------------- Cloudinary Admin API：只在伺服器端讀，金鑰不進瀏覽器 ----------------
+# 壽星專屬畫面要把大家投稿的卡片／照片「列出來」，這需要 Cloudinary 的 Admin API，
+# 跟賓客上傳用的 Unsigned preset 是兩回事——Admin API 需要 API Key + Secret，
+# 這兩個值只能放在伺服器的環境變數裡（Render 後台設定），絕對不能出現在 wishes.html
+# 這種會送到瀏覽器的檔案裡。這支伺服器本身刻意不裝任何額外套件（見 requirements.txt），
+# 所以呼叫 Cloudinary 一樣只用標準庫的 urllib，不用 requests。
+CLOUDINARY_CLOUD_NAME = os.environ.get('CLOUDINARY_CLOUD_NAME', 'z0maamnp')
+CLOUDINARY_API_KEY = os.environ.get('CLOUDINARY_API_KEY', '')
+CLOUDINARY_API_SECRET = os.environ.get('CLOUDINARY_API_SECRET', '')
+
+
+def cloudinary_search(expression, max_results=200):
+    """呼叫 Cloudinary 的 Admin Search API（唯讀），自動翻頁抓完所有符合的資產。
+    失敗時丟出 RuntimeError，訊息用來判斷要回什麼樣的錯誤給前端。"""
+    if not (CLOUDINARY_API_KEY and CLOUDINARY_API_SECRET):
+        raise RuntimeError('missing_credentials')
+
+    auth = base64.b64encode(
+        ('%s:%s' % (CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET)).encode('utf-8')
+    ).decode('ascii')
+    url = 'https://api.cloudinary.com/v1_1/%s/resources/search' % CLOUDINARY_CLOUD_NAME
+
+    resources = []
+    cursor = None
+    for _ in range(20):  # 上限抓 20 頁，一場派對的投稿量不可能碰到這個上限
+        body = {
+            'expression': expression,
+            'sort_by': [{'created_at': 'asc'}],
+            'with_field': ['context'],
+            'max_results': max_results,
+        }
+        if cursor:
+            body['next_cursor'] = cursor
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(body).encode('utf-8'),
+            method='POST',
+            headers={
+                'Authorization': 'Basic ' + auth,
+                'Content-Type': 'application/json',
+            },
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                data = json.loads(resp.read().decode('utf-8'))
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode('utf-8', 'ignore')
+            raise RuntimeError('cloudinary_http_%d: %s' % (e.code, detail[:300]))
+        except Exception as e:
+            raise RuntimeError('cloudinary_request_failed: %s' % e)
+
+        resources.extend(data.get('resources', []))
+        cursor = data.get('next_cursor')
+        if not cursor:
+            break
+    return resources
+
+
+def _starview_resource_to_dict(res):
+    ctx = res.get('context') or {}
+    custom = ctx.get('custom', ctx) if isinstance(ctx, dict) else {}
+    return {
+        'publicId': res.get('public_id', ''),
+        'url': res.get('secure_url') or res.get('url', ''),
+        'createdAt': res.get('created_at', ''),
+        'name': custom.get('name', ''),
+        'caption': custom.get('caption', ''),
+        'bg': custom.get('bg', ''),
+    }
+
+
 # ---------------- HTTP handler ----------------
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):
@@ -215,6 +316,28 @@ class Handler(BaseHTTPRequestHandler):
             # The key itself is never sent to the browser — we only ever answer yes/no.
             given = qs.get('key', [''])[0]
             self._send_json({'ok': secrets.compare_digest(given, HOST_KEY)})
+        elif path == '/api/starview/data':
+            given = qs.get('key', [''])[0]
+            if not secrets.compare_digest(given, STAR_KEY):
+                self._send_json({'error': 'forbidden'}, status=403)
+            else:
+                try:
+                    card_resources = cloudinary_search('tags:card')
+                    photo_resources = cloudinary_search('tags:photo')
+                except RuntimeError as e:
+                    msg = str(e)
+                    if msg == 'missing_credentials':
+                        self._send_json({
+                            'error': 'missing_credentials',
+                            'message': '伺服器還沒設定 Cloudinary API 金鑰（CLOUDINARY_API_KEY／CLOUDINARY_API_SECRET）',
+                        }, status=500)
+                    else:
+                        self._send_json({'error': 'cloudinary_failed', 'message': msg}, status=502)
+                else:
+                    self._send_json({
+                        'cards': [_starview_resource_to_dict(r) for r in card_resources],
+                        'photos': [_starview_resource_to_dict(r) for r in photo_resources],
+                    })
         elif path == '/api/storage/get':
             key = qs.get('key', [None])[0]
             with _lock:
@@ -344,6 +467,11 @@ def main():
         print('主持人專屬網址 = 你的公開網址後面接上：')
         print(f'    #host={HOST_KEY}')
         print('這組金鑰不要外流，也不要投影出來。')
+        print('')
+        print('壽星專屬網址（卡片牆／照片牆／下載）= 你的 /wishes 網址後面接上：')
+        print(f'    #star={STAR_KEY}')
+        print('這組金鑰只給壽星本人，也不要外流。需要先在平台設定')
+        print('CLOUDINARY_API_KEY／CLOUDINARY_API_SECRET 這兩個環境變數，這個畫面才抓得到資料。')
         print('=' * 60)
         try:
             server.serve_forever()
@@ -370,6 +498,7 @@ def main():
     url = f'http://{ip}:{chosen_port}/'
 
     host_url = f'{url}#host={HOST_KEY}'
+    star_url = f'{url}wishes#star={STAR_KEY}'
 
     print('=' * 60)
     print('🎂  遊戲伺服器已啟動！')
@@ -383,6 +512,11 @@ def main():
     print('・ 大家加入用的網址（遊戲裡會變成 QR code，可以放心投影）：')
     print(f'\n    {url}\n')
     print('  沒有金鑰的人打開它只會看到「加入遊戲」，進不了主持人頁面。')
+    print('')
+    print('🎁 壽星專屬網址（卡片牆／照片牆／下載，只給壽星本人）：')
+    print(f'\n    {star_url}\n')
+    print('  本機模式下沒設定 CLOUDINARY_API_KEY／CLOUDINARY_API_SECRET 環境變數，')
+    print('  這個畫面會抓不到資料，這兩個金鑰只需要在雲端（Render）上設定。')
     print('')
     print('大家的手機要先連上「跟這台電腦同一個」WiFi 或個人熱點，')
     print('才連得到伺服器、掃碼加入。')
