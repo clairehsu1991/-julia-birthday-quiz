@@ -449,6 +449,21 @@ function escapeContextValue(v){
   return String(v).replace(/\\/g, '\\\\').replace(/=/g, '\\=').replace(/\|/g, '\\|');
 }
 
+// Cloudinary 的 context（存在 Cloudinary 那邊的備註欄位，跟卡片圖片本身是分開的）
+// 遇到大部分的 emoji（U+10000 以上，也就是需要 UTF-16 surrogate pair 的字元）會直接
+// 回傳 400 "Context Invalid encoding in context"、整張卡片完全上傳失敗——用真的帳號
+// 實測過：中文、❤ ✨ ☺ 這種 BMP 範圍的符號都沒事，但 🎉🎂🥳😊 這類常見 emoji 一定會炸。
+// 這裡只清掉「要送進 context 的文字」裡的這類字元，卡片畫面本身（canvas 直接畫的訊息／
+// 簽名）完全不受影響，emoji 一樣會正常顯示在卡片上，只有存在 Cloudinary 備註欄位的
+// 那份純文字副本會把 emoji 拿掉，避免因為這樣讓整張卡片連圖都傳不上去。
+function stripAstralForContext(v){
+  return String(v)
+    .replace(/[\u{10000}-\u{10FFFF}]/gu, '')      // 4-byte emoji 本體
+    .replace(/[\u200D\uFE0E\uFE0F]/g, '')      // 附著在旁邊的 ZWJ／文字-圖形變體選擇字元，emoji 拿掉後留著也沒意義
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+}
+
 async function uploadToCloudinary(fileOrBlob, { tags, context, preset } = {}){
   const url = `https://api.cloudinary.com/v1_1/${CLOUD_NAME}/image/upload`;
   const fd = new FormData();
@@ -527,12 +542,12 @@ async function handleSubmit(e){
     await redrawCard();
     const canvas = document.getElementById('cardCanvas');
     const cardBlob = await canvasToBlob(canvas, 'image/jpeg', 0.92);
-    const context = `name=${escapeContextValue(nameVal)}|caption=${escapeContextValue(msgVal)}|bg=${escapeContextValue(selectedBgId)}`;
+    const context = `name=${escapeContextValue(stripAstralForContext(nameVal))}|caption=${escapeContextValue(stripAstralForContext(msgVal))}|bg=${escapeContextValue(selectedBgId)}`;
     await uploadToCloudinary(cardBlob, { tags: 'card', context });
 
     for (const file of selectedPhotos){
       const uploadFile = await compressImageFile(file);
-      await uploadToCloudinary(uploadFile, { tags: 'photo', context: `name=${escapeContextValue(nameVal)}`, preset: UPLOAD_PRESET_PHOTO });
+      await uploadToCloudinary(uploadFile, { tags: 'photo', context: `name=${escapeContextValue(stripAstralForContext(nameVal))}`, preset: UPLOAD_PRESET_PHOTO });
     }
 
     document.getElementById('formScreen').hidden = true;
