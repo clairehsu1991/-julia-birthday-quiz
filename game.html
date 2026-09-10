@@ -558,7 +558,27 @@
     border-radius:999px; padding:7px 14px; font-size:12.5px; font-weight:700; color:var(--ink);
     box-shadow:0 4px 10px rgba(46,36,24,0.1);
   }
-  .lobby-hero{ position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; gap:10px; text-align:center; }
+  /* （六十八）使用者看過（六十七）給的 2x/3x/4x 示意圖後選了 2 倍。直接用
+     CSS `zoom:2` 整塊放大，不是把 .hero-icon/.hero-title/.hero-sub/.hero-pill
+     每個 font-size 的 clamp() 數字自己手動加倍——理由有兩個：(1) 示意圖當初
+     就是用同一招（`zoom` 套在 .lobby-hero 本身）截出來的，使用者是看著這組
+     截圖點頭的，直接沿用同一個屬性能保證正式畫面跟她核可的示意圖像素級對得
+     上，不會因為手動換算 clamp() 數字產生肉眼難以察覺的落差；(2) `zoom` 會
+     讓瀏覽器自動重排版面（下面的 .lobby-joined-wrap 名單會自動被推下去），
+     不用像 transform:scale() 那樣手動算位移。
+     注意 `zoom` 不會讓裡面用 vw 算的 clamp() 字級「跟著倍率再長大一輪」——
+     vw 永遠是對「真正的瀏覽器視窗寬度」算的，不受套用 zoom 的祖先元素影響，
+     `zoom` 只是把「vw 已經算出來的那個字級」在畫面上多畫大兩倍，實際佔用的
+     版面寬度才會跟著變大（詳見示意圖階段量到的機制：4x 時「生日快樂」會被
+     擠成兩行，就是因為字級（vw 決定、不受 zoom 影響）乘以 4 之後，已經超過
+     .lobby-hero 從父層 .col（見（六十五）的 920px 版寬上限）分到的可用寬度；
+     2 倍時字級 x2 還在可用寬度之內，量測過不會換行，見下面「驗證方式」）。
+     沒有動 .lobby-joined-wrap 的 margin-top／已加入名單本身的字級——那塊
+     不在使用者這次要求放大的範圍內（她只提到「圖一中央這段文字」，圖一
+     框住的就是主標題這塊，不含下面的已加入名單），維持原樣。放大後主標題
+     區塊佔的版面變高，把「賓客多的時候已加入名單會不會被擠到需要捲動」
+     一併排進這次的驗證項目，不是想當然爾。 */
+  .lobby-hero{ position:relative; z-index:1; display:flex; flex-direction:column; align-items:center; gap:10px; text-align:center; zoom:2; }
   .lobby-hero .hero-icon{ font-size:clamp(30px,4.5vw,46px); }
   .lobby-hero .hero-title{
     font-family:'Fredoka',sans-serif; font-weight:600; font-size:clamp(30px,7vw,64px); line-height:1.12; margin:0;
@@ -608,7 +628,29 @@
      視為「看過」、安靜出現在名單裡，不補放一輪 pop 動畫——這份驚喜感是
      留給接下來真的在投影頁開著的當下加入的人，不然大廳一開就要看一串
      連續彈出動畫，反而是干擾。 */
-  .lobby-joined-wrap{ position:relative; z-index:1; margin-top:22px; width:100%; max-width:900px; }
+  /* （六十八）主標題放大 2 倍後多吃掉一截版面高度，量測過賓客數落在
+     16 人左右、投影頁高度是常見的 768px 時，已加入名單會被擠到讓整頁
+     多出約 15px、需要捲動（見（六十八）驗證方式）。派對實際會有多少人
+     加入無法預先知道，與其賭一個「目前量到夠用」的固定 margin/字級數字
+     （這種寫死數字禁不起賓客數再多一點、或另一台投影裝置字型渲染差一點
+     點就破功，過去（六十五）vw 版寬上限的教訓就是這樣來的），這裡改成
+     讓「已加入名單」這一小塊自己有一個高度上限、超過就在自己範圍內垂直
+     捲動（`overflow-y:auto`），不管來了幾位賓客，主標題／QR code／已加入
+     人數這些其他區塊都保證維持在畫面內、整頁本身永遠不用捲動——賓客多的
+     時候名單自己捲得到最新加入的人，退化成「一小塊清單可以滑」，不是
+     整個投影頁跑版。`min-height:0` 是讓它在 flex 版面（`.col.center` 是
+     `flex:1`）裡真的能被壓縮到比內容還矮的必要寫法，沒有這行，
+     `overflow-y:auto` 不會生效、還是會撐開整頁。
+     這裡原本想直接寫 `max-height:100%` 讓 CSS 自己算，但量過發現沒用：
+     `#app{ min-height:100vh }` 是「下限」不是「上限」，`.shell`/`.col` 都
+     只有 `flex:1`、沒有任何一層是真正的定值高度，一旦內容想撐高，
+     `#app`／`body` 會直接跟著長高到超過 100vh（沒有任何地方設
+     `overflow:hidden` 去裁切），這時候「100%」算出來的基準已經是「撐開
+     之後」的高度，等於沒夾到。改成 JS 算出來的實際可用高度（見
+     `clampLobbyJoinedWrapHeight()`），量測時機比照（六十六）
+     `spawnLobbyFloatWords()` 同一招：量 `.lobby-hero` 實際渲染出來的位置，
+     不是套公式猜。 */
+  .lobby-joined-wrap{ position:relative; z-index:1; margin-top:22px; width:100%; max-width:900px; min-height:0; overflow-y:auto; }
   .lobby-joined-list{ display:flex; flex-wrap:wrap; justify-content:center; gap:10px; }
   .lobby-joined-badge{
     display:flex; align-items:center; gap:7px; background:rgba(255,255,255,0.72); border:1px solid var(--line);
@@ -1153,6 +1195,15 @@
   .lp-rules-list li{ display:flex; gap:14px; align-items:flex-start; font-size:clamp(16px,2.4vw,22px); line-height:1.6; color:var(--ink); }
   .lp-rules-list .ico{ flex:none; font-size:clamp(21px,3vw,28px); }
   .lp-rules-list li.stake{ background:rgba(242,193,78,0.26); border:1.5px dashed rgba(200,150,30,0.65); border-radius:16px; padding:14px 18px; font-weight:800; font-size:clamp(17px,2.6vw,24px); }
+  /* （六十七）使用者把規則卡三條文字換成「標題句＋說明句」兩層結構（例如
+     「🥇前三名 → 晉級獎金挑戰賽」＋「究竟誰能把獎金抱回家？」），原本
+     li 底下只有一個純文字 span，撐不下兩種字重/字級的層次，加一組
+     .rule-head／.rule-desc：標題沿用 li 本身的字級＋加粗，說明句縮小一階、
+     顏色降階（跟其他地方「標題深色、輔助文字用 --ink-dim」的既有慣例一致），
+     兩者用 flex-column 疊在一起、留一點行距。 */
+  .lp-rules-list .rule-txt{ display:flex; flex-direction:column; gap:3px; }
+  .lp-rules-list .rule-head{ font-weight:800; }
+  .lp-rules-list .rule-desc{ font-size:0.76em; font-weight:600; color:var(--ink-dim); line-height:1.5; }
 
   .lp-modal{ background:rgba(46,36,24,0.46); position:fixed; inset:0; display:flex; align-items:center; justify-content:center; z-index:40; }
   .lp-modal-card{ background:var(--cream); border-radius:22px; padding:clamp(18px,3vw,28px) clamp(22px,4vw,32px); text-align:center; box-shadow:0 20px 48px rgba(46,36,24,0.32); max-width:min(320px,86%); }
@@ -1160,6 +1211,18 @@
   .lp-modal-avatar{ font-size:clamp(44px,7vw,60px); margin:10px 0 4px; }
   .lp-modal-name{ font-family:'Fredoka',sans-serif; font-weight:600; font-size:clamp(20px,3.4vw,28px); margin:0; }
   .lp-modal-sub{ font-size:12px; color:var(--ink-dim); margin-top:6px; line-height:1.6; }
+  /* （六十七）.lp-modal-card 原本的 max-width:min(320px,86%) 是給玩家手機
+     用的尺寸——主持人／投影頁是桌機或投影銀幕，直接套用同一份會變成一張
+     小卡片孤伶伶飄在一整片暗色遮罩正中央，比例不對。「進入獎金挑戰賽」
+     這個彈窗兩邊都要顯示（尤其投影頁是給全場一起看的），額外疊一個
+     .lp-challenge-card 覆寫成大螢幕看得舒服的尺寸，字級也跟著放大一輪，
+     手法跟 .lp-lastplace-card 覆寫同一組 .lp-modal-* class 的既有模式
+     一樣（見上面 lastplace 那段的 CSS）。 */
+  .lp-challenge-card{ max-width:none; width:min(60vw,60vh,520px); }
+  .lp-challenge-card .lp-modal-kicker{ font-size:clamp(12px,1.6vw,16px); }
+  .lp-challenge-card .lp-modal-avatar{ font-size:clamp(48px,9vmin,88px); margin:14px 0 6px; }
+  .lp-challenge-card .lp-modal-name{ font-size:clamp(28px,5vw,48px); }
+  .lp-challenge-card .lp-modal-sub{ font-size:clamp(14px,2vw,19px); margin-top:10px; }
 
   .lp-choice-row{ display:flex; gap:12px; flex-wrap:wrap; justify-content:center; margin-top:16px; }
   .lp-choice-btn{ flex:1 1 180px; max-width:210px; border-radius:16px; padding:14px 12px; text-align:center; font-weight:800; border:2px solid var(--line); background:#fff; cursor:pointer; }
@@ -2232,6 +2295,12 @@ async function boot(){
       SPECTATE_KEY = sp;
       ensureSpectateBadge();
       ensureSpectateZoomControl();
+      // （六十八）投影頁視窗尺寸變動時（例如換一台投影裝置、手動調整瀏覽器
+      // 視窗），重新量一次「已加入名單」的可用高度——guard 寫在函式本身
+      // （量不到當下就沒在大廳畫面的 .lobby-hero/.lobby-joined-wrap 會直接
+      // return），所以這裡不用另外判斷目前是不是在大廳畫面，其他畫面收到
+      // resize 事件呼叫這個函式也只是安靜跳過，不會有副作用。
+      window.addEventListener('resize', clampLobbyJoinedWrapHeight);
       // （三十後續修正）投影頁現在自己會出聲（見 animatePodiumReveal()／
       // animateFinalLeaderboardReveal() 的 playSound 參數），這裡盡早嘗試解鎖
       // AudioContext——這個分頁通常是主持人點「🖥️ 開投影頁」用 window.open()
@@ -3670,17 +3739,20 @@ function goRules(){
   sSet('game:state', hostState);
   renderHostRules();
 }
+/* （六十七）使用者提供新版規則文案，把原本每條「一句話講完」改成「一句
+   標題（含 emoji）＋一句補充說明」的兩層結構——跟（六十六）之後她陸續要求
+   的其他文案調整同一個方向：先給一句抓眼球的短句，細節放第二行。 */
 const RULES_BULLETS = [
-  { ico:'🎯', text:'每一題都是「猜猜看壽星會怎麼選」，跟壽星選的一樣才會得分。' },
-  { ico:'🥇', text:'取前三名進入獎金挑戰賽——最後要通過一分鐘的「囚徒談判」，獎金才真的到手。' },
-  { ico:'😅', text:'分數最後一名？準備好被公開處刑，除非你有種去踢館獎金最高者討回面子！' }
+  { ico:'🎯', head:'你有多懂壽星？', desc:'猜猜壽星會怎麼選！跟壽星答案一樣就得分！' },
+  { ico:'🥇', head:'前三名 → 晉級獎金挑戰賽', desc:'究竟誰能把獎金抱回家？' },
+  { ico:'😅', head:'最後一名 → 公開處刑！', desc:'給你一次翻身的機會——別連第二次都輸得這麼難看。' }
 ];
 function rulesCardHtml(){
   return `
     <div class="lp-rules-card">
       <h3 class="lp-rules-title">🎮 開始之前，先看一下規則</h3>
       <ul class="lp-rules-list">
-        ${RULES_BULLETS.map(b => `<li><span class="ico">${b.ico}</span><span>${esc(b.text)}</span></li>`).join('')}
+        ${RULES_BULLETS.map(b => `<li><span class="ico">${b.ico}</span><span class="rule-txt"><span class="rule-head">${esc(b.head)}</span><span class="rule-desc">${esc(b.desc)}</span></span></li>`).join('')}
         <li class="stake"><span class="ico">💰</span><span>開始之前，麻煩每個人先拿出 <b>100 元</b>放在桌上，當作這次的參賽費用！</span></li>
       </ul>
     </div>
@@ -4702,9 +4774,10 @@ function spawnConfetti(){
 }
 
 /* ============================================================
-   HOST: AWARDS — podium → 合作／背叛 → 獎金結果 → 最後一名 → 海帶拳 → 結果 → done
-   awardsStage: 'podium' -> 'coop' -> 'coopResult' -> 'lastplace' -> ('duel' ->) 'result' -> 'done'
-   （見 party_mockups.html #lastplace 一節，規則已跟使用者確認定案。）
+   HOST: AWARDS — podium → 進入挑戰賽宣告 → 合作／背叛 → 獎金結果 → 最後一名 → 海帶拳 → 結果 → done
+   awardsStage: 'podium' -> 'challengeIntro' -> 'coop' -> 'coopResult' -> 'lastplace' -> ('duel' ->) 'result' -> 'done'
+   （見 party_mockups.html #lastplace 一節，規則已跟使用者確認定案。'challengeIntro'
+   是（六十七）新增的過渡彈窗階段，見 goAwardsChallengeIntro() 上方的文件註解。）
    ============================================================ */
 function goAwards(){
   const sx = hostState.shouxingId;
@@ -4721,6 +4794,7 @@ function goAwards(){
 }
 function renderHostAwards(){
   const stage = hostState.awardsStage;
+  if (stage === 'challengeIntro') return renderHostAwardsChallengeIntro();
   if (stage === 'coop') return renderHostAwardsCoop();
   if (stage === 'coopResult') return renderHostAwardsCoopResult();
   if (stage === 'lastplace') return renderHostAwardsLastplace();
@@ -4760,7 +4834,7 @@ function renderHostAwardsPodium(){
       </div>
       ${top3.length? '' : '<p class="sub">這場沒有人猜，先跳過頒獎</p>'}
       <div class="btn-row" style="margin-top:6px">
-        <button class="btn" onclick="goAwardsCoop()">🤝🏻😈 一分鐘囚徒談判 →</button>
+        <button class="btn" onclick="goAwardsChallengeIntro()">🤝🏻😈 一分鐘囚徒談判 →</button>
       </div>
     </div></div>
   `);
@@ -4824,6 +4898,66 @@ function animatePodiumReveal(prefix, playSound){
    between two of those awaits, exactly the RPS freeze's shape (see the old
    evaluateRpsRound()/processRpsThrows() pattern this was carried over from,
    in game.html's pre-awards-rewrite history). */
+/* （六十七）使用者要求「最懂壽星前三名」（頒獎台）這頁改成先跳出彈窗說
+   「進入獎金挑戰賽」，主持人按「繼續」才真的進入一分鐘囚徒談判——透過
+   AskUserQuestion 確認過兩件事：(1) 彈窗要主持人自己按「繼續」才關閉，
+   不是倒數幾秒自動消失；(2) 主持人畫面／投影頁都要同步顯示這個宣告，不是
+   只有主持人自己看得到。所以這裡不是單純在按鈕的 onclick 裡插一個
+   `alert()`/純前端彈窗就結束——那樣投影頁不會同步看到。做法是比照其他
+   「懸念揭曉」階段的既有模式，直接當成 awardsStage 狀態機新增的一個過渡
+   階段（'challengeIntro'，插在 'podium' 跟 'coop' 之間），寫進
+   hostState 並存檔，host／spectate 兩邊各自的 render 分派函式
+   （renderHostAwards()/renderSpectateAwards()）都認得這個新階段、各自畫出
+   同一份「🏆 進入獎金挑戰賽」宣告卡——這樣投影頁走它自己的 poll 迴圈也會
+   看到同一個畫面，不用另外開一條專門同步「彈窗開關」的路。
+   CSS 用的是 .lp-modal／.lp-modal-card 這組本來就存在、但目前整支
+   game.html 沒有任何地方真的套用 .lp-modal（唯一的固定滿版深色遮罩外層）
+   的死樣式——之前每個「看起來像彈窗」的畫面（例如 renderHostAwardsLastplace()
+   的本場最後一名卡片）其實都只是把 .lp-modal-card 內嵌畫在 .shell 版面
+   裡，不是真的浮在最上層的彈窗。這裡是第一次真正把 .lp-modal 這顆遮罩用
+   上，剛好也是使用者第一次明確要求「彈窗」效果，不是「卡片」效果。
+   人數不夠 4 人時 goAwardsCoop() 會直接跳過整套挑戰賽改叫
+   finishAwardsSimple()（見該函式），這裡先複製同一個判斷提前擋掉——不夠
+   人數時再彈一個「進入獎金挑戰賽」的宣告、下一步卻是直接跳過整套挑戰賽，
+   會顯得莫名其妙，不如維持原本「人數不夠就整套跳過」的行為，不額外插這個
+   過場。 */
+function goAwardsChallengeIntro(){
+  const sx0 = hostState.shouxingId;
+  const ranked0 = rankedGuessers(hostState.players, sx0);
+  if (ranked0.length < 4){ goAwardsCoop(); return; }
+  hostState.awardsStage = 'challengeIntro';
+  sSet('game:state', hostState);
+  renderHostAwardsChallengeIntro();
+}
+function renderHostAwardsChallengeIntro(){
+  render(`
+    <div class="shell"><div class="col" style="align-items:center;text-align:center">
+      ${hostNav(true)}
+    </div></div>
+    <div class="lp-modal">
+      <div class="lp-modal-card lp-challenge-card">
+        <div class="lp-modal-kicker">🏆 頒獎典禮</div>
+        <div class="lp-modal-avatar">🎉</div>
+        <h3 class="lp-modal-name">進入獎金挑戰賽</h3>
+        <p class="lp-modal-sub">前三名要通過「一分鐘囚徒談判」，獎金才真的到手！</p>
+        <button class="btn block" style="margin-top:16px" onclick="goAwardsCoop()">▶ 繼續</button>
+      </div>
+    </div>
+  `);
+}
+function renderSpectateAwardsChallengeIntro(state){
+  clearSpectateCountdown();
+  render(`
+    <div class="lp-modal">
+      <div class="lp-modal-card lp-challenge-card">
+        <div class="lp-modal-kicker">🏆 頒獎典禮</div>
+        <div class="lp-modal-avatar">🎉</div>
+        <h3 class="lp-modal-name">進入獎金挑戰賽</h3>
+        <p class="lp-modal-sub">前三名要通過「一分鐘囚徒談判」，獎金才真的到手！</p>
+      </div>
+    </div>
+  `);
+}
 function goAwardsCoop(){
   const sx = hostState.shouxingId;
   const ranked = rankedGuessers(hostState.players, sx);
@@ -5498,6 +5632,33 @@ function applySpectateZoom(v){
   if (label) label.textContent = Math.round(v * 100) + '%';
   return v;
 }
+/* （六十七）同一輪使用者追加「投影頁可以有全螢幕功能嗎，就不要有上面網頁
+   的那些功能列表影響」——瀏覽器的網址列／分頁列這些「網頁的功能列表」，
+   一般網頁本身沒有辦法隱藏它，唯一的辦法是叫瀏覽器進入真正的全螢幕模式
+   （Fullscreen API），那些瀏覽器自己的 UI 才會整個收起來，這不是純 CSS
+   能做到的事，所以額外加一個按鈕、由使用者自己的點擊手勢觸發
+   `requestFullscreen()`（瀏覽器基於安全理由，只信任真人點擊，不能自動幫她
+   進全螢幕）。跟縮放控制項放在同一顆膠囊裡（用一條分隔線隔開），因為都是
+   「投影頁顯示調整」同一類的小工具，沒必要分成兩顆各自佔一個角落。按鈕
+   圖示跟 aria-label 會依「目前是不是全螢幕」動態切換（監聽
+   fullscreenchange，包含使用者自己按 Esc 退出全螢幕的情況也會同步更新，
+   不會卡在「明明已經退出了、按鈕還顯示可以退出」的不同步狀態）。 */
+function isSpectateFullscreen(){ return !!document.fullscreenElement; }
+function toggleSpectateFullscreen(){
+  if (isSpectateFullscreen()) {
+    document.exitFullscreen().catch(()=>{});
+  } else {
+    document.documentElement.requestFullscreen().catch(()=>{});
+  }
+}
+function updateSpectateFullscreenBtn(){
+  const btn = document.getElementById('spec-fullscreen-btn');
+  if (!btn) return;
+  const fs = isSpectateFullscreen();
+  btn.textContent = fs ? '⛶' : '⛶';
+  btn.setAttribute('aria-label', fs ? '離開全螢幕' : '全螢幕顯示');
+  btn.style.opacity = fs ? '1' : '.85';
+}
 function ensureSpectateZoomControl(){
   if (document.getElementById('spec-zoom-ctrl')) return;
   const d = document.createElement('div');
@@ -5505,14 +5666,20 @@ function ensureSpectateZoomControl(){
   d.style.cssText = 'position:fixed;bottom:8px;right:8px;z-index:40;display:flex;align-items:center;gap:2px;'
     + 'background:rgba(46,36,24,.55);color:#fff;border-radius:999px;padding:3px;font-size:12px;font-weight:800;';
   d.innerHTML =
-    '<button type="button" id="spec-zoom-minus" aria-label="縮小投影頁" '
+    '<button type="button" id="spec-fullscreen-btn" aria-label="全螢幕顯示" '
+      + 'style="all:unset;cursor:pointer;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:50%;font-size:14px;">⛶</button>'
+    + '<span style="width:1px;height:16px;background:rgba(255,255,255,.3);margin:0 2px;"></span>'
+    + '<button type="button" id="spec-zoom-minus" aria-label="縮小投影頁" '
       + 'style="all:unset;cursor:pointer;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:50%;">－</button>'
     + '<span id="spec-zoom-label" style="min-width:40px;text-align:center;">100%</span>'
     + '<button type="button" id="spec-zoom-plus" aria-label="放大投影頁" '
       + 'style="all:unset;cursor:pointer;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:50%;">＋</button>';
   document.body.appendChild(d);
+  document.getElementById('spec-fullscreen-btn').onclick = toggleSpectateFullscreen;
   document.getElementById('spec-zoom-minus').onclick = () => applySpectateZoom(getSpectateZoom() - SPECTATE_ZOOM_STEP);
   document.getElementById('spec-zoom-plus').onclick = () => applySpectateZoom(getSpectateZoom() + SPECTATE_ZOOM_STEP);
+  document.addEventListener('fullscreenchange', updateSpectateFullscreenBtn);
+  updateSpectateFullscreenBtn();
   applySpectateZoom(getSpectateZoom());
 }
 /* Long-poll driven replacement for the old `setInterval(spectateTick, 1500)`
@@ -5667,7 +5834,46 @@ function renderSpectateLobby(state){
     </div></div>
   `);
   spawnLobbyFloatWords();
+  clampLobbyJoinedWrapHeight();
   playLobbyJoinPops(newIds, state.players);
+}
+/* （六十八）幫「已加入名單」（.lobby-joined-wrap）量出實際還剩多少可用
+   高度，寫成 inline max-height——不是套一個猜出來的固定數字，是每次真的
+   量 .lobby-hero 目前渲染完的底部位置在哪（同一招沿用（六十六）
+   spawnLobbyFloatWords() 量 .lobby-hero 位置的做法），這樣不管主標題被
+   放大成幾倍、螢幕多高多寬、字型渲染跟預期差一點，都會自動算出正確的
+   剩餘空間，不用每次改版面都回來調一次這個數字。
+   第一版這裡曾經用一個猜的 BOTTOM_BREATHING_ROOM(16px) 常數當作畫面最下緣
+   的預留空間，結果 16 位賓客在 768px 高的投影尺寸下實測還是溢出了約
+   15px——回頭量才發現 `.shell{padding:clamp(16px,4vw,40px)}` 這個外層
+   padding 在 1440 這種寬度下其實吃掉的是上限值 40px，不是隨手猜的 16px，
+   兩者的落差正好跟量到的溢位幅度對得上。改成直接讀 `.shell` 目前的
+   `padding-bottom` computed 值，而不是繼續猜一個常數——這樣不管以後
+   `.shell` 的 padding clamp() 數字怎麼調、或者在不同寬度下 4vw 算出來的
+   實際 padding 是多少，這裡都會自動跟著對，不會重蹈（六十五）vw 版寬
+   上限那次「寫死數字禁不起後續改版」的覆轍。
+   量不到 .lobby-hero／.lobby-joined-wrap／.shell（理論上不會發生）就直接
+   跳過，讓它退回沒有上限、頂多真的人多到爆版才需要捲動整頁，不會整個
+   大廳畫面直接掛掉。 */
+function clampLobbyJoinedWrapHeight(){
+  const hero = document.querySelector('.lobby-hero');
+  const wrap = document.querySelector('.lobby-joined-wrap');
+  const shell = document.querySelector('.shell');
+  const col = document.querySelector('.col.center');
+  if (!hero || !wrap || !shell || !col) return;
+  const heroBottom = hero.getBoundingClientRect().bottom;
+  // wrap 自己的 max-height 是它「內容框」的上限，跟 hero 底部之間隔了兩段
+  // 距離：.col 的 flex `gap`（兩個直排子元素之間，目前 16px）跟 wrap 自己
+  // 的 margin-top（目前 22px）——一開始只扣了 margin-top，量出來還是每次
+  // 都固定多溢出約 16px，才發現 flex 的 `gap` 不會跟子元素自己的 margin
+  // 合併/取大值（不是一般文件流那種 margin collapse），是直接疊加，兩段
+  // 距離要一起扣掉才對。都直接讀 computedStyle 現有的值，不在這裡重複寫死
+  // 數字，避免以後只改了 CSS 那邊卻忘記這裡也要跟著改。
+  const rowGap = parseFloat(getComputedStyle(col).rowGap) || 0;
+  const marginTop = parseFloat(getComputedStyle(wrap).marginTop) || 0;
+  const shellPaddingBottom = parseFloat(getComputedStyle(shell).paddingBottom) || 0;
+  const available = window.innerHeight - heroBottom - rowGap - marginTop - shellPaddingBottom;
+  wrap.style.maxHeight = Math.max(0, available) + 'px';
 }
 function joinedBadgeHtml(id, p, showNow){
   return `<div class="lobby-joined-badge${showNow ? ' show' : ''}" data-pid="${id}">${avatarSpan(p.avatar)}<span>${esc(p.name)}${p.isShouxing ? ' 🎂' : ''}</span></div>`;
@@ -6056,6 +6262,7 @@ function renderSpectateFinal(state){
 }
 function renderSpectateAwards(state){
   const stage = state.awardsStage;
+  if (stage === 'challengeIntro') return renderSpectateAwardsChallengeIntro(state);
   if (stage === 'coop') return renderSpectateAwardsCoop(state);
   if (stage === 'coopResult') return renderSpectateAwardsCoopResult(state);
   if (stage === 'lastplace') return renderSpectateAwardsLastplace(state);
@@ -7061,7 +7268,7 @@ function renderPlayerAwards(state){
   // any individual phone to do here, same neutral waiting shot the old
   // rps/picking stages used for a player not directly involved this
   // particular beat of the ceremony.
-  if (stage === 'coopResult' || stage === 'duel' || stage === 'result'){
+  if (stage === 'challengeIntro' || stage === 'coopResult' || stage === 'duel' || stage === 'result'){
     render(`
       <div class="shell"><div class="center">
         <div style="font-size:54px">🎉</div>
