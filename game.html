@@ -1224,6 +1224,34 @@
   .lp-challenge-card .lp-modal-name{ font-size:clamp(28px,5vw,48px); }
   .lp-challenge-card .lp-modal-sub{ font-size:clamp(14px,2vw,19px); margin-top:10px; }
 
+  /* （六十九）「最懂壽星前三名」原本是木頭頒獎台＋凸台插圖（.podium／
+     .awards-layout，見下方），使用者反饋「也不是真的頒獎時間」，改成主持人
+     點擊後直接輪流跳出前三名的大頭像＋名字（沿用 .lp-modal/.lp-modal-card
+     這組彈窗機制，再疊一層覆寫，手法同 .lp-challenge-card／.lp-lastplace-card），
+     尺寸比照「恭喜得獎名單」畫面 starWinsPhotoHtml() 的大頭照
+     （.lp-starwins-photo，使用者截圖參考圖三指名這個尺寸）。三人各自的彈窗
+     用同一個 DOM 容器換內容＋retrigger pop 動畫（animateTopRevealSequence()），
+     不是同時渲染三個疊在一起的彈窗，避免三份大卡片同時存在畫面上互相干擾。 */
+  .lp-topreveal-card{ max-width:none; width:min(70vw,70vh,560px); }
+  .lp-topreveal-card.pop{ animation: topRevealPop .5s cubic-bezier(.34,1.56,.64,1); }
+  @keyframes topRevealPop{ 0%{ transform:scale(.55); opacity:0; } 100%{ transform:scale(1); opacity:1; } }
+  .lp-topreveal-card .lp-modal-kicker{ font-size:clamp(13px,1.8vw,18px); }
+  .lp-topreveal-card .lp-modal-avatar{ margin:6px 0 10px; }
+  .lp-topreveal-card .lp-modal-avatar .avatar-badge{ width:min(60vw,340px); height:min(60vw,340px); }
+  .lp-topreveal-card .lp-modal-avatar .avatar-badge img{ width:100%; height:100%; }
+  .lp-topreveal-card .lp-modal-name{ font-size:clamp(28px,5vw,48px); margin-top:4px; }
+  /* 輪流彈完之後定格的橫排最終畫面——「版面左右各留白 20%」＝容器本身寬度
+     60%、置中，三人平分剩下的寬度左右排列。一開始不掛 .show（opacity:0 +
+     輕微下移），等三個人都跳完之後才一次淡入定格，避免跟前面的彈窗演出
+     同時搶戲。 */
+  .lp-topreveal-row{ display:flex; justify-content:center; align-items:flex-start; gap:clamp(16px,3.4vw,40px); width:60%; margin:14px auto 0; opacity:0; transform:translateY(14px); transition:opacity .5s ease, transform .5s ease; }
+  .lp-topreveal-row.show{ opacity:1; transform:translateY(0); }
+  .lp-topreveal-person{ flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; gap:6px; text-align:center; }
+  .lp-topreveal-person .avatar-badge{ width:min(22vw,26vh,170px); height:min(22vw,26vh,170px); }
+  .lp-topreveal-person .rk{ font-family:'Fredoka',sans-serif; font-weight:600; font-size:clamp(13px,1.8vw,18px); color:var(--ink-dim); }
+  .lp-topreveal-person .nm{ font-weight:800; font-size:clamp(15px,2.4vw,23px); }
+  .lp-topreveal-person .sc{ font-size:clamp(12px,1.6vw,16px); color:var(--ink-dim); }
+
   .lp-choice-row{ display:flex; gap:12px; flex-wrap:wrap; justify-content:center; margin-top:16px; }
   .lp-choice-btn{ flex:1 1 180px; max-width:210px; border-radius:16px; padding:14px 12px; text-align:center; font-weight:800; border:2px solid var(--line); background:#fff; cursor:pointer; }
   .lp-choice-btn .big{ font-size:22px; display:block; margin-bottom:5px; }
@@ -1232,16 +1260,31 @@
   .lp-choice-btn.challenge .lbl{ color:var(--coral); }
   .lp-hostpanel-note{ font-size:11px; color:var(--ink-dim); margin-top:12px; background:rgba(255,255,255,0.65); border-radius:999px; padding:5px 14px; display:inline-block; }
 
-  .lp-result-card{ background:rgba(251,246,236,0.92); border-radius:22px; padding:clamp(18px,3vw,28px) clamp(22px,4vw,32px); text-align:center; max-width:min(360px,86%); box-shadow:0 16px 38px rgba(46,36,24,0.18); }
+  /* （六十九）使用者反饋「本場最後一名」結果頁（resultCardHtml()，只有
+     renderHostAwardsResult()／renderSpectateAwardsResult() 兩個呼叫點，都是
+     主持人／投影頁的大螢幕情境，沒有玩家手機在用同一個 class）太小，要求
+     放大到跟 starWinsPhotoHtml() 的「恭喜得獎名單」大卡片（.lp-starwins-card，
+     使用者截圖參考圖三）一致的尺寸——這裡直接調整 .lp-result-card 自己的
+     base 尺寸（不需要像 coopResult 那樣另外疊一個 modifier class 才能避免
+     波及其他畫面，因為這個 class 本來就沒有其他呼叫點）。
+     這裡額外多加一個 width:100%，不是只調 max-width 就好——renderHostAwardsResult()
+     的外層 .col 帶了 align-items:center（不是預設的 stretch），.lp-result-card
+     本身舊版也從來沒有自己宣告 width，兩個條件疊在一起，區塊只會照文字內容
+     自然需要的寬度縮，max-width 調到 600px 但內容用不到那麼寬時完全不會生效
+     （實測維持在文字自然寬度 ~460px，遠小於 600px 的上限）——跟 .lp-rules-card
+     自己就宣告 width:100% 才能撐滿版面是同一個道理（見 .lp-rules-card 上方
+     那組「auto 外距優先權比 stretch 高」的相關說明）。 */
+  .lp-result-card{ background:rgba(251,246,236,0.92); border-radius:28px; padding:clamp(28px,5vw,52px) clamp(32px,6vw,64px); text-align:center; width:100%; max-width:min(600px,90vw); box-shadow:0 16px 38px rgba(46,36,24,0.18); }
   .lp-result-card.win{ border:2px solid var(--moss); }
   .lp-result-card.lose{ border:2px solid var(--alert); }
-  .lp-result-title{ font-family:'Fredoka',sans-serif; font-weight:600; font-size:clamp(19px,3.4vw,26px); margin:6px 0 6px; }
+  .lp-result-icon{ font-size:clamp(48px,7vw,76px); }
+  .lp-result-title{ font-family:'Fredoka',sans-serif; font-weight:600; font-size:clamp(28px,5vw,44px); margin:10px 0 10px; }
   .lp-result-card.win .lp-result-title{ color:var(--moss); }
   .lp-result-card.lose .lp-result-title{ color:var(--alert); }
-  .lp-result-sub{ font-size:12.5px; color:var(--ink-dim); }
-  .lp-penalty-box{ margin-top:14px; background:rgba(217,83,79,0.1); border:1.5px dashed var(--alert); border-radius:14px; padding:10px 13px; }
-  .lp-penalty-box .tag{ font-size:9.5px; font-weight:800; color:var(--alert); letter-spacing:.03em; }
-  .lp-penalty-box .txt{ font-size:13.5px; font-weight:800; color:var(--ink); margin-top:4px; line-height:1.5; }
+  .lp-result-sub{ font-size:clamp(15px,2.2vw,19px); color:var(--ink-dim); line-height:1.6; }
+  .lp-penalty-box{ margin-top:18px; background:rgba(217,83,79,0.1); border:1.5px dashed var(--alert); border-radius:16px; padding:clamp(14px,2.4vw,20px) clamp(16px,2.8vw,24px); }
+  .lp-penalty-box .tag{ font-size:clamp(12px,1.6vw,15px); font-weight:800; color:var(--alert); letter-spacing:.03em; }
+  .lp-penalty-box .txt{ font-size:clamp(16px,2.4vw,21px); font-weight:800; color:var(--ink); margin-top:6px; line-height:1.55; }
 
   .lp-trio{ display:flex; justify-content:center; gap:18px; margin-bottom:14px; flex-wrap:wrap; }
   .lp-trio-person{ display:flex; flex-direction:column; align-items:center; gap:4px; }
@@ -1287,6 +1330,24 @@
   .lp-outcome-card.happened{ border-color:var(--coral); background:rgba(232,101,75,0.08); }
   .lp-outcome-card.unknown{ border-style:dashed; border-color:var(--alert); }
   .lp-outcome-card.unknown .desc{ color:var(--alert); }
+  /* （六十九）使用者反饋「談判結果公布」（coopResult）畫面看起來比「一分鐘
+     囚徒談判」（coop，用 .lp-rules-card 包住、佔滿版面）小又空——改成呼叫端
+     也疊一個 .lp-rules-card（見 renderHostAwardsCoopResult()／
+     renderSpectateAwardsCoopResult()），手法同 starWinsPhotoHtml() 疊
+     .lp-starwins-card 的既有模式：額外加一個專屬的 .lp-coopresult-card
+     modifier class 來放大內部的 .lp-trio／.lp-outcome-grid／.lp-outcome-card，
+     不能直接寫 `.lp-rules-card .lp-trio{...}`——renderHostAwardsCoop() 的
+     「一分鐘囚徒談判」畫面也用同一個 .lp-rules-card 包住同一組 .lp-trio，
+     使用者明確說這頁尺寸已經 OK、不用動，寫成不夠精準的選擇器會連那頁
+     的排版一起意外改掉。 */
+  .lp-coopresult-card .lp-trio{ gap:clamp(24px,4vw,56px); margin-bottom:clamp(18px,3vh,32px); }
+  .lp-coopresult-card .lp-trio-person .avatar-badge{ width:clamp(56px,7vw,84px); height:clamp(56px,7vw,84px); }
+  .lp-coopresult-card .lp-trio-person .nm{ font-size:clamp(15px,2vw,20px); }
+  .lp-coopresult-card .lp-trio-person .rk{ font-size:clamp(20px,3vw,30px); }
+  .lp-coopresult-card .lp-outcome-grid{ max-width:none; width:100%; }
+  .lp-coopresult-card .lp-outcome-card{ padding:clamp(18px,3vh,32px) clamp(20px,3vw,32px); border-radius:20px; }
+  .lp-coopresult-card .lp-outcome-card .combo{ font-size:clamp(22px,3.4vw,34px); letter-spacing:3px; }
+  .lp-coopresult-card .lp-outcome-card .desc{ font-size:clamp(15px,2vw,20px); margin-top:10px; }
 
   /* （六十四）使用者反饋海帶拳畫面也太小、飄在中間——跟囚徒談判／規則頁
      同一套「拿掉寬度上限、字級整輪放大」處理，改由呼叫端的 .lp-rules-card
@@ -1331,14 +1392,23 @@
      同權重下 author 樣式會贏，[hidden] 屬性反而蓋不掉，畫面會變成「明明有
      hidden 屬性，選擇卡還是被看得到」。改成自己控制 display 值就不會有
      這個特異度打架的問題。 */
-  .lp-lastplace-choicewrap{ position:fixed; inset:0; display:none; z-index:10; }
+  /* （六十九）使用者反饋這裡原本「整個滿版」（兩張卡各佔半個螢幕、從頂
+     滑到底）太大，改成「大型按鈕」：外層 wrap 用左右各 20% 的內距把兩顆
+     按鈕收進中間 60% 的版面（不再 inset:0 頂到邊），按鈕本身也從滿版拉伸
+     高度改成內容自然高度、圓角卡片（不再 flex-direction 頂天立地）。亮暗
+     對比也一併加強：原本暗態 opacity:.55／亮態 opacity:1 差距不夠明顯，
+     改成暗態 .35＋額外調降飽和（filter:grayscale），亮態疊上更深的底色、
+     放大一點＋明顯的陰影，讓「輪到哪一個在亮」一眼就能分辨。 */
+  .lp-lastplace-choicewrap{ position:fixed; inset:0; display:none; z-index:10; align-items:center; justify-content:center; padding:0 20%; gap:clamp(18px,3vw,36px); }
   .lp-lastplace-choicewrap.show{ display:flex; }
-  .lp-lastplace-choicecard{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; text-align:center; opacity:.55; transition:opacity .4s ease, background .4s ease; padding:24px; }
-  .lp-lastplace-choicecard.accept{ background:rgba(63,92,51,0.08); }
-  .lp-lastplace-choicecard.challenge{ background:rgba(232,101,75,0.08); border-left:2px dashed var(--line); }
-  .lp-lastplace-choicecard.glow{ opacity:1; }
-  .lp-lastplace-choicecard .big{ font-size:clamp(52px,9vw,110px); }
-  .lp-lastplace-choicecard .lbl{ font-family:'Fredoka',sans-serif; font-weight:600; font-size:clamp(18px,3vw,30px); }
+  .lp-lastplace-choicecard{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; text-align:center; opacity:.35; filter:grayscale(.25); transition:opacity .4s ease, background .4s ease, transform .4s ease, box-shadow .4s ease, filter .4s ease; padding:clamp(22px,4vh,44px) clamp(16px,2.4vw,28px); border-radius:32px; box-shadow:0 6px 0 rgba(46,36,24,0.1); }
+  .lp-lastplace-choicecard.accept{ background:rgba(63,92,51,0.10); }
+  .lp-lastplace-choicecard.challenge{ background:rgba(232,101,75,0.10); }
+  .lp-lastplace-choicecard.glow{ opacity:1; filter:none; transform:scale(1.06); box-shadow:0 18px 36px rgba(46,36,24,0.3); }
+  .lp-lastplace-choicecard.accept.glow{ background:rgba(63,92,51,0.24); }
+  .lp-lastplace-choicecard.challenge.glow{ background:rgba(232,101,75,0.24); }
+  .lp-lastplace-choicecard .big{ font-size:clamp(40px,7vw,84px); }
+  .lp-lastplace-choicecard .lbl{ font-family:'Fredoka',sans-serif; font-weight:600; font-size:clamp(16px,2.4vw,25px); }
   .lp-lastplace-countdown-wrap{ position:fixed; bottom:24px; left:50%; transform:translateX(-50%); z-index:11; display:none; }
   .lp-lastplace-countdown-wrap.show{ display:block; }
 </style>
@@ -2057,6 +2127,90 @@ function podiumLabelHtml(rank, elId, player, scoreText, extraHtml){
     <div class="score num" id="${elId}-score">${scoreText}</div>
     ${extraHtml || ''}
   </div>`;
+}
+/* ============================================================
+   （六十九）「最懂壽星前三名」改版：輪流彈出大頭像 → 橫排定格
+   ============================================================
+   舊版是木頭頒獎台＋凸台插圖（podiumCharHtml()／podiumLabelHtml()／
+   animatePodiumReveal()，見上方與 .podium／.awards-layout CSS）——使用者
+   反饋「也不是真的頒獎時間」，改成主持人點擊「🏆 進入獎金挑戰賽 →」後，
+   直接輪流跳出前三名的大頭像＋名字（單張彈窗，尺寸比照 starWinsPhotoHtml()
+   的大頭照，使用者截圖參考圖三指名這個尺寸），三人跳完後收起彈窗、換成
+   橫排定格的畫面（左右各留白 20%，見 .lp-topreveal-row CSS），再接
+   goAwardsChallengeIntro()（六十七既有的「進入獎金挑戰賽」彈窗）。
+   上面這組舊的 podiumCharHtml()／podiumLabelHtml()／animatePodiumReveal()／
+   .podium 系列 CSS 改版後不再有任何呼叫點——保留不刪，一來還原風險低（真的
+   要復原舊版頒獎台的話直接照抄就能用），二來刪除大量死程式碼要重新確認
+   每一處真的沒有殘留引用，投入產出比不划算，之後如果要徹底清理再另外處理。
+   animateTopRevealSequence()：三人依序（第1→2→3名，跟畫面上橫排定格後的
+   左到右順序一致）塞進同一個彈窗容器、retrigger 一次 CSS pop 動畫——「移除
+   再加回 .pop class，靠 void el.offsetWidth 強制 reflow 讓同一個 keyframes
+   動畫可以重播」是這支程式第一次需要「同一個 class 短時間內套用兩次」的
+   場景，其餘地方的揭曉動畫都是套一次 class 就不會再拿掉，用 isFirstRender
+   擋重播即可，這裡不適用（同一輪裡三張卡本來就要連續重播三次）。彈窗／
+   按鈕的顯示用 el.style.display 直接切換，不用 [hidden] 屬性——[hidden] 在
+   這幾個 class（.lp-modal／.btn-row）都自帶 display:flex 的情況下會被同權重
+   的 author 樣式蓋掉，見 .lp-lastplace-choicewrap 上方那段 CSS 註解一樣的
+   坑。 */
+function topRevealSoloCardHtml(rank, player){
+  const medal = ['🥇','🥈','🥉'][rank-1] || '';
+  return `
+    <div class="lp-modal-kicker">${medal} 最懂壽星．第 ${rank} 名</div>
+    <div class="lp-modal-avatar">${player?avatarSpan(player.avatar):'🙈'}</div>
+    <h3 class="lp-modal-name">${player?nameTag(player):'（沒有人）'}</h3>
+  `;
+}
+function topRevealPersonHtml(rank, player){
+  const medal = ['🥇','🥈','🥉'][rank-1] || '';
+  return `
+    ${player?avatarSpan(player.avatar):'🙈'}
+    <span class="rk">${medal} 第${rank}名</span>
+    <span class="nm">${player?nameTag(player):'（沒有人）'}</span>
+    <span class="sc">${player?player.score:0} 分</span>
+  `;
+}
+/* top3：[[id,player],...]，index 0 是第 1 名（goAwards() 裡 topIds 本來就是
+   排序過的，見 rankedGuessers()）。modalWrap/modalCard：單張大彈窗的外層
+   遮罩／內層卡片；rowEl：橫排定格的容器（呼叫端已經把三個人的內容渲染好，
+   這裡只負責在對的時機補上 .show class 觸發淡入）。onDone：三人都跳完、
+   橫排定格之後的 callback（host 端用來把下一步按鈕的 display 補回來；
+   spectate 端唯讀不需要按鈕，傳 null）。彈出順序是第 3→2→1 名（懸念留到
+   最後才揭曉冠軍，跟舊版 animatePodiumReveal()／整支程式其他揭曉動畫的既有
+   慣例一致）——橫排定格後的畫面順序（topRevealPersonHtml() 渲染進
+   rowEl 的順序）仍然是第 1→2→3 名由左到右，兩者本來就是各自獨立的，不需要
+   互相配合：彈出順序只影響「彈窗依序出現的次序」，橫排定格畫面是呼叫端
+   一次把三個人的最終內容都準備好、只等 .show class 觸發淡入。 */
+/* playSound：同 animatePodiumReveal() 既有規則——只有 spectate 端傳 true
+   會出聲（host 端呼叫時不傳，維持靜音，理由見 animatePodiumReveal() 上方
+   文件），第 1 名跳出來時撒花＋號角，第 2、3 名只是輕巧一聲。 */
+function animateTopRevealSequence(top3, modalWrap, modalCard, rowEl, onDone, playSound){
+  const order = [3,2,1].filter(rank => top3[rank-1]);
+  const finish = () => {
+    if (modalWrap) modalWrap.style.display = 'none';
+    if (rowEl) rowEl.classList.add('show');
+    if (onDone) onDone();
+  };
+  if (!order.length){ finish(); return; }
+  let i = 0;
+  const showNext = () => {
+    if (i >= order.length){ finish(); return; }
+    const rank = order[i]; i++;
+    const player = top3[rank-1][1];
+    if (modalWrap && modalCard){
+      modalWrap.style.display = 'flex';
+      modalCard.innerHTML = topRevealSoloCardHtml(rank, player);
+      modalCard.classList.remove('pop');
+      void modalCard.offsetWidth; // 強制 reflow，讓 .pop 的 keyframes 動畫可以重播
+      modalCard.classList.add('pop');
+      if (rank === 1) spawnConfetti();
+      if (playSound){
+        if (rank === 1) playPodiumFanfare();
+        else playPodiumPop();
+      }
+    }
+    setTimeout(showNext, 1450);
+  };
+  showNext();
 }
 /* Shared leaderboard row for FINAL rankings (final results table, player's
    own final list, awards-ceremony player top-3 mini list) — reserves a
@@ -4122,7 +4276,8 @@ function renderHostChapterIntro(){
     </div></div>
   `);
 }
-/* ---------- 倒數計時音效（（二十二）新增，只在主持人畫面播放） ----------
+/* ---------- 倒數計時音效（（二十二）新增；（六十九）投影頁也補上了同一套，
+   見 updateSpectateTimerUI() 上方文件） ----------
    純用 Web Audio API 合成的短音效（振盪器 + 音量包絡），不需要任何外部
    音檔——跟這整個專案「完全不依賴外部函式庫／素材」的既有原則一致。最後
    5 秒開始「滴、滴」聲，越接近 0 秒滴得越快（beepIntervalMs 分段縮短間
@@ -4169,7 +4324,9 @@ function playTimeUpAlarm(){
    外部音檔。這幾個新音效對應「團隊視角總體檢報告」音效設計師角色點名的三個
    最可惜的靜音時刻——公布正解、頒獎台／最終排行榜皇冠揭曉、許願任務公布。
    用 AskUserQuestion 跟使用者確認過音效要在哪個畫面播放：使用者選了「主持人
-   畫面／投影頁兩邊都播放」（不是像倒數計時嗶聲那樣只在主持人端），理由是
+   畫面／投影頁兩邊都播放」（當時是不是像倒數計時嗶聲那樣只在主持人端——
+   （六十九）倒數計時嗶聲後來也補上投影頁了，見 updateSpectateTimerUI() 上方
+   文件，這句歷史對比僅供參考，不代表現狀），理由是
    這幾個音效是要炒熱全場氣氛的，投影頁才是真正投影出去給大家看、大家聽到
    聲音的那個畫面，只在主持人端播反而可能全場聽不到。所以下面每個播放呼叫
    都直接放進 host／spectate 各自（或共用）的揭曉邏輯裡，沿用既有的
@@ -4469,8 +4626,20 @@ function renderHostReveal(){
            100%，方塊還是只會照文字內容縮到剛好的寬度，不會真的變寬。這裡
            額外加一個 width:100%，才會真的讓題目文字方塊撐滿跟下面
            .options-grid 一樣的寬度（.col 的寬度上限），文字夠長時自然用得到
-           這個寬度才換行，不會提早換行。 -->
-      ${qtextHtml(q.text, "font-size:clamp(14px,2.1vw,19px);max-width:100%;width:100%", q.alignLeft)}
+           這個寬度才換行，不會提早換行。
+           （六十九）使用者測試後反饋這裡的字級（原本固定 clamp(14px,2.1vw,19px)，
+           不會隨題目長短變動——qtextHtml() 本身的換行估算 long/xlong 自動縮字
+           機制在這裡完全不會生效，因為這個 inline style 的 font-size 优先權
+           比 class 規則高，永遠蓋掉）看起來偏小；同時最大寬度原本雖然實測
+           跟 .options-grid 一樣受 .col 920px 上限夾住、理論上不會差，使用者
+           仍反饋兩者換行寬度看起來不一致，這裡額外把 max-width 明確對齊
+           .options-grid 自己宣告的 1000px 上限（min(1000px,100%)，兩者用同一個
+           數字，不再各自隱含依賴 .col 的上限），讓兩者的換行寬度來源完全一致、
+           不留疑慮。字級調大到 clamp(17px,2.6vw,23px)——在 shots69 系列腳本
+           用 2-3 行長度的題目文字＋6 位賓客在四種既有尺寸下實測
+           document.documentElement.scrollHeight 皆未超出 innerHeight，仍然
+           一頁塞得下。 -->
+      ${qtextHtml(q.text, "font-size:clamp(17px,2.6vw,23px);max-width:min(1000px,100%);width:100%", q.alignLeft)}
       ${shouxingChoice==null
         ? '<p class="sub" style="text-align:center">壽星這題沒來得及作答，這題大家都不計分</p>'
         : `<p class="reveal-answer-banner" id="reveal-suspense">🤔 壽星選的是<span class="waiting-dots"><span>.</span><span>.</span><span>.</span></span></p>`}
@@ -4629,7 +4798,7 @@ function renderHostFinal(){
         <div class="lb-rest-viewport" style="margin-top:6px" id="final-leaderboard-rest"></div>
       </div>
       <div class="btn-row" style="margin-top:14px">
-        <button class="btn" onclick="goAwards()">🏆 進入頒獎典禮 →</button>
+        <button class="btn" onclick="goAwards()">🏆 進入獎金挑戰賽 →</button>
         <button class="btn secondary" onclick="restartSameGame()">🔄 再玩一輪（分數歸零${(RANDOM_ORDER||DRAW_COUNT)?'、重新抽題':''}）</button>
         <button class="btn ghost" onclick="hostNewGame()">🆕 回設定改題目</button>
       </div>
@@ -4803,50 +4972,42 @@ function renderHostAwards(){
   if (stage === 'done') return renderHostAwardsDone();
   return renderHostAwardsPodium();
 }
-/* （二十五）改版：凸台＋角色縮小，並改成跟右側「其餘排名」面板並排的兩欄
-   版面（.awards-layout）——縮小＋並排這兩件事一起讓凸台不再擋住上面的標題
-   （原本量到皇冠會蓋到標題下緣，見開發紀錄診斷數據），也不用再另外加大
-   margin-top 硬撐版面。角色現在真的「站」在台面上（見 podiumCharHtml 的
-   函式註解），姓名/分數/獎品移到凸台正下方一整排（podiumLabelHtml）。 */
+/* （六十九）改版：不再畫木頭頒獎台，直接輪流彈出前三名大頭像→橫排定格，
+   見 animateTopRevealSequence() 上方那段完整的沿革說明。彈窗/橫排都不需要
+   isFirstRender 判斷——renderHostAwardsPodium() 本身就是 goAwards() 觸發的
+   一次性導覽渲染（不是掛在 poll 迴圈上），跟其他 renderHostXxx() 一樣。 */
 function renderHostAwardsPodium(){
   const top3 = (hostState.topIds||[]).map(id=>[id, hostState.players[id]]).filter(([,p])=>p);
-  // （六十四）使用者反饋獎金金額不該在頒獎台這裡就爆雷——改到整場（含後面
-  // 海帶拳）都結束後才在 renderHostAwardsDone() 一次揭曉，這裡不再算/不再
-  // 顯示 prizeAmounts／prizeLine，podium 只單純顯示名次＋分數。
   render(`
     <div class="shell"><div class="col" style="align-items:center;text-align:center">
       ${hostNav(true)}
       <h1 class="marquee-title">最懂壽星<span class="hl">前三名</span></h1>
-      <div class="awards-layout">
-        <div class="podium-wrap">
-          <div class="podium" id="award-podium" style="--pw:min(70vw, calc((100vh - 380px)*1.202), 620px)">
-            <img class="riser-img" src="${PODIUM_RISER_IMG}" alt="頒獎台">
-            ${top3[1]?podiumCharHtml(2,'ap-2',top3[1][1]):''}
-            ${top3[0]?podiumCharHtml(1,'ap-1',top3[0][1]):''}
-            ${top3[2]?podiumCharHtml(3,'ap-3',top3[2][1]):''}
-          </div>
-          <div class="podium-labels">
-            ${top3[1]?podiumLabelHtml(2,'ap-2',top3[1][1],String(top3[1][1].score)):''}
-            ${top3[0]?podiumLabelHtml(1,'ap-1',top3[0][1],String(top3[0][1].score)):''}
-            ${top3[2]?podiumLabelHtml(3,'ap-3',top3[2][1],String(top3[2][1].score)):''}
-          </div>
-        </div>
+      <div class="lp-topreveal-row" id="lp-topreveal-row">
+        ${[1,2,3].map(rank => `<div class="lp-topreveal-person">${top3[rank-1]?topRevealPersonHtml(rank,top3[rank-1][1]):''}</div>`).join('')}
       </div>
       ${top3.length? '' : '<p class="sub">這場沒有人猜，先跳過頒獎</p>'}
-      <div class="btn-row" style="margin-top:6px">
+      <div class="btn-row" style="margin-top:6px;display:none" id="lp-topreveal-btnrow">
         <button class="btn" onclick="goAwardsChallengeIntro()">🤝🏻😈 一分鐘囚徒談判 →</button>
       </div>
     </div></div>
+    <div class="lp-modal" id="lp-topreveal-modal" style="display:none">
+      <div class="lp-modal-card lp-topreveal-card" id="lp-topreveal-card"></div>
+    </div>
   `);
-  animatePodiumReveal('ap');
+  const modalWrap = document.getElementById('lp-topreveal-modal');
+  const modalCard = document.getElementById('lp-topreveal-card');
+  const rowEl = document.getElementById('lp-topreveal-row');
+  const btnRow = document.getElementById('lp-topreveal-btnrow');
+  animateTopRevealSequence(top3, modalWrap, modalCard, rowEl, () => { if (btnRow) btnRow.style.display = 'flex'; });
 }
-/* Shared by the awards podium and the awards "done" recap screen (prefix 'ap' /
-   'ad') — third place first, then second, then first; each one's `.show` alone
-   triggers its fade/rise + the crown starting to sway (pure CSS, see .podium
-   .p.show ...), with the 🎁 prize text fading in ~650ms later as its own
-   separate reveal beat. Unlike renderHostFinal(), these two screens don't
-   replay the score-tally/reorder suspense first — see
-   animateFinalLeaderboardReveal()'s doc comment for why.
+/* （六十九）這個函式原本是「頒獎台」畫面自己的揭曉動畫（third place first,
+   then second, then first; each one's `.show` alone triggers its fade/rise +
+   the crown starting to sway），renderHostAwardsDone() 的「ad」前綴其實從未
+   真的呼叫過這個函式（doc comment 曾經這樣宣稱，但檢查全檔案沒有任何
+   `animatePodiumReveal('ad'...)` 呼叫點——單純是舊註解沒有跟著更新，這裡
+   一併修正）。（六十九）頒獎台畫面本身也改版成 animateTopRevealSequence()
+   那一套輪流彈出大頭像，不再呼叫這個函式——目前全檔案已經沒有任何呼叫點，
+   保留不刪的理由同 podiumCharHtml() 上方的說明。
    （三十後續修正）第二個參數 playSound：（三十）原本讓 playPodiumPop()/
    playPodiumFanfare() 在 host 跟 spectate 兩邊都播，結果使用者實測發現
    投影頁本來就比主持人頁慢半拍（要等自己的 poll 抓到新狀態才會渲染），兩邊
@@ -5039,10 +5200,10 @@ function updateHostCoopTimerUI(remainMs){
   }
   const forceBtn = document.getElementById('coop-force-btn');
   if (forceBtn) forceBtn.hidden = !urgent;
-  // 倒數嗶聲只在主持人畫面播——跟題目倒數的 tickCountdownSound() 同一個
-  // 理由（見該函式與 playCountdownTick() 上方的說明），這裡刻意重新做一份
-  // 獨立的 sibling 而不是直接呼叫 tickCountdownSound()，因為那個函式綁死
-  // 題目倒數自己的 _timerAudio 狀態跟固定 5 秒門檻，不是這裡要重用的對象。
+  // 這裡刻意重新做一份獨立的 sibling（tickCoopCountdownSound()）而不是直接
+  // 呼叫 tickCountdownSound()，因為那個函式綁死題目倒數自己的 _timerAudio
+  // 狀態跟固定 5 秒門檻，不是這裡要重用的對象；（六十九）投影頁現在也會呼叫
+  // 同一顆 tickCoopCountdownSound()，見 updateSpectateCoopTimerUI() 上方文件。
   tickCoopCountdownSound(remainMs);
 }
 let _coopLastBeepAt = 0;
@@ -5207,22 +5368,29 @@ function renderHostAwardsCoopResult(){
   // 不再顯示實際金額（coopPrizeAmountsFrom/coopPrizePercents 不再需要），
   // 只公布「合作／背叛」的選擇本身，實際能拿多少留到 renderHostAwardsDone()
   // 全場（含後面海帶拳）結束後才一次揭曉。
+  // （六十九）使用者反饋這頁看起來比「一分鐘囚徒談判」小又空，改成跟那頁
+  // 一樣用 .lp-rules-card 包住＋佔滿 .lp-inner（見 renderHostAwardsCoop()），
+  // 額外疊 .lp-coopresult-card 放大內部字級/間距，見該 class 上方 CSS 註解。
   render(`
-    <div class="shell"><div class="col" style="align-items:center;text-align:center">
+    <div class="shell"><div class="col">
       ${hostNav(true)}
-      <span class="eyebrow">🎭 談判結果公布</span>
-      <div class="lp-trio">
-        ${ids.map(id=>{
-          const p = hostState.players[id]; if (!p) return '';
-          const isForfeit = forfeits.includes(id);
-          const icon = choices[id]==='cooperate' ? '🤝🏻' : '😈';
-          return `<div class="lp-trio-person">${avatarSpan(p.avatar)}<span class="nm">${nameTag(p)}</span><span class="rk" style="font-size:22px">${icon}</span>${isForfeit? '<span class="rk" style="color:var(--alert)">（時間到，視為背叛）</span>' : ''}</div>`;
-        }).join('')}
-      </div>
-      <div class="lp-outcome-grid" style="grid-template-columns:1fr;max-width:420px">
-        <div class="lp-outcome-card happened">
-          <div class="combo">${meta.combo}</div>
-          <div class="desc">${meta.title}獎金金額稍後在頒獎結果一次揭曉。</div>
+      <div class="lp-inner" style="flex:1">
+        <div class="lp-rules-card lp-coopresult-card" style="text-align:center">
+          <h3 class="lp-rules-title">🎭 談判結果公布</h3>
+          <div class="lp-trio">
+            ${ids.map(id=>{
+              const p = hostState.players[id]; if (!p) return '';
+              const isForfeit = forfeits.includes(id);
+              const icon = choices[id]==='cooperate' ? '🤝🏻' : '😈';
+              return `<div class="lp-trio-person">${avatarSpan(p.avatar)}<span class="nm">${nameTag(p)}</span><span class="rk" style="font-size:34px">${icon}</span>${isForfeit? '<span class="rk" style="color:var(--alert)">（時間到，視為背叛）</span>' : ''}</div>`;
+            }).join('')}
+          </div>
+          <div class="lp-outcome-grid" style="grid-template-columns:1fr">
+            <div class="lp-outcome-card happened">
+              <div class="combo">${meta.combo}</div>
+              <div class="desc">${meta.title}獎金金額稍後在頒獎結果一次揭曉。</div>
+            </div>
+          </div>
         </div>
       </div>
       <div class="btn-row" style="margin-top:14px">
@@ -5415,7 +5583,7 @@ function resultCardHtml(state, last){
   if (result === 'win'){
     return `
       <div class="lp-result-card win">
-        <div style="font-size:38px">🎉</div>
+        <div class="lp-result-icon">🎉</div>
         <h3 class="lp-result-title">${name}贏了！</h3>
         <p class="lp-result-sub">${score.last} : ${score.champ} 拿下海帶拳挑戰，拿回自己付出的 100 元，全身而退！</p>
       </div>`;
@@ -5423,7 +5591,7 @@ function resultCardHtml(state, last){
   if (result === 'lose'){
     return `
       <div class="lp-result-card lose">
-        <div style="font-size:38px">😭</div>
+        <div class="lp-result-icon">😭</div>
         <h3 class="lp-result-title">${name}輸了……</h3>
         <p class="lp-result-sub">${score.last} : ${score.champ} 惜敗，100 元留在桌上，還要接受懲罰</p>
         <div class="lp-penalty-box">
@@ -5435,7 +5603,7 @@ function resultCardHtml(state, last){
   // 'shame' — accepted outright, no duel ever played, so don't frame it as a match score.
   return `
     <div class="lp-result-card lose">
-      <div style="font-size:38px">😅</div>
+      <div class="lp-result-icon">😅</div>
       <h3 class="lp-result-title">${name}接受了罵名</h3>
       <p class="lp-result-sub">本場最後一名，就是${name}！</p>
     </div>`;
@@ -5562,10 +5730,22 @@ function renderHostAwardsDone(){
    （這段註解原本寫「投影頁完全靜音、沒有懸念動畫」，是（二十四）剛拆出
    spectate 章節那時候的狀態，之後（二十九）／（三十）陸續把懸念動畫跟音效
    都補上了，這段一直沒有跟著更新——順手一併修正，避免繼續誤導。）
-   倒數計時的嗶聲／時間到警示音（ensureAudioCtx()/playCountdownTick()/
-   playTimeUpAlarm()）目前仍然「只在主持人分頁播」，這點沒有變：那是給
-   主持人自己抓節奏用的工具音，跟下面這些「炒熱全場氣氛」的音效目的不同，
-   沒有理由跟著搬過來。公布正解／頒獎台皇冠揭曉／許願任務公布這三組音效
+   （六十九修正）倒數計時的嗶聲／時間到警示音（ensureAudioCtx()/
+   playCountdownTick()/playTimeUpAlarm()）原本「只在主持人分頁播」，理由是
+   「那是給主持人自己抓節奏用的工具音」——但使用者實測回報最後一名選擇畫面
+   完全聽不到倒數音效，才意識到這個理由沒有考慮到實際的硬體佈局：主持人
+   主控板通常是自己手上的筆電/手機，真正接喇叭、放給全場聽的是投影頁，
+   只在主持人分頁出聲等於全場實質上聽不到。這裡把 updateSpectateTimerUI()／
+   updateSpectateCoopTimerUI()／updateSpectateLastplaceTimerUI() 都補上對應
+   的 tickCountdownSound()／tickCoopCountdownSound() 呼叫，投影頁現在跟主持人
+   頁一樣會出聲（兩邊各自獨立的分頁、各自的 _timerAudio／_coopLastBeepAt
+   狀態，不會互相干擾，也不會有下面這段「兩邊都播」曾經踩過的音畫不同步
+   問題——倒數本身是每個分頁各自用 Date.now() 算的本地 tick，不是靠 server
+   廣播的一次性揭曉事件，沒有 poll 延遲造成的「時間點對不上」風險）。玩家
+   自己手機上的倒數（updatePlayerTimerUI()／updatePlayerCoopTimerUI()／
+   updatePlayerLastplaceTimerUI()）維持原樣不出聲——個人手機在會不會靜音、
+   會不會打擾其他人上跟大螢幕情境不同，使用者這次反饋的範圍也只到主持人／
+   投影頁，這裡不擴大範圍。公布正解／頒獎台皇冠揭曉／許願任務公布這三組音效
    （playRevealChime()/playPodiumPop()/playPodiumFanfare()/
    playCardFlipSound()，見（三十））原本是主持人頁跟投影頁「兩邊都播」——
    使用者透過 AskUserQuestion 明確選了這個做法。但後來實際使用時回報「投影頁
@@ -6069,27 +6249,35 @@ function renderSpectateQuestion(state){
    this local 200ms tick is what makes the chip count down smoothly between
    those moments instead of only moving when a poll happens to land. Also
    repaints the answered-count bar every tick from whatever state the last poll landed
-   (mirrors updateHostTimerUI on the host tab) — deliberately does NOT call
-   tickCountdownSound(); see the SPECTATE section doc comment for why this
-   view stays silent. */
+   (mirrors updateHostTimerUI on the host tab).
+   （六十九）使用者反饋倒數計時沒有音效——這個畫面原本刻意不出聲（見
+   SPECTATE 章節上方文件當時的理由：「主持人自己抓節奏用的工具音，沒理由
+   搬過來」），但實際上主持人主控板通常不是接喇叭的那一台，真正在放給全場
+   聽的是投影頁，只有主持人自己聽得到等於全場都聽不到。這裡補上
+   tickCountdownSound()——它引用的 _timerAudio 是整支程式的頂層變數，host／
+   spectate 是各自獨立的分頁（各自載入一份完整的 game.html），沒有跨分頁共用
+   狀態的疑慮，直接呼叫同一個函式就能各自獨立出聲。AudioContext 解鎖的部分
+   投影頁本來就已經處理過，見 `#spectate=` 開機分支呼叫 ensureAudioCtx() 的
+   註解。 */
 function updateSpectateTimerUI(state){
   if (!state) return;
   const chip = document.getElementById('spec-timer-chip');
   if (chip && state.questionStartAt){
     const limit = state.timeLimitMs || TIME_LIMIT_SECONDS * 1000;
-    let secs, urgent;
+    let secs, urgent, remainMs;
     if (state.graceActive){
-      const graceRemain = Math.max(0, 5000 - (Date.now() - (state.graceStartAt || Date.now())));
-      secs = Math.ceil(graceRemain / 1000);
+      remainMs = Math.max(0, 5000 - (Date.now() - (state.graceStartAt || Date.now())));
+      secs = Math.ceil(remainMs / 1000);
       urgent = true;
     } else {
-      const remain = Math.max(0, limit - (Date.now() - state.questionStartAt));
-      secs = Math.ceil(remain / 1000);
+      remainMs = Math.max(0, limit - (Date.now() - state.questionStartAt));
+      secs = Math.ceil(remainMs / 1000);
       urgent = secs <= 5;
     }
     chip.querySelector('.num').textContent = secs;
     chip.classList.toggle('urgent', urgent);
     document.body.classList.toggle('countdown-tint', urgent);
+    tickCountdownSound(remainMs);
   }
   const bar = document.getElementById('spec-answer-bar');
   if (bar){
@@ -6144,7 +6332,7 @@ function renderSpectateReveal(state){
     <div class="shell tight"><div class="col reveal-tight">
       <span class="eyebrow">🎂 壽星的選擇</span>
       ${isWarmup ? '<p class="warmup-note">🔥 暖身題．這題不計分</p>' : ''}
-      ${qtextHtml(q.text, "font-size:clamp(14px,2.1vw,19px);max-width:100%;width:100%", q.alignLeft)}
+      ${qtextHtml(q.text, "font-size:clamp(17px,2.6vw,23px);max-width:min(1000px,100%);width:100%", q.alignLeft)}
       ${shouxingChoice==null
         ? '<p class="sub" style="text-align:center">壽星這題沒來得及作答，這題大家都不計分</p>'
         : `<p class="reveal-answer-banner" id="spec-reveal-suspense">${isFirstRender
@@ -6274,43 +6462,35 @@ function renderSpectateAwards(state){
 function clearSpectateCoopCountdown(){
   if (spectateCoopCountdownHandle){ clearInterval(spectateCoopCountdownHandle); spectateCoopCountdownHandle = null; }
 }
+/* （六十九）同 renderHostAwardsPodium() 的改版，見 animateTopRevealSequence()
+   上方文件——輪流彈出大頭像→橫排定格，不再畫木頭頒獎台。isFirstRender（用
+   state.roundId 當 key，同 renderSpectateReveal()／renderPlayerReveal() 那套
+   既有判斷）只讓第一次進到這個畫面時播「依序跳出」的演出；同一輪之後每次
+   poll 重新渲染（分數／許願卡等其他狀態變化都會觸發整頁重畫）直接顯示
+   「已經橫排定格」的最終狀態，不重播。 */
 function renderSpectateAwardsPodium(state){
   clearSpectateCountdown();
   const top3 = (state.topIds||[]).map(id=>[id, state.players[id]]).filter(([,p])=>p);
-  // （六十四）同 renderHostAwardsPodium() 的修正：獎金金額改到全場結束後才
-  // 在 renderSpectateAwardsDone() 揭曉，這裡不再算/不再顯示。
-  // (二十九) 第一次進到這個畫面時，跟主持人頁一樣播「3rd→2nd→1st 依序跳出＋
-  // 撒花」；之後同一輪的每次 poll 重新渲染（分數／許願卡等其他狀態變化都會
-  // 觸發整頁重畫）就跳過動畫、直接顯示最終狀態，避免動畫一直重播閃爍——同一套
-  // 判斷方式用在 renderSpectateReveal()／renderPlayerReveal()。
   const key = (state.roundId||'') + '_podium';
   const isFirstRender = _lastSpecPodiumKey !== key;
   _lastSpecPodiumKey = key;
   render(`
     <div class="shell"><div class="col" style="align-items:center;text-align:center">
       <h1 class="marquee-title">最懂壽星<span class="hl">前三名</span></h1>
-      <div class="awards-layout">
-        <div class="podium-wrap">
-          <div class="podium" style="--pw:min(70vw, calc((100vh - 380px)*1.202), 620px)">
-            <img class="riser-img" src="${PODIUM_RISER_IMG}" alt="頒獎台">
-            ${top3[1]?podiumCharHtml(2,'spec-ap-2',top3[1][1]):''}
-            ${top3[0]?podiumCharHtml(1,'spec-ap-1',top3[0][1]):''}
-            ${top3[2]?podiumCharHtml(3,'spec-ap-3',top3[2][1]):''}
-          </div>
-          <div class="podium-labels">
-            ${top3[1]?podiumLabelHtml(2,'spec-ap-2',top3[1][1],String(top3[1][1].score)):''}
-            ${top3[0]?podiumLabelHtml(1,'spec-ap-1',top3[0][1],String(top3[0][1].score)):''}
-            ${top3[2]?podiumLabelHtml(3,'spec-ap-3',top3[2][1],String(top3[2][1].score)):''}
-          </div>
-        </div>
+      <div class="lp-topreveal-row${isFirstRender?'':' show'}" id="spec-topreveal-row">
+        ${[1,2,3].map(rank => `<div class="lp-topreveal-person">${top3[rank-1]?topRevealPersonHtml(rank,top3[rank-1][1]):''}</div>`).join('')}
       </div>
       ${top3.length? '' : '<p class="sub">這場沒有人猜，先跳過頒獎</p>'}
     </div></div>
+    <div class="lp-modal" id="spec-topreveal-modal" style="display:none">
+      <div class="lp-modal-card lp-topreveal-card" id="spec-topreveal-card"></div>
+    </div>
   `);
   if (isFirstRender){
-    animatePodiumReveal('spec-ap', true);
-  } else {
-    document.querySelectorAll('.podium .p').forEach(el => el.classList.add('show'));
+    const modalWrap = document.getElementById('spec-topreveal-modal');
+    const modalCard = document.getElementById('spec-topreveal-card');
+    const rowEl = document.getElementById('spec-topreveal-row');
+    animateTopRevealSequence(top3, modalWrap, modalCard, rowEl, null, true);
   }
 }
 function renderSpectateAwardsCoop(state){
@@ -6345,8 +6525,8 @@ function renderSpectateAwardsCoop(state){
   updateSpectateCoopTimerUI(state);
   spectateCoopCountdownHandle = setInterval(()=> updateSpectateCoopTimerUI(lastSpectateState || state), 200);
 }
-/* 只更新畫面，不呼叫 tickCoopCountdownSound() 之類的——倒數嗶聲只在主持人
-   畫面播，跟題目倒數的既有規則一樣（見 renderHostAwardsCoop 上方文件）。 */
+/* （六十九）補上倒數嗶聲——同 updateSpectateTimerUI() 上方那段文件的理由，
+   投影頁才是真正放給全場聽的畫面，倒數音效不該只留在主持人自己的分頁。 */
 function updateSpectateCoopTimerUI(state){
   const el = document.getElementById('spec-coop-countdown');
   if (!el || !state || !state.coopStartAt) return;
@@ -6356,6 +6536,7 @@ function updateSpectateCoopTimerUI(state){
   const ss = String(secs%60).padStart(2,'0');
   el.textContent = mm + ':' + ss;
   el.classList.toggle('urgent', remainMs <= COOP_URGENT_THRESHOLD_MS);
+  tickCoopCountdownSound(remainMs);
 }
 /* 這裡是揭曉合作／背叛結果的那一刻，撒花＋音效只在投影頁播（跟頒獎台
    podium-pop/card-flip 同一個既有理由：主持人自己點擊觸發的畫面是瞬間的，
@@ -6373,25 +6554,30 @@ function renderSpectateAwardsCoopResult(state){
   const meta = coopOutcomeMeta(outcome, champ);
   // （六十四）同 renderHostAwardsCoopResult() 的修正：不再算/不再顯示實際
   // 金額，只公布合作／背叛的選擇本身。
+  // （六十九）同 renderHostAwardsCoopResult() 的改版：疊 .lp-rules-card
+  // （＋放大用的 .lp-coopresult-card）比照 renderSpectateAwardsCoop() 佔滿
+  // .lp-inner，不再是飄在中間的小卡片。
   const key = (state.roundId||'') + '_coopresult';
   const isFirstRender = _lastSpecCoopResultKey !== key;
   _lastSpecCoopResultKey = key;
   render(`
-    <div class="shell"><div class="col" style="align-items:center;text-align:center">
-      <div class="lp-inner">
-        <span class="lp-eyebrow">🎭 談判結果公布</span>
-        <div class="lp-trio">
-          ${ids.map(id=>{
-            const p = state.players[id]; if (!p) return '';
-            const isForfeit = forfeits.includes(id);
-            const icon = choices[id]==='cooperate' ? '🤝🏻' : '😈';
-            return `<div class="lp-trio-person">${avatarSpan(p.avatar)}<span class="nm">${nameTag(p)}</span><span class="rk" style="font-size:22px">${icon}</span>${isForfeit? '<span class="rk" style="color:var(--alert)">（時間到，視為背叛）</span>' : ''}</div>`;
-          }).join('')}
-        </div>
-        <div class="lp-outcome-grid" style="grid-template-columns:1fr;max-width:420px">
-          <div class="lp-outcome-card happened">
-            <div class="combo">${meta.combo}</div>
-            <div class="desc">${meta.title}獎金金額稍後在頒獎結果一次揭曉。</div>
+    <div class="shell"><div class="col">
+      <div class="lp-inner" style="flex:1">
+        <div class="lp-rules-card lp-coopresult-card" style="text-align:center">
+          <h3 class="lp-rules-title">🎭 談判結果公布</h3>
+          <div class="lp-trio">
+            ${ids.map(id=>{
+              const p = state.players[id]; if (!p) return '';
+              const isForfeit = forfeits.includes(id);
+              const icon = choices[id]==='cooperate' ? '🤝🏻' : '😈';
+              return `<div class="lp-trio-person">${avatarSpan(p.avatar)}<span class="nm">${nameTag(p)}</span><span class="rk" style="font-size:34px">${icon}</span>${isForfeit? '<span class="rk" style="color:var(--alert)">（時間到，視為背叛）</span>' : ''}</div>`;
+            }).join('')}
+          </div>
+          <div class="lp-outcome-grid" style="grid-template-columns:1fr">
+            <div class="lp-outcome-card happened">
+              <div class="combo">${meta.combo}</div>
+              <div class="desc">${meta.title}獎金金額稍後在頒獎結果一次揭曉。</div>
+            </div>
           </div>
         </div>
       </div>
@@ -6481,6 +6667,11 @@ function startSpectateLastplaceGlow(){
     c.classList.toggle('glow', !onAccept);
   }, 700);
 }
+/* （六十九）使用者實測發現最後一名選擇畫面（投影頁）倒數沒有音效，這裡
+   一併補上——同 updateSpectateTimerUI()／updateSpectateCoopTimerUI() 上方
+   的理由，也借用跟 host 端同一顆 tickCoopCountdownSound() 節流器（同一支
+   分頁自己的頂層變數，跟 host 分頁不會互相干擾，理由同 hostLastplaceCountdownTick()
+   上方那段「借用 coop 倒數同一顆嗶聲節流器」的既有註解）。 */
 function updateSpectateLastplaceTimerUI(state){
   const el = document.getElementById('spec-lastplace-countdown');
   if (!el || !state || !state.lastplaceStartAt) return;
@@ -6488,6 +6679,7 @@ function updateSpectateLastplaceTimerUI(state){
   const secs = Math.ceil(remainMs/1000);
   el.textContent = '00:' + String(secs).padStart(2,'0');
   el.classList.toggle('urgent', remainMs <= COOP_URGENT_THRESHOLD_MS);
+  tickCoopCountdownSound(remainMs);
 }
 function renderSpectateAwardsDuel(state){
   clearSpectateCountdown();
