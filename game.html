@@ -93,7 +93,15 @@
   .sun-blob{
     position:absolute; left:var(--sx); top:var(--sy); width:var(--sz); height:var(--sz);
     border-radius:50%;
-    background:radial-gradient(circle, rgba(255,226,140,0.95) 0%, rgba(255,214,110,0.5) 40%, rgba(255,214,110,0) 72%);
+    /* （六十六）使用者反饋螢火蟲光斑「飽和度請稍微調高，目前太不清楚」——
+       原本的 rgba(255,226,140,…)／rgba(255,214,110,…) 是一組偏白、偏淡的
+       米黃色（RGB 三個分量彼此差距不大，飽和度本來就低，混在米色背景
+       （--cream 那組同樣偏米黃）裡容易糊成一片）。改成飽和度明顯更高的
+       金黃／琥珀色：中心 rgba(255,200,70,…)、外圈 rgba(255,170,40,…)，
+       RGB 分量差距拉大（尤其藍色分量從 110/140 壓到 40/70），色相更純、
+       跟背景的米色區隔更清楚；透明度數值本身沒動（只換顏色，不是使用者
+       這次要調的「濃度」，那是（四十）已經確認過 80% 的獨立設定）。 */
+    background:radial-gradient(circle, rgba(255,200,70,0.95) 0%, rgba(255,170,40,0.55) 40%, rgba(255,170,40,0) 72%);
     opacity:var(--op); will-change:transform,opacity;
     animation:
       sunBlobDrift var(--dur) ease-in-out var(--delay) infinite,
@@ -2223,6 +2231,7 @@ async function boot(){
     if (await verifyHostKey(sp)){
       SPECTATE_KEY = sp;
       ensureSpectateBadge();
+      ensureSpectateZoomControl();
       // （三十後續修正）投影頁現在自己會出聲（見 animatePodiumReveal()／
       // animateFinalLeaderboardReveal() 的 playSound 參數），這裡盡早嘗試解鎖
       // AudioContext——這個分頁通常是主持人點「🖥️ 開投影頁」用 window.open()
@@ -5461,6 +5470,51 @@ function ensureSpectateBadge(){
     + 'padding:4px 10px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.02em;pointer-events:none';
   document.body.appendChild(d);
 }
+/* （六十六）使用者反饋「用 HDMI 線接電視，投影頁比例很奇怪，這個大小不能
+   自行調整嗎」——問的其實是「能不能自己調整投影頁的顯示大小」。每台電視／
+   HDMI 輸出的實際解析度、瀏覽器縮放、超掃描（overscan）裁邊都不一樣，我
+   這邊沒有那台電視、猜不出正確的數字，與其硬猜一組新的固定尺寸（很可能
+   換一台電視或她重新接線又不對），不如直接給一個「自己現場調」的控制項：
+   投影頁右下角一個不擋畫面的縮放小工具（－ / 百分比 / ＋），用 CSS 的
+   zoom 屬性整頁等比縮放（等同瀏覽器內建的 Ctrl+ 縮放，vw/vh/clamp() 這些
+   既有的單位都會跟著一起縮放，不用另外改任何版面 CSS），選好的比例存進
+   localStorage（key: spectateZoomLevel），同一台電視/瀏覽器下次打開投影頁
+   會記得上次調整的結果，不用每次重調。只在 #spectate= 這個唯讀投影頁掛
+   這個控制項，主持人自己的操作畫面／玩家手機都不受影響。
+   放在右下角是刻意的：左上角已經有 #spec-badge、大廳畫面左下角另外有
+   .lobby-count-corner、右上角有 .lobby-qr-corner，右下角是唯一在所有
+   投影頁畫面（不只大廳）都保證空著的角落。 */
+const SPECTATE_ZOOM_STEP = 0.1, SPECTATE_ZOOM_MIN = 0.5, SPECTATE_ZOOM_MAX = 2.0;
+function getSpectateZoom(){
+  let v = 1;
+  try { v = parseFloat(localStorage.getItem('spectateZoomLevel') || '1'); } catch(e){}
+  return (isFinite(v) && v >= SPECTATE_ZOOM_MIN && v <= SPECTATE_ZOOM_MAX) ? v : 1;
+}
+function applySpectateZoom(v){
+  v = Math.min(SPECTATE_ZOOM_MAX, Math.max(SPECTATE_ZOOM_MIN, +v.toFixed(2)));
+  document.documentElement.style.zoom = v;
+  try { localStorage.setItem('spectateZoomLevel', String(v)); } catch(e){}
+  const label = document.getElementById('spec-zoom-label');
+  if (label) label.textContent = Math.round(v * 100) + '%';
+  return v;
+}
+function ensureSpectateZoomControl(){
+  if (document.getElementById('spec-zoom-ctrl')) return;
+  const d = document.createElement('div');
+  d.id = 'spec-zoom-ctrl';
+  d.style.cssText = 'position:fixed;bottom:8px;right:8px;z-index:40;display:flex;align-items:center;gap:2px;'
+    + 'background:rgba(46,36,24,.55);color:#fff;border-radius:999px;padding:3px;font-size:12px;font-weight:800;';
+  d.innerHTML =
+    '<button type="button" id="spec-zoom-minus" aria-label="縮小投影頁" '
+      + 'style="all:unset;cursor:pointer;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:50%;">－</button>'
+    + '<span id="spec-zoom-label" style="min-width:40px;text-align:center;">100%</span>'
+    + '<button type="button" id="spec-zoom-plus" aria-label="放大投影頁" '
+      + 'style="all:unset;cursor:pointer;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:50%;">＋</button>';
+  document.body.appendChild(d);
+  document.getElementById('spec-zoom-minus').onclick = () => applySpectateZoom(getSpectateZoom() - SPECTATE_ZOOM_STEP);
+  document.getElementById('spec-zoom-plus').onclick = () => applySpectateZoom(getSpectateZoom() + SPECTATE_ZOOM_STEP);
+  applySpectateZoom(getSpectateZoom());
+}
 /* Long-poll driven replacement for the old `setInterval(spectateTick, 1500)`
    — see runHostPollLoop() above for the general pattern and hostPollGen's
    comment for why a generation counter (not a boolean) guards this. This is
@@ -5646,18 +5700,77 @@ function playLobbyJoinPops(newIds, players){
 }
 /* 飄動文字的起點/飄移方向與距離/速度/大小/透明度全部用 Math.random() 現場
    決定——每次進大廳（或大廳有玩家加入/離開觸發重新渲染）都會重新排列一次，
-   不需要固定座標表，效果自然不會每次都一樣。 */
+   不需要固定座標表，效果自然不會每次都一樣。
+   （六十六）字級加倍（六十五）之後，使用者反饋常常疊到中央「Julia 生日
+   快樂」主標題，看不清楚——加一個「中央淨空區」：用 getBoundingClientRect()
+   實際量出 .lobby-hero（標題＋副標＋提示 pill 那一整塊）目前渲染出來的
+   位置（不用寫死的固定座標，畫面多寬多高、標題字級多大都會自動跟著量，
+   包括之後如果字級/文案又調整也不用回來改這裡），外擴一點緩衝距離變成
+   一個「禁區」，起點只從畫面上、下、左、右四條跟禁區還有一定距離的安全帶
+   裡挑（哪幾條帶夠寬/夠高就用哪幾條，四條輪流分配，人多的帶自然分到比較
+   多字）；飄移方向（dx/dy）也跟著限制——挑到「左」安全帶的字，飄移不能把
+   它推過禁區左邊界，其餘方向依此類推。動畫最遠只會飄到 dx/dy 的 1.7 倍
+   （見 lobbyFloatDrift 這個 keyframe 100% 那格），所以這裡用 1.7 倍反推
+   夾住的上限，讓整趟飄移路徑（不是只有起點）都不會蓋到中央主標題。真的
+   量不到 .lobby-hero（理論上不該發生，防呆用）就退回原本整片隨機。 */
 function spawnLobbyFloatWords(){
   const layer = document.getElementById('lobby-float-layer');
   if (!layer) return;
-  LOBBY_GREETINGS.forEach(g => {
+  const vw = window.innerWidth || 1, vh = window.innerHeight || 1;
+  const heroEl = document.querySelector('.lobby-hero');
+  const MARGIN = 3; // 禁區外擴緩衝，單位是「vw/vh 的百分比點數」
+  let box = null;
+  if (heroEl){
+    const r = heroEl.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0){
+      box = {
+        left: Math.max(0, r.left / vw * 100 - MARGIN),
+        right: Math.min(100, r.right / vw * 100 + MARGIN),
+        top: Math.max(0, r.top / vh * 100 - MARGIN),
+        bottom: Math.min(100, r.bottom / vh * 100 + MARGIN),
+      };
+    }
+  }
+  const regions = [];
+  if (box){
+    if (box.left - 4 >= 10) regions.push('left');
+    if (86 - box.right >= 10) regions.push('right');
+    if (box.top - 8 >= 10) regions.push('top');
+    if (82 - box.bottom >= 10) regions.push('bottom');
+  }
+  LOBBY_GREETINGS.forEach((g, gi) => {
     const el = document.createElement('span');
     el.className = 'lobby-float-word';
     el.textContent = g.t;
-    const sx = 4 + Math.random() * 82;
-    const sy = 8 + Math.random() * 74;
-    const dx = (Math.random() * 32 - 16).toFixed(1) + 'vw';
-    const dy = (Math.random() * 22 - 11).toFixed(1) + 'vh';
+    let sx, sy;
+    // dx/dy 的自由範圍（沒有禁區限制時的原始隨機區間）
+    let dxLo = -16, dxHi = 16, dyLo = -11, dyHi = 11;
+    if (regions.length){
+      const region = regions[gi % regions.length];
+      const EDGE_BUFFER = 2; // 留給禁區邊界的最後一點緩衝，避免貼著邊界剛好擦到
+      if (region === 'left'){
+        sx = 4 + Math.random() * (box.left - 4);
+        sy = 8 + Math.random() * 74;
+        dxHi = Math.max(dxLo, (box.left - sx - EDGE_BUFFER) / 1.7); // 不能往右飄進禁區
+      } else if (region === 'right'){
+        sx = box.right + Math.random() * (86 - box.right);
+        sy = 8 + Math.random() * 74;
+        dxLo = Math.min(dxHi, (box.right - sx + EDGE_BUFFER) / 1.7); // 不能往左飄進禁區
+      } else if (region === 'top'){
+        sx = 4 + Math.random() * 82;
+        sy = 8 + Math.random() * (box.top - 8);
+        dyHi = Math.max(dyLo, (box.top - sy - EDGE_BUFFER) / 1.7); // 不能往下飄進禁區
+      } else {
+        sx = 4 + Math.random() * 82;
+        sy = box.bottom + Math.random() * (82 - box.bottom);
+        dyLo = Math.min(dyHi, (box.bottom - sy + EDGE_BUFFER) / 1.7); // 不能往上飄進禁區
+      }
+    } else {
+      sx = 4 + Math.random() * 82;
+      sy = 8 + Math.random() * 74;
+    }
+    const dx = (dxLo + Math.random() * (dxHi - dxLo)).toFixed(1) + 'vw';
+    const dy = (dyLo + Math.random() * (dyHi - dyLo)).toFixed(1) + 'vh';
     const dur = (16 + Math.random() * 16).toFixed(1) + 's';
     const delay = (-Math.random() * 30).toFixed(1) + 's';
     const size = ((13 + Math.random() * 13) * 2).toFixed(0) + 'px';
