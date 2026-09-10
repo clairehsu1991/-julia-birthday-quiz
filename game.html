@@ -1139,8 +1139,8 @@
      置中——這樣「大」跟「滿版」兩個方向一起補足，不用另外開一個新的
      class。字級也一併放大一輪（標題／條列／押金提示都是），確保投影在
      大螢幕上還是看得清楚。*/
-  .lp-rules-card{ background:rgba(251,246,236,0.92); border-radius:28px; padding:clamp(28px,5vh,56px) clamp(28px,6vw,72px); width:100%; box-shadow:0 18px 46px rgba(46,36,24,0.18); }
-  .lp-rules-title{ font-family:'Fredoka',sans-serif; font-weight:600; font-size:clamp(26px,4.6vw,44px); margin:0 0 24px; text-align:center; }
+  .lp-rules-card{ background:rgba(251,246,236,0.92); border-radius:28px; padding:clamp(16px,3vh,56px) clamp(28px,6vw,72px); width:100%; box-shadow:0 18px 46px rgba(46,36,24,0.18); }
+  .lp-rules-title{ font-family:'Fredoka',sans-serif; font-weight:600; font-size:clamp(26px,4.6vw,44px); margin:0 0 12px; text-align:center; }
   .lp-rules-list{ list-style:none; margin:0 auto; padding:0; display:flex; flex-direction:column; gap:clamp(14px,2.4vh,22px); text-align:left; max-width:680px; }
   .lp-rules-list li{ display:flex; gap:14px; align-items:flex-start; font-size:clamp(16px,2.4vw,22px); line-height:1.6; color:var(--ink); }
   .lp-rules-list .ico{ flex:none; font-size:clamp(21px,3vw,28px); }
@@ -1172,16 +1172,41 @@
   .lp-penalty-box .tag{ font-size:9.5px; font-weight:800; color:var(--alert); letter-spacing:.03em; }
   .lp-penalty-box .txt{ font-size:13.5px; font-weight:800; color:var(--ink); margin-top:4px; line-height:1.5; }
 
-  .lp-trio{ display:flex; justify-content:center; gap:clamp(14px,3vw,32px); margin-bottom:16px; flex-wrap:wrap; }
+  .lp-trio{ display:flex; justify-content:center; gap:18px; margin-bottom:14px; flex-wrap:wrap; }
   .lp-trio-person{ display:flex; flex-direction:column; align-items:center; gap:4px; }
-  .lp-trio-person .av{ font-size:clamp(34px,5.5vw,48px); }
-  .lp-trio-person .nm{ font-size:11.5px; font-weight:800; }
-  .lp-trio-person .rk{ font-size:9.5px; color:var(--ink-dim); }
-  .lp-trio-cards{ display:flex; justify-content:center; gap:clamp(10px,2.4vw,20px); margin-top:2px; }
-  .lp-trio-card{ width:clamp(46px,7vw,64px); aspect-ratio:3/4; border-radius:10px; background:linear-gradient(160deg,#EADFC4,#F3E7CE); border:1.5px solid var(--line); display:flex; align-items:center; justify-content:center; font-size:20px; color:var(--ink-dim); box-shadow:0 4px 10px rgba(46,36,24,0.12); }
-  .lp-countdown{ margin-top:16px; font-family:'Fredoka',sans-serif; font-weight:600; font-size:clamp(22px,3.6vw,30px); background:#fff; border-radius:999px; padding:6px 24px; border:2px solid var(--line); color:var(--ink); }
+  /* （六十五）這一段的沿革，留著方便之後回頭查「為什麼是這幾個數字」：
+     使用者一開始反饋囚徒談判畫面「頭像圖片還是太小」，第一輪把選錯的
+     class（avatarSpan() 從不輸出的 .av，從沒生效過的死規則）改成正確覆寫
+     .lp-trio-person .avatar-badge，第二輪追加「請佔畫面的7成」後把頭像
+     衝到 230-240px（過程中還撞見一次「vw 係數沒扣掉 .col max-width:920px
+     這個版面寬度上限、算出來的尺寸讓三顆頭像在 .lp-trio 的 flex-wrap 下
+     擠到換行、整排爆版面」的 bug，細節見下面 trio-card 那段沿革說明）。
+     **交付後使用者才澄清：她要放大的其實是下面那三張蓋牌的
+     「？」神秘卡，不是頭像**——頭像「看得清楚是誰就可以」，不需要佔滿
+     畫面。所以這裡把頭像縮回一個「認得出來但不搶戲」的中等尺寸（改用固定
+     px 而不是 vh／vw，因為這裡不再是撐版面的主要元素，不需要再跟著螢幕
+     尺寸縮放），把騰出來的高度預算轉讓給下面的神秘卡。 */
+  .lp-trio-person .avatar-badge{ width:46px; height:46px; margin-right:0; }
+  .lp-trio-person .nm{ font-size:clamp(12px,1.4vw,14px); font-weight:800; }
+  .lp-trio-person .rk{ font-size:clamp(10.5px,1.2vw,12px); color:var(--ink-dim); }
+  .lp-trio-cards{ display:flex; justify-content:center; gap:14px; margin-top:2px; }
+  /* 「請佔畫面的7成」真正指的是這三張蓋牌卡——懸念感的主視覺本來就該是
+     它們，不是頭像。沿用旁邊頭像那次踩過的坑：寬度不能用 vw 去對「整個
+     視窗寬度」算，因為 .lp-rules-card 外層的 .col 有 max-width:920px，
+     螢幕越寬、.lp-rules-card 左右 padding（6vw）吃掉的量也越大，兩者相減
+     後卡片「內容實際可用寬度」在桌機／投影常見寬螢幕下會收斂在一個固定值
+     （實測約 776px），用視窗寬度去算一定會算超過、把三張卡擠到 flex-wrap
+     換行。改成只用 vh 當主要係數（矮螢幕才需要真的縮小，寬螢幕不太需要
+     繼續放大到超乎比例），像素上限抓 230px（3×230 + 2×14(間距) = 718px，
+     在 776px 的可用寬度內還留了安全餘裕）。字級（「？」）跟著用 vh 等比
+     放大，卡片本身的陰影/邊框沿用原本設計、只是整體放大。用 shots65.js
+     系列腳本在 1440×768／900／1080、1024×768 四種尺寸下實測
+     document.documentElement.scrollHeight 與 .lp-trio-cards 是否換行，
+     確認皆無捲動、三張卡維持單行後才定案。 */
+  .lp-trio-card{ width:min(25vh,210px); aspect-ratio:3/4; border-radius:16px; background:linear-gradient(160deg,#EADFC4,#F3E7CE); border:2px solid var(--line); display:flex; align-items:center; justify-content:center; font-size:min(9.5vh,76px); font-weight:800; color:var(--ink-dim); box-shadow:0 10px 24px rgba(46,36,24,0.18); }
+  .lp-countdown{ margin-top:14px; font-family:'Fredoka',sans-serif; font-weight:600; font-size:clamp(22px,3.6vw,30px); background:#fff; border-radius:999px; padding:6px 24px; border:2px solid var(--line); color:var(--ink); }
   .lp-countdown.urgent{ border-color:var(--alert); color:var(--alert); animation:pulse .5s ease infinite; }
-  .lp-countdown-note{ font-size:10.5px; color:var(--ink-dim); margin-top:7px; }
+  .lp-countdown-note{ font-size:10.5px; color:var(--ink-dim); margin-top:6px; }
 
   .lp-outcome-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:10px; margin-top:6px; width:100%; max-width:520px; }
   @media (max-width:560px){ .lp-outcome-grid{ grid-template-columns:1fr; } }
@@ -5635,7 +5660,7 @@ function spawnLobbyFloatWords(){
     const dy = (Math.random() * 22 - 11).toFixed(1) + 'vh';
     const dur = (16 + Math.random() * 16).toFixed(1) + 's';
     const delay = (-Math.random() * 30).toFixed(1) + 's';
-    const size = (13 + Math.random() * 13).toFixed(0) + 'px';
+    const size = ((13 + Math.random() * 13) * 2).toFixed(0) + 'px';
     const op = (0.35 + Math.random() * 0.4).toFixed(2);
     el.style.setProperty('--sx', sx + '%');
     el.style.setProperty('--sy', sy + '%');
