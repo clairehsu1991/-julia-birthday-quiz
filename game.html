@@ -1322,7 +1322,13 @@
   .lp-result-title{ font-family:'Fredoka',sans-serif; font-weight:600; font-size:clamp(28px,5vw,44px); margin:10px 0 10px; }
   .lp-result-card.win .lp-result-title{ color:var(--moss); }
   .lp-result-card.lose .lp-result-title{ color:var(--alert); }
-  .lp-result-sub{ font-size:clamp(15px,2.2vw,19px); color:var(--ink-dim); line-height:1.6; }
+  /* （七十九）使用者反映海帶拳結果卡下方那句說明文字，換行常常斷得很難看——
+     「…全身而退！」被斷成「…全身而」+「退！」，最後一行只剩一個字掛在那，
+     跟 .lp-rules-title 之前遇到的同一種問題（見上面那則（2026-09-XX）留言）
+     同一個原因：文字長度隨分數／人數變動，沒辦法手動塞斷行符號。沿用同一個
+     解法，加 text-wrap:balance 讓瀏覽器自己在换行時盡量把每行字數拉平，不會
+     再單獨留一兩個字在最後一行。 */
+  .lp-result-sub{ font-size:clamp(15px,2.2vw,19px); color:var(--ink-dim); line-height:1.6; text-wrap:balance; }
   .lp-penalty-box{ margin-top:18px; background:rgba(217,83,79,0.1); border:1.5px dashed var(--alert); border-radius:16px; padding:clamp(14px,2.4vw,20px) clamp(16px,2.8vw,24px); }
   .lp-penalty-box .tag{ font-size:clamp(12px,1.6vw,15px); font-weight:800; color:var(--alert); letter-spacing:.03em; }
   .lp-penalty-box .txt{ font-size:clamp(16px,2.4vw,21px); font-weight:800; color:var(--ink); margin-top:6px; line-height:1.55; }
@@ -1430,14 +1436,52 @@
   .lp-lastplace-reveal.docked{ inset:auto; top:8px; right:8px; background:transparent; z-index:41; }
   .lp-lastplace-card{ background:var(--cream); border-radius:26px; padding:clamp(24px,4vh,48px) clamp(24px,5vw,56px); text-align:center; box-shadow:0 22px 52px rgba(46,36,24,0.34); width:min(64vw,64vh,520px); transition:width .6s cubic-bezier(.22,.8,.32,1), padding .6s cubic-bezier(.22,.8,.32,1), border-radius .6s ease; }
   .lp-lastplace-card .lp-modal-avatar{ font-size:clamp(64px,13vmin,150px); }
-  .lp-lastplace-card .lp-modal-avatar .avatar-badge img{ width:clamp(90px,18vmin,200px); height:clamp(90px,18vmin,200px); }
+  /* （七十九）修這頁收起來的小徽章（見下面 .docked 那組留言）時，實測發現這裡
+     放大版的頭像其實也中鏢同一個問題：.avatar-badge 這個 span 本身還是
+     base 版的 width:22px;height:22px（見上面「頭像選擇」那組留言），是
+     display:inline-flex 容器；裡面的 <img> 想長到 clamp(90-200px) 卻被塞在
+     只有 22px 寬的 flex 容器裡，flex-shrink 預設值又是 1，瀏覽器在收縮這個
+     有內建比例的 replaced element 時，量出來的結果是「高度照樣吃到指定值，
+     寬度卻硬是照著圖片原始比例縮更多」——头像因此一直是比預期窄一截的
+     長條形，不是正方形，只是幅度不算誇張、截圖比對時不容易一眼看出來。
+     修法是把 .avatar-badge 這個容器本身也放大到跟裡面圖片同一個尺寸（不是
+     只放大圖片），容器夠大之後圖片改回 100%／100% 撐滿（跟一直沒出過問題
+     的 base 版 .avatar-badge img{width:100%;height:100%} 用同一招），flex
+     不需要再收縮任何東西，寬高才會真的一致。 */
+  .lp-lastplace-card .lp-modal-avatar .avatar-badge{ width:clamp(90px,18vmin,200px); height:clamp(90px,18vmin,200px); }
+  .lp-lastplace-card .lp-modal-avatar .avatar-badge img{ width:100%; height:100%; }
   .lp-lastplace-card .lp-modal-name{ font-size:clamp(24px,4.4vw,38px); margin-top:6px; }
   .lp-lastplace-card .lp-modal-sub{ font-size:clamp(13px,1.8vw,17px); margin-top:10px; }
-  .lp-lastplace-reveal.docked .lp-lastplace-card{ width:clamp(140px,18vmin,180px); padding:8px 6px; border-radius:14px; box-shadow:0 8px 18px rgba(46,36,24,0.24); }
-  .lp-lastplace-reveal.docked .lp-modal-kicker{ font-size:7px; }
-  .lp-lastplace-reveal.docked .lp-lastplace-card .lp-modal-avatar{ font-size:20px; margin:2px 0; }
-  .lp-lastplace-reveal.docked .lp-lastplace-card .lp-modal-avatar .avatar-badge img{ width:34px; height:34px; }
-  .lp-lastplace-reveal.docked .lp-lastplace-card .lp-modal-name{ font-size:11px; margin-top:0; }
+  /* （七十九）使用者截圖回報這個收起來的小徽章看起來比主畫面右上角的
+     QR code 小很多——追查發現徽章「外框」其實從一開始（見上面（六十四）
+     留言）就故意做成跟 .qr-holder.sm（clamp(140px,18vmin,180px)）一樣的
+     寬度，問題出在裡面的頭像圖片本身：舊版寫死 34px，只佔外框寬度不到
+     三成，旁邊留一大圈空白，QR code 卻是整塊圖片幾乎貼齊卡片內緣，兩者
+     擺一起自然一個明顯偏小。這裡改用一個 --dockw 自訂屬性存外框寬度（跟
+     .podium 的 --pw 同一招），頭像圖片跟表情符號 fallback 字級都用
+     calc(var(--dockw) * 比例) 換算，不管外框在 clamp 的哪個尺寸，頭像永遠
+     占外框寬度約 72%（留下的邊框比例對齊 QR code 卡片自己的留白手感），
+     兩個徽章在畫面上看起來份量才會一致。
+     實測發現只改 width 還不夠：基底 .lp-modal-card 規則帶了
+     `max-width:min(320px,86%)`（給一般置中大彈窗用的上限），這裡的外層
+     `.lp-lastplace-reveal.docked` 是沒設寬度、靠 flex 自動收縮貼合內容的
+     容器，86% 是對這個「還在算多寬」的容器算的，Chromium 在這種收縮容器
+     裡解析百分比 max-width 會算出一個比預期小的值（實測跟卡片自己最終
+     寬度形成迴圈，86%×140≈120px，徽章因此又被壓回去），把 140-180px 的
+     width 又蓋掉一截。這裡額外把 max-width 蓋成 none，卡片實際寬度才會
+     真的等於 --dockw，不會被這條原本只是為了限制「一般大彈窗」寬度、
+     跟收起來的小徽章毫無關係的上限意外咬到。
+     跟上面「放大版頭像」那則留言同一個原因：一開始只放大 img 本身
+     （width/height:calc(var(--dockw)*0.72)），量出來寬邊一樣被 .avatar-badge
+     固定的 22px flex 容器壓縮成比高邊窄一截的長條形。這裡改成連
+     .avatar-badge 容器本身都一起放大到 calc(var(--dockw)*0.72)，圖片改回
+     100%／100% 撐滿容器，寬高才會真的相等。 */
+  .lp-lastplace-reveal.docked .lp-lastplace-card{ --dockw:clamp(140px,18vmin,180px); width:var(--dockw); max-width:none; padding:8px 6px; border-radius:14px; box-shadow:0 8px 18px rgba(46,36,24,0.24); }
+  .lp-lastplace-reveal.docked .lp-modal-kicker{ font-size:9px; }
+  .lp-lastplace-reveal.docked .lp-lastplace-card .lp-modal-avatar{ font-size:calc(var(--dockw) * 0.48); margin:2px 0; }
+  .lp-lastplace-reveal.docked .lp-lastplace-card .lp-modal-avatar .avatar-badge{ width:calc(var(--dockw) * 0.72); height:calc(var(--dockw) * 0.72); }
+  .lp-lastplace-reveal.docked .lp-lastplace-card .lp-modal-avatar .avatar-badge img{ width:100%; height:100%; }
+  .lp-lastplace-reveal.docked .lp-lastplace-card .lp-modal-name{ font-size:13px; margin-top:2px; }
   .lp-lastplace-reveal.docked .lp-lastplace-card .lp-modal-sub{ display:none; }
   /* display:none/.show 而不是靠 [hidden] 屬性——這個 class 自己就要設
      display:flex，跟瀏覽器內建的 [hidden]{display:none} UA 樣式撞在一起時，
@@ -2346,6 +2390,26 @@ function renderLbRestList(rest, startRank, opts){
    renderLbRestList() 一樣是純 DOM 操作、共用同一個 #final-leaderboard-rest
    容器（把它從「只放6+名」升級成「full」模式放全部人），呼叫時把上面
    #final-leaderboard 那個前5名靜態清單藏起來，避免前5名同時出現兩次。 */
+let _lbMarqueeSig = null;
+let _lbMarqueeStartAt = null;
+/* （七十九）使用者反映「投影頁的排行榜滾動效果不見了」——追查後發現動畫
+   其實沒有壞，是被反覆打斷、看起來幾乎沒在動。renderSpectateFinal() 已結算
+   分支每次收到 hostState 有任何變化（哪怕是跟排行榜完全無關的變化，例如
+   同時間有賓客在許願牆送出祝福卡——見該函式上方「（四十三）」那則留言）都會
+   整頁重畫、重新呼叫這個函式，而這裡原本每次都是從頭新建一份 track，CSS
+   animation 也跟著從 0% 重新起跑。正式派對現場許願牆的祝福卡送出頻率可能
+   每 1-2 秒就有一次，遠比跑完一輪跑馬燈（實測 20 秒以上）短得多，實際效果
+   是捲動畫面反覆被重置回最開頭那一小段，肉眼幾乎看不出真的在捲——不是
+   效果真的消失，是每次都被打斷重播片頭。
+   修法：用一個模組層級的簽章（每位玩家 id+分數）比對這次要顯示的名單跟
+   上次是否相同——「最終排行榜」畫面顯示期間分數本來就不會再變動（只有
+   restartSameGame() 開新的一輪才會變，那時 roundId 也會跟著換，
+   _lastSpecFinalKey 判斷會把它當成全新一輪，isFirstRender 重新走一次完整
+   動畫序列，這裡的簽章也會自然跟著變），所以正常情況下每次重畫都會判定
+   「名單沒變」，沿用同一個起始時間戳記換算「照理說現在應該捲到哪裡」，
+   用負值 animation-delay 讓新建的 track 直接接著那個進度播，視覺上不管中途
+   被重畫幾次都跟沒被打斷一樣連續；只有名單真的變了才視為新的一輪，起始
+   時間歸零重算。 */
 function renderLbFullMarquee(all, opts){
   opts = opts || {};
   const topStatic = document.getElementById('final-leaderboard');
@@ -2355,6 +2419,8 @@ function renderLbFullMarquee(all, opts){
   restEl.classList.add('full');
   restEl.classList.remove('scrolling');
   if (!all.length){ restEl.innerHTML = ''; return; }
+  const sig = all.map(([id,p])=> id + ':' + p.score).join(',');
+  if (sig !== _lbMarqueeSig){ _lbMarqueeSig = sig; _lbMarqueeStartAt = null; }
   const rowsHtml = all.map(([id,p],i)=> finalRowHtml(i+1, p, { pid: id })).join('');
   restEl.innerHTML = `<div class="lb-rest-track">${rowsHtml}</div>`;
   const track = restEl.querySelector('.lb-rest-track');
@@ -2367,7 +2433,11 @@ function renderLbFullMarquee(all, opts){
     const unit = rowsHtml + seam;
     track.innerHTML = unit + unit; // 複製一份（含分隔列），動畫跑到 -50% 正好無縫接回開頭
     const singleHeight = track.scrollHeight / 2;
-    track.style.animationDuration = Math.max(8, singleHeight / 26).toFixed(1) + 's';
+    const durationSec = Math.max(8, singleHeight / 26);
+    track.style.animationDuration = durationSec.toFixed(1) + 's';
+    if (_lbMarqueeStartAt == null) _lbMarqueeStartAt = Date.now();
+    const elapsedSec = ((Date.now() - _lbMarqueeStartAt) / 1000) % durationSec;
+    track.style.animationDelay = (-elapsedSec).toFixed(2) + 's';
     restEl.classList.add('scrolling');
   }
   if (opts.fade){
@@ -5060,17 +5130,27 @@ function renderHostAwards(){
 /* （六十九）改版：不再畫木頭頒獎台，直接輪流彈出前三名大頭像→橫排定格，
    見 animateTopRevealSequence() 上方那段完整的沿革說明。彈窗/橫排都不需要
    isFirstRender 判斷——renderHostAwardsPodium() 本身就是 goAwards() 觸發的
-   一次性導覽渲染（不是掛在 poll 迴圈上），跟其他 renderHostXxx() 一樣。 */
+   一次性導覽渲染（不是掛在 poll 迴圈上），跟其他 renderHostXxx() 一樣。
+   （七十九）使用者反映這頁（跟投影頁的 renderSpectateAwardsPodium()）內容
+   整個貼在畫面上緣、下面留一大片空白，跟本場最後一名結果卡（見
+   renderHostAwardsResult()／resultCardHtml() 上方留言）改版前是同一種問題：
+   .col 本身沒有 justify-content，子元素自然堆在頂端。修法照搬同一招——把
+   標題／前三名橫排／空猜提示這些「應該置中放大」的內容包進
+   `<div class="lp-inner" style="flex:1">`，靠 .lp-inner 自己的
+   justify-content:center 在扣掉 hostNav／下方按鈕列之後的剩餘空間置中，不用
+   另外發明新樣式。 */
 function renderHostAwardsPodium(){
   const top3 = (hostState.topIds||[]).map(id=>[id, hostState.players[id]]).filter(([,p])=>p);
   render(`
-    <div class="shell"><div class="col" style="align-items:center;text-align:center">
+    <div class="shell"><div class="col">
       ${hostNav(true)}
-      <h1 class="marquee-title">最懂壽星<span class="hl">前三名</span></h1>
-      <div class="lp-topreveal-row" id="lp-topreveal-row">
-        ${[1,2,3].map(rank => `<div class="lp-topreveal-person">${top3[rank-1]?topRevealPersonHtml(rank,top3[rank-1][1]):''}</div>`).join('')}
+      <div class="lp-inner" style="flex:1">
+        <h1 class="marquee-title">最懂壽星<span class="hl">前三名</span></h1>
+        <div class="lp-topreveal-row" id="lp-topreveal-row">
+          ${[1,2,3].map(rank => `<div class="lp-topreveal-person">${top3[rank-1]?topRevealPersonHtml(rank,top3[rank-1][1]):''}</div>`).join('')}
+        </div>
+        ${top3.length? '' : '<p class="sub">這場沒有人猜，先跳過頒獎</p>'}
       </div>
-      ${top3.length? '' : '<p class="sub">這場沒有人猜，先跳過頒獎</p>'}
       <div class="btn-row" style="margin-top:6px;display:none" id="lp-topreveal-btnrow">
         <button class="btn" onclick="goAwardsChallengeIntro()">🤝🏻😈 一分鐘囚徒談判 →</button>
       </div>
@@ -6386,6 +6466,72 @@ function updateSpectateTimerUI(state){
     if (lbl) lbl.textContent = '已作答 ' + answered + ' / ' + total;
   }
 }
+/* （七十九）使用者反映投影頁的公佈答案頁「整體都這麼小」，同時要求「維持
+   一頁大小」不能捲動。這一頁沿用主持人端 renderHostReveal() 的 .reveal-tight
+   收緊樣式（見上面「主持人揭曉頁」那則留言）——那組 clamp() 數字當初是照著
+   主持人自己筆電瀏覽器視窗（常見高度約 700px 上下）量出來的「保證塞得下」
+   上限，投影頁如果是真的整片鋪滿的大投影幕／電視（1280×720 到 1920×1080
+   都可能遇到），可用的高度、寬度其實比 700px 那組基準寬裕很多，但 clamp()
+   的 px 上限已經先把字級／間距鎖住了，畫面自然顯得比投影幕本身小一大截、
+   `.col` 自己的 920px 版寬上限更是讓寬螢幕兩側留下大片空白。
+   跟 .lobby-hero 那次「zoom:2 整塊放大」（見上面（六十八）留言）是同一招，
+   但那裡人數固定、內容量幾乎不變，可以直接寫死倍率；揭曉頁的內容量會隨
+   題目文字長短／排行榜人數變動，寫死倍率在內容多的那幾輪可能撐爆、內容少
+   的那幾輪又放大不夠。這裡改成渲染完先在 zoom:1（原始 tight 尺寸）量一次
+   實際內容的 scrollWidth/scrollHeight，分別算出「塞到約 78% 螢幕高」跟
+   「塞到約 94% 螢幕寬」兩個候選倍率，取比較保守（較小）的那個當 zoom 值，
+   套用後再量一次實際結果，萬一還超出 95% 螢幕高這個安全上限（留一點緩衝，
+   不要真的頂到底），按超出比例再往下修一次收斂——不管題目多長、排行榜幾人
+   都不會需要捲動，也不會因為內容剛好很少就放大到誇張的比例。只有投影頁
+   （renderSpectateReveal()）呼叫這個函式，主持人自己筆電上的
+   renderHostReveal() 維持原本 tight 尺寸不變——那邊本來就是照筆電視窗在調，
+   換算基準不一樣，使用者這次反映的也只有投影頁。
+   （實測補充）一開始直接量 wrap.scrollHeight/scrollWidth 得到的其實不是
+   「內容真正需要的高度」——`.col` 本身是 `.shell`（display:flex;
+   flex-direction:column）底下 `flex:1` 的子元素，即使內容沒那麼高，
+   flex-grow 也會把它撐滿 `.shell` 扣掉留白後的剩餘空間，量出來的
+   scrollHeight 幾乎恆等於「可用高度」本身（測了 4 種螢幕高度，比例永遠
+   卡在同一個百分比，就是這個原因），拿來當「內容多高」的依據會整個算錯。
+   改成量 `.col` 每個直接子元素（.eyebrow／qtext／排行榜面板…）各自的
+   getBoundingClientRect()，取「最上面子元素的頂邊」到「最下面子元素的
+   底邊」這段距離，才是內容實際佔用的高度，不受父層 flex-grow 撐滿與否
+   影響；寬度同理也改成量子元素左右邊界的跨距，而不是容器自己的
+   scrollWidth（雖然寬度這邊沒有 flex-grow 撐滿的問題——`.col` 寬度是
+   width:100%/max-width:920px 的一般盒模型，但統一用同一套量法比較不容易
+   之後改版時又踩到同樣的陷阱）。 */
+function fitSpectateRevealScale(){
+  const wrap = document.getElementById('spec-reveal-inner');
+  if (!wrap) return;
+  const measure = () => {
+    const kids = Array.prototype.slice.call(wrap.children);
+    if (!kids.length) return { h: 0, w: 0 };
+    let top = Infinity, bottom = -Infinity, left = Infinity, right = -Infinity;
+    kids.forEach(k => {
+      const r = k.getBoundingClientRect();
+      if (r.top < top) top = r.top;
+      if (r.bottom > bottom) bottom = r.bottom;
+      if (r.left < left) left = r.left;
+      if (r.right > right) right = r.right;
+    });
+    return { h: bottom - top, w: right - left };
+  };
+  wrap.style.zoom = 1;
+  const natural = measure();
+  if (!natural.h || !natural.w) return;
+  const targetH = window.innerHeight * 0.78;
+  const targetW = window.innerWidth * 0.94;
+  let z = Math.min(targetH / natural.h, targetW / natural.w);
+  z = Math.max(1, Math.min(z, 1.8));
+  wrap.style.zoom = z;
+  const after = measure();
+  const safeH = window.innerHeight * 0.95;
+  const safeW = window.innerWidth * 0.97;
+  if (after.h > safeH || after.w > safeW){
+    const shrink = Math.min(safeH / after.h, safeW / after.w);
+    z = Math.max(1, z * shrink);
+    wrap.style.zoom = z;
+  }
+}
 function renderSpectateReveal(state){
   clearSpectateCountdown();
   const q = state.questions[state.questionIndex];
@@ -6427,7 +6573,7 @@ function renderSpectateReveal(state){
     prevRanked = prevRankedFull.filter(([id]) => visibleIds.has(id));
   }
   render(`
-    <div class="shell tight"><div class="col reveal-tight">
+    <div class="shell tight"><div class="col reveal-tight" id="spec-reveal-inner">
       <span class="eyebrow">🎂 壽星的選擇</span>
       ${isWarmup ? '<p class="warmup-note">🔥 暖身題．這題不計分</p>' : ''}
       ${qtextHtml(q.text, "font-size:clamp(17px,2.6vw,23px);max-width:min(1000px,100%);width:100%", q.alignLeft)}
@@ -6465,6 +6611,7 @@ function renderSpectateReveal(state){
       </div>
     </div></div>
   `);
+  fitSpectateRevealScale();
   animateOptionBars(document, 150, !isFirstRender);
   if (isFirstRender && shouxingChoice != null){
     setTimeout(()=>{
@@ -6572,13 +6719,17 @@ function renderSpectateAwardsPodium(state){
   const key = (state.roundId||'') + '_podium';
   const isFirstRender = _lastSpecPodiumKey !== key;
   _lastSpecPodiumKey = key;
+  // （七十九）跟 renderHostAwardsPodium() 同一個修法：包一層
+  // `.lp-inner{flex:1}` 讓內容置中放大，不要貼在畫面上緣，見該函式上方留言。
   render(`
-    <div class="shell"><div class="col" style="align-items:center;text-align:center">
-      <h1 class="marquee-title">最懂壽星<span class="hl">前三名</span></h1>
-      <div class="lp-topreveal-row${isFirstRender?'':' show'}" id="spec-topreveal-row">
-        ${[1,2,3].map(rank => `<div class="lp-topreveal-person">${top3[rank-1]?topRevealPersonHtml(rank,top3[rank-1][1]):''}</div>`).join('')}
+    <div class="shell"><div class="col">
+      <div class="lp-inner" style="flex:1">
+        <h1 class="marquee-title">最懂壽星<span class="hl">前三名</span></h1>
+        <div class="lp-topreveal-row${isFirstRender?'':' show'}" id="spec-topreveal-row">
+          ${[1,2,3].map(rank => `<div class="lp-topreveal-person">${top3[rank-1]?topRevealPersonHtml(rank,top3[rank-1][1]):''}</div>`).join('')}
+        </div>
+        ${top3.length? '' : '<p class="sub">這場沒有人猜，先跳過頒獎</p>'}
       </div>
-      ${top3.length? '' : '<p class="sub">這場沒有人猜，先跳過頒獎</p>'}
     </div></div>
     <div class="lp-modal" id="spec-topreveal-modal" style="display:none">
       <div class="lp-modal-card lp-topreveal-card" id="spec-topreveal-card"></div>
@@ -7592,11 +7743,46 @@ function renderPlayerAwards(state){
     `);
     return;
   }
-  // coopResult / duel / result — all host/spectate-controlled; nothing for
-  // any individual phone to do here, same neutral waiting shot the old
-  // rps/picking stages used for a player not directly involved this
+  // （八十）使用者反饋：海帶拳（duel）進行中，手機上卻跟其他旁觀階段
+  // 一樣顯示通用的「頒獎典禮進行中／看主畫面囉～」，完全看不出「現在是
+  // 海帶拳」——對正在猜拳的當事人兩位（最後一名／獎金最高者）尤其奇怪，
+  // 他們人明明就在對戰，手機卻一個字都沒提到海帶拳。拆成兩種畫面：
+  // 當事人兩位看得到對手是誰、目前比分（duelScore 隨 recordDuelRound()
+  // 每次 sSet 都會 poll 推播過來，所以分數是即時的，不用自己另外倒數／
+  // 送出什麼），其他旁觀者則看到「OOO vs OOO 海帶拳進行中」而不是完全
+  // 沒有名字的通用文字。
+  if (stage === 'duel'){
+    const last = state.players ? state.players[state.lastPlaceId] : null;
+    const champ = state.players ? state.players[state.prizeChampionId] : null;
+    const score = state.duelScore || { last:0, champ:0 };
+    const amDuelist = PLAYER_ID === state.lastPlaceId || PLAYER_ID === state.prizeChampionId;
+    if (amDuelist){
+      const oppo = PLAYER_ID === state.lastPlaceId ? champ : last;
+      render(`
+        <div class="shell"><div class="center">
+          <div style="font-size:54px">🥊</div>
+          <h1 class="marquee-title" style="font-size:clamp(22px,6vw,32px)">海帶拳・三戰兩勝</h1>
+          <p class="sub">你 vs ${oppo?esc(oppo.name):'對方'}</p>
+          <div class="lp-countdown" style="font-size:clamp(26px,7vw,38px)">${score.last} : ${score.champ}</div>
+          <p class="sub" style="margin-top:14px">現場猜拳，主持人在主畫面即時計分</p>
+        </div></div>
+      `);
+      return;
+    }
+    render(`
+      <div class="shell"><div class="center">
+        <div style="font-size:54px">🥊</div>
+        <h1 class="marquee-title" style="font-size:clamp(22px,6vw,32px)">海帶拳・三戰兩勝進行中</h1>
+        <p class="sub">${last?esc(last.name):'最後一名'} vs ${champ?esc(champ.name):'獎金最高者'}，看主畫面看戰況</p>
+      </div></div>
+    `);
+    return;
+  }
+  // challengeIntro / coopResult / result — all host/spectate-controlled;
+  // nothing for any individual phone to do here, same neutral waiting shot
+  // the old rps/picking stages used for a player not directly involved this
   // particular beat of the ceremony.
-  if (stage === 'challengeIntro' || stage === 'coopResult' || stage === 'duel' || stage === 'result'){
+  if (stage === 'challengeIntro' || stage === 'coopResult' || stage === 'result'){
     render(`
       <div class="shell"><div class="center">
         <div style="font-size:54px">🎉</div>
