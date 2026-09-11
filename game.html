@@ -1292,8 +1292,13 @@
   .lp-choice-btn{ flex:1 1 180px; max-width:210px; border-radius:16px; padding:14px 12px; text-align:center; font-weight:800; border:2px solid var(--line); background:#fff; cursor:pointer; }
   .lp-choice-btn .big{ font-size:22px; display:block; margin-bottom:5px; }
   .lp-choice-btn .lbl{ font-size:12.5px; color:var(--ink); }
-  .lp-choice-btn.challenge{ border-color:var(--coral); background:rgba(232,101,75,0.08); }
-  .lp-choice-btn.challenge .lbl{ color:var(--coral); }
+  /* （七十八）原本這裡有 .lp-choice-btn.challenge（背叛／挑戰那顆按鈕的
+     coral 邊框＋淡紅底），使用者反饋兩顆選項顏色不一樣，會讓玩家誤以為
+     「紅色那顆已經被預先選起來」。這兩顆按鈕其實是平等的兩個選項、沒有
+     哪個是預設值，拿掉這個 modifier class（連同 renderPlayerCoopChoice()／
+     renderPlayerLastplaceChoice() 按鈕上的 class="challenge" 一起移除），
+     兩顆在還沒點之前都用同一套白底樣式，真正點下去之後畫面會直接換成
+     「送出中…」／「已送出」，不需要再靠顏色區分「這顆是哪個選項」。 */
   .lp-hostpanel-note{ font-size:11px; color:var(--ink-dim); margin-top:12px; background:rgba(255,255,255,0.65); border-radius:999px; padding:5px 14px; display:inline-block; }
 
   /* （六十九）使用者反饋「本場最後一名」結果頁（resultCardHtml()，只有
@@ -1804,6 +1809,26 @@ async function sSet(key, value){
     noteRev(data);
     return data;
   } catch(e){ console.error('storage set failed', e); return null; }
+}
+/* （七十八）sSet() 本來就把 fetch 失敗／逾時吞掉直接回傳 null，這對「輪詢
+   同步一般狀態」很安全（下一輪自然會再試），但對「玩家在限時挑戰畫面上
+   點一次僅有一次機會的選擇」（submitPlayerCoopChoice／
+   submitPlayerLastplaceChoice）不夠——這兩處原本是「先樂觀顯示已送出、
+   再背景 sSet()」，如果那次 sSet() 剛好網路不穩失敗，畫面已經騙玩家說
+   「已送出」，實際上伺服器完全沒收到，倒數結束後主畫面/其他人的結果會
+   顯示這位玩家「沒有選擇」——這是使用者實測抓到的真實 bug。sSetWithRetry()
+   包一層重試（預設 3 次、每次間隔遞增），並把「有沒有真的成功」的結果
+   回傳給呼叫端，讓呼叫端只在真的成功時才顯示「已送出」，失敗時改顯示
+   錯誤訊息、把按鈕還給玩家重新點一次，而不是無條件假裝成功。 */
+async function sSetWithRetry(key, value, attempts, baseDelayMs){
+  attempts = attempts || 3;
+  baseDelayMs = baseDelayMs == null ? 500 : baseDelayMs;
+  for (let i = 0; i < attempts; i++){
+    const r = await sSet(key, value);
+    if (r) return true;
+    if (i < attempts - 1) await new Promise(res => setTimeout(res, baseDelayMs * (i + 1)));
+  }
+  return false;
 }
 async function sList(prefix){
   try{
@@ -5636,6 +5661,15 @@ function recordDuelRound(winnerSide){
 /* ============================================================
    HOST: 結果公布 (awardsStage 'result') — 'shame' / 'win' / 'lose'
    ============================================================ */
+/* （七十八）使用者反饋這頁「靠上」，不是置中——（六十九）那次修正只調了
+   .lp-result-card 自己的尺寸（見上方 CSS 註解），沒有動外層容器，導致
+   renderHostAwardsResult()／renderSpectateAwardsResult() 的 .col 仍然是
+   預設從上往下排列的 flex column、卡片只佔它自然高度，下面大片空間完全
+   沒用到。改法跟這場其他所有「大螢幕單卡置中」畫面（renderHostAwardsDuel()／
+   renderHostAwardsCoopResult() 等）一致：卡片外面包一層
+   `<div class="lp-inner" style="flex:1">`，靠 .lp-inner 自己的
+   justify-content:center 把卡片垂直置中在 .col 裡「扣掉導覽列／繼續按鈕」
+   剩下的空間正中央，不用另外調卡片本身的尺寸或新增自訂 CSS。 */
 function resultCardHtml(state, last){
   const result = state.duelResult;
   const name = last ? esc(last.name) : '最後一名';
@@ -5671,9 +5705,11 @@ function resultCardHtml(state, last){
 function renderHostAwardsResult(){
   const last = hostState.players[hostState.lastPlaceId];
   render(`
-    <div class="shell"><div class="col" style="align-items:center;text-align:center">
+    <div class="shell"><div class="col">
       ${hostNav(true)}
-      ${resultCardHtml(hostState, last)}
+      <div class="lp-inner" style="flex:1">
+        ${resultCardHtml(hostState, last)}
+      </div>
       <div class="btn-row" style="margin-top:14px">
         <button class="btn" onclick="finishAwardsCeremony()">繼續 →</button>
       </div>
@@ -6768,8 +6804,10 @@ function renderSpectateAwardsResult(state){
   clearSpectateCoopCountdown();
   const last = state.players[state.lastPlaceId];
   render(`
-    <div class="shell"><div class="col" style="align-items:center;text-align:center">
-      ${resultCardHtml(state, last)}
+    <div class="shell"><div class="col">
+      <div class="lp-inner" style="flex:1">
+        ${resultCardHtml(state, last)}
+      </div>
     </div></div>
   `);
 }
@@ -7357,11 +7395,17 @@ function renderPlayerAnswerLog(){
 }
 /* ---------- PLAYER: 頒獎典禮 ---------- */
 /* coopChoiceSubmittedToken remembers which coopRoundToken THIS phone has
-   already submitted a choice for — same "compare against the current round
-   token" pattern the old rpsThrownToken used for the deleted RPS throw
-   screen. As long as it matches the state's current token, we've submitted
-   and should show the "已送出，等其他人" view instead of the two buttons. */
+   already CONFIRMED submitted a choice for (server write succeeded) — same
+   "compare against the current round token" pattern the old rpsThrownToken
+   used for the deleted RPS throw screen. As long as it matches the state's
+   current token, we've submitted and should show the "已送出，等其他人" view.
+   （七十八）新增 coopChoicePendingToken／coopChoiceFailedToken：分別記錄
+   「這個 round token 目前正在送出、還沒有結果」跟「這個 round token 上一次
+   送出失敗了」，讓 submitPlayerCoopChoice() 可以在真的送出成功之前都不
+   顯示「已送出」——見該函式上方的完整說明。 */
 let coopChoiceSubmittedToken = null;
+let coopChoicePendingToken = null;
+let coopChoiceFailedToken = null;
 function clearPlayerCoopCountdown(){
   if (playerCoopCountdownHandle){ clearInterval(playerCoopCountdownHandle); playerCoopCountdownHandle = null; }
 }
@@ -7379,6 +7423,8 @@ function updatePlayerCoopTimerUI(state){
    'coop' branch below gates the call. */
 function renderPlayerCoopChoice(state){
   const submitted = coopChoiceSubmittedToken === state.coopRoundToken;
+  const pending = coopChoicePendingToken === state.coopRoundToken;
+  const failed = coopChoiceFailedToken === state.coopRoundToken;
   render(`
     <div class="shell"><div class="center">
       <span class="eyebrow">🤝🏻😈 一分鐘囚徒談判</span>
@@ -7386,11 +7432,14 @@ function renderPlayerCoopChoice(state){
       <div class="lp-countdown" id="player-coop-countdown">01:00</div>
       ${submitted ? `
         <p class="sub" style="font-weight:700;margin-top:14px">已送出，等其他人…</p>
+      ` : pending ? `
+        <p class="sub" style="font-weight:700;margin-top:14px">送出中…</p>
       ` : `
-        <p class="sub">選好後不能反悔，倒數結束才會一起公布</p>
+        <p class="sub">點下去就會立刻送出，選好後不能反悔，倒數結束才會一起公布</p>
+        ${failed ? '<p class="sub" style="color:var(--alert);font-weight:700">剛剛網路不穩，沒有送出成功，請重新點一次</p>' : ''}
         <div class="lp-choice-row">
           <button class="lp-choice-btn" onclick="submitPlayerCoopChoice('cooperate')"><span class="big">🤝🏻</span><span class="lbl">合作</span></button>
-          <button class="lp-choice-btn challenge" onclick="submitPlayerCoopChoice('betray')"><span class="big">😈</span><span class="lbl">背叛</span></button>
+          <button class="lp-choice-btn" onclick="submitPlayerCoopChoice('betray')"><span class="big">😈</span><span class="lbl">背叛</span></button>
         </div>
       `}
     </div></div>
@@ -7399,24 +7448,38 @@ function renderPlayerCoopChoice(state){
   clearPlayerCoopCountdown();
   playerCoopCountdownHandle = setInterval(()=> updatePlayerCoopTimerUI(lastPlayerState || state), 200);
 }
-/* Optimistic-then-persist, exactly the shape the deleted submitPlayerRpsHand()
-   used: mark coopChoiceSubmittedToken and re-render to the "已送出" view
-   BEFORE the network write resolves, so a slow/flaky connection can't leave
-   the buttons tappable twice — same reasoning as that old function's own
-   comment on this exact UX pattern. */
+/* （七十八）原本是「先樂觀顯示已送出、再背景 sSet()」（見下面保留的舊註解
+   說明原本的用意），使用者實測抓到反例：玩家那次網路不穩，sSet() 悄悄
+   失敗，畫面卻已經顯示「已送出」，最後主畫面公布時這位玩家變成「沒有
+   選擇」。改成：點下去先進 pending 狀態（顯示「送出中…」，兩顆按鈕收起來
+   達到原本「避免手滑點兩下」的效果），實際呼叫 sSetWithRetry()（內建重試
+   3 次）等到真正有結果才決定畫面——成功才顯示「已送出」，失敗則顯示
+   「剛剛網路不穩」並把兩顆按鈕還給玩家，讓她可以直接再點一次，而不是
+   困在一個看起來成功、其實沒送出的畫面裡動彈不得。 */
 async function submitPlayerCoopChoice(choice){
   if (choice !== 'cooperate' && choice !== 'betray') return;
   const token = lastPlayerState ? lastPlayerState.coopRoundToken : null;
-  coopChoiceSubmittedToken = token;
+  if (coopChoicePendingToken === token || coopChoiceSubmittedToken === token) return;
+  coopChoicePendingToken = token;
+  coopChoiceFailedToken = null;
   renderPlayerCoopChoice(lastPlayerState || { coopIds:[PLAYER_ID], coopRoundToken: token });
-  await sSet('coopchoice:' + PLAYER_ID, choice);
+  const ok = await sSetWithRetry('coopchoice:' + PLAYER_ID, choice);
+  if (coopChoicePendingToken !== token) return; // 這段等待期間畫面已經換到別輪，舊結果不該再套用
+  coopChoicePendingToken = null;
+  if (ok) coopChoiceSubmittedToken = token; else coopChoiceFailedToken = token;
+  renderPlayerCoopChoice(lastPlayerState || { coopIds:[PLAYER_ID], coopRoundToken: token });
 }
 /* （六十四）最後一名自己手機上的限時選擇畫面——跟 renderPlayerCoopChoice()
    同一個模式（lastplaceChoiceSubmittedToken 比對 state.lastplaceRoundToken
    的邏輯，完全對應 coopChoiceSubmittedToken 比對 coopRoundToken），只是這裡
    永遠只有一個人（renderPlayerAwards()'s 'lastplace' 分支只在
-   PLAYER_ID === state.lastPlaceId 時才會呼叫這個函式）。 */
+   PLAYER_ID === state.lastPlaceId 時才會呼叫這個函式）。
+   （七十八）lastplaceChoicePendingToken／lastplaceChoiceFailedToken 跟
+   coopChoicePendingToken／coopChoiceFailedToken 同一套道理，見
+   submitPlayerCoopChoice() 上方完整說明——這裡不重複貼一次。 */
 let lastplaceChoiceSubmittedToken = null;
+let lastplaceChoicePendingToken = null;
+let lastplaceChoiceFailedToken = null;
 function clearPlayerLastplaceCountdown(){
   if (playerLastplaceCountdownHandle){ clearInterval(playerLastplaceCountdownHandle); playerLastplaceCountdownHandle = null; }
 }
@@ -7431,6 +7494,8 @@ function updatePlayerLastplaceTimerUI(state){
 function renderPlayerLastplaceChoice(state){
   const champ = state.players ? state.players[state.prizeChampionId] : null;
   const submitted = lastplaceChoiceSubmittedToken === state.lastplaceRoundToken;
+  const pending = lastplaceChoicePendingToken === state.lastplaceRoundToken;
+  const failed = lastplaceChoiceFailedToken === state.lastplaceRoundToken;
   render(`
     <div class="shell"><div class="center">
       <span class="eyebrow">😱 本場最後一名是你！</span>
@@ -7438,11 +7503,14 @@ function renderPlayerLastplaceChoice(state){
       <div class="lp-countdown" id="player-lastplace-countdown">00:30</div>
       ${submitted ? `
         <p class="sub" style="font-weight:700;margin-top:14px">已送出，看主畫面公布…</p>
+      ` : pending ? `
+        <p class="sub" style="font-weight:700;margin-top:14px">送出中…</p>
       ` : `
-        <p class="sub">選好後不能反悔；時間到了沒選就自動視為接受罵名</p>
+        <p class="sub">點下去就會立刻送出，選好後不能反悔；時間到了沒選就自動視為接受罵名</p>
+        ${failed ? '<p class="sub" style="color:var(--alert);font-weight:700">剛剛網路不穩，沒有送出成功，請重新點一次</p>' : ''}
         <div class="lp-choice-row">
           <button class="lp-choice-btn" onclick="submitPlayerLastplaceChoice('accept')"><span class="big">😅</span><span class="lbl">接受最後一名的罵名</span></button>
-          <button class="lp-choice-btn challenge" onclick="submitPlayerLastplaceChoice('challenge')"><span class="big">🥊</span><span class="lbl">挑戰${champ?esc(champ.name):'獎金最高者'}</span></button>
+          <button class="lp-choice-btn" onclick="submitPlayerLastplaceChoice('challenge')"><span class="big">🥊</span><span class="lbl">挑戰${champ?esc(champ.name):'獎金最高者'}</span></button>
         </div>
       `}
     </div></div>
@@ -7454,9 +7522,15 @@ function renderPlayerLastplaceChoice(state){
 async function submitPlayerLastplaceChoice(choice){
   if (choice !== 'accept' && choice !== 'challenge') return;
   const token = lastPlayerState ? lastPlayerState.lastplaceRoundToken : null;
-  lastplaceChoiceSubmittedToken = token;
+  if (lastplaceChoicePendingToken === token || lastplaceChoiceSubmittedToken === token) return;
+  lastplaceChoicePendingToken = token;
+  lastplaceChoiceFailedToken = null;
   renderPlayerLastplaceChoice(lastPlayerState || { lastplaceRoundToken: token, players:{}, prizeChampionId:null });
-  await sSet('lastplacechoice:' + PLAYER_ID, choice);
+  const ok = await sSetWithRetry('lastplacechoice:' + PLAYER_ID, choice);
+  if (lastplaceChoicePendingToken !== token) return; // 這段等待期間畫面已經換到別輪，舊結果不該再套用
+  lastplaceChoicePendingToken = null;
+  if (ok) lastplaceChoiceSubmittedToken = token; else lastplaceChoiceFailedToken = token;
+  renderPlayerLastplaceChoice(lastPlayerState || { lastplaceRoundToken: token, players:{}, prizeChampionId:null });
 }
 function renderPlayerAwards(state){
   const stage = state.awardsStage || 'podium';
