@@ -261,19 +261,21 @@
   .sv-stage.show{ display:block; }
   .sv-stage-book{ position:absolute; inset:0; perspective:2400px; }
   .sv-stage-page{
-    position:absolute; inset:0; display:flex; align-items:center; justify-content:center; gap:5vw;
-    background:var(--cream); padding:7vh 6vw; backface-visibility:hidden; transform-origin:left center;
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center; gap:3vw;
+    background:var(--cream); padding:4vh 4vw; backface-visibility:hidden; transform-origin:left center;
   }
   .sv-stage-page.under{ z-index:1; }
   .sv-stage-page.over{ z-index:2; transition:transform .9s cubic-bezier(.6,.02,.35,1); }
   .sv-stage-page.over.flipping{ transform:rotateY(-178deg); box-shadow:0 30px 70px rgba(0,0,0,0.35); }
-  .sv-stage-page .sv-spread-head .name{ font-size:clamp(28px,4vw,48px); }
+  .sv-stage-page .sv-spread-head .name{ font-size:clamp(32px,4.6vw,58px); }
   .sv-stage-page .sv-spread-head .sub{ font-size:16px; }
-  .sv-stage-page .sv-spread-card{ width:min(560px,30vw); }
+  .sv-stage-page .sv-spread-card{ width:min(700px,33vw); }
   .sv-stage-page .sv-spread-card .sv-card{ cursor:default; }
   .sv-stage-page .sv-spread-card .sv-card:hover{ transform:none; }
-  .sv-stage-page .sv-spread-photos{ flex:1; min-height:62vh; }
+  .sv-stage-page .sv-spread-photos{ flex:1; min-height:74vh; }
   .sv-stage-page .sv-spread-photo .sv-polaroid{ cursor:default; }
+  .sv-stage-photoonly{ display:flex; flex-direction:column; align-items:center; width:100%; height:100%; gap:18px; }
+  .sv-stage-photoonly .sv-spread-photos.sv-stage-photos-full{ width:100%; flex:1; min-height:0; }
   .sv-stage-label{
     position:absolute; bottom:20px; left:22px; z-index:3; font-size:13px; font-weight:800;
     color:var(--ink-dim); background:rgba(255,255,255,0.6); padding:5px 14px; border-radius:999px; letter-spacing:.04em;
@@ -1040,24 +1042,45 @@ async function initStarView(){
     1:{px:460,vw:50}, 2:{px:360,vw:40}, 3:{px:300,vw:34}, 4:{px:260,vw:30},
     5:{px:215,vw:25}, 6:{px:190,vw:23}, 7:{px:170,vw:20}, 8:{px:155,vw:19}
   };
-  function photoSpreadSize(count){
-    const s = PHOTO_SIZE_BY_COUNT[Math.min(count,8)];
+  // 投影當下是全螢幕大螢幕，跟點開看的 modal 尺寸需求不一樣，另外一張更大的尺寸表，目標是卡片＋照片共佔螢幕 8 成以上。
+  const STAGE_PHOTO_SIZE_BY_COUNT = {
+    1:{px:760,vw:38}, 2:{px:600,vw:32}, 3:{px:480,vw:27}, 4:{px:420,vw:24},
+    5:{px:360,vw:20}, 6:{px:320,vw:18}, 7:{px:290,vw:16}, 8:{px:260,vw:15}
+  };
+  function photoSpreadSize(count, table){
+    const s = (table || PHOTO_SIZE_BY_COUNT)[Math.min(count,8)];
     return 'width:min(' + s.px + 'px,' + s.vw + 'vw);';
   }
   var spreadIdx = 0;
   // 卡片＋照片拼貼的內容，點開看的 lightbox 跟派對投影共用同一套（沒上傳照片的人，用奧卡大頭貼當影保底，不再顯示文字）
-  function spreadInnerHtml(s){
+  function spreadInnerHtml(s, big){
+    const sizeTable = big ? STAGE_PHOTO_SIZE_BY_COUNT : PHOTO_SIZE_BY_COUNT;
+    // 投影時如果這個人沒有投稿卡片，不留一整欄空白的卡片位置（只有名字＋提示文字很空），
+    // 照片直接用滿整個寬度；點開看的 modal 維持原本左右分欄的樣子不動。
+    if (big && !s.card){
+      var phtml = '<div class="sv-stage-photoonly"><div class="sv-spread-head"><div class="name">' + svEscapeHtml(s.name) + '</div><div class="sub">的照片</div></div>';
+      phtml += '<div class="sv-spread-photos sv-stage-photos-full">';
+      const fpreset = SCATTER_PRESETS[Math.min(s.photos.length,8)];
+      const fsizeStyle = photoSpreadSize(s.photos.length, sizeTable);
+      s.photos.forEach(function(x, i){
+        const pos = fpreset[i % fpreset.length];
+        phtml += '<div class="sv-spread-photo" style="left:' + pos.x + '%;top:' + pos.y + '%;--rot:' + pos.r + 'deg;' + fsizeStyle + '">' +
+          svPhotoHtml(x.photo, x.tape, s.pos) + '</div>';
+      });
+      phtml += '</div></div>';
+      return phtml;
+    }
     var html = '<div class="sv-spread-card"><div class="sv-spread-head"><div class="name">' + svEscapeHtml(s.name) + '</div><div class="sub">的卡片與照片</div></div>';
     html += s.card ? svCardHtml(s.card, s.pos) : '<div class="sv-spread-empty">這位還沒有投稿卡片</div>';
     html += '</div>';
     html += '<div class="sv-spread-photos">';
     if (!s.photos.length){
-      const sizeStyle = photoSpreadSize(1);
+      const sizeStyle = photoSpreadSize(1, sizeTable);
       html += '<div class="sv-spread-photo" style="left:50%;top:50%;--rot:-3deg;' + sizeStyle + '">' +
         svPhotoHtml({ url: AVATAR_FALLBACK_URI, name: s.name }, TAPE_CLASSES[0], s.pos) + '</div>';
     } else {
       const preset = SCATTER_PRESETS[Math.min(s.photos.length,8)];
-      const sizeStyle = photoSpreadSize(s.photos.length);
+      const sizeStyle = photoSpreadSize(s.photos.length, sizeTable);
       s.photos.forEach(function(x, i){
         const pos = preset[i % preset.length];
         html += '<div class="sv-spread-photo" style="left:' + pos.x + '%;top:' + pos.y + '%;--rot:' + pos.r + 'deg;' + sizeStyle + '">' +
@@ -1114,7 +1137,7 @@ async function initStarView(){
   var stageTimer = null;
 
   function stageSpreadHtml(pos){
-    return spreadInnerHtml(stagePages[pos % stagePages.length]);
+    return spreadInnerHtml(stagePages[pos % stagePages.length], true);
   }
   function stageLabelText(pos){
     return '🎉 派對投影中・' + (pos + 1) + ' / ' + stagePages.length;
