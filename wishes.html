@@ -239,8 +239,7 @@
   .sv-spread-card .sv-card{ width:100%; }
   .sv-spread-photos{ flex:1; min-width:0; position:relative; min-height:480px; }
   @media (max-width:760px){ .sv-spread-photos{ width:100%; min-height:460px; } }
-  .sv-spread-photo{ position:absolute; width:min(270px,31vw); transform:translate(-50%,-50%) rotate(var(--rot,0deg)); }
-  @media (max-width:760px){ .sv-spread-photo{ width:min(150px,36vw); } }
+  .sv-spread-photo{ position:absolute; transform:translate(-50%,-50%) rotate(var(--rot,0deg)); }
   .sv-spread-empty{ display:flex; align-items:center; justify-content:center; height:100%; color:var(--ink-dim); font-size:13.5px; text-align:center; padding:20px; }
   .sv-lbclose{
     position:absolute; top:22px; right:26px; width:44px; height:44px; border-radius:50%;
@@ -748,10 +747,70 @@ function svEscapeHtml(s){
   });
 }
 
+/* 使用者要求跟 game.html 投影頁同一種「自己調整顯示大小＋全螢幕」功能，直接
+   搬過來同一套做法：用 CSS 的 zoom 屬性整頁等比縮放（vw/vh/clamp() 這些既有
+   單位都會一起縮放，不用另外改版面 CSS），選好的比例存 localStorage（跟
+   game.html 的 spectateZoomLevel 用不同 key，避免同一個瀏覽器互相覆蓋），
+   下次打開這個秘密連結會記得上次調整的結果——想要「4 欄卡片牆整頁不用捲動」
+   的話，把畫面縮小一點就能自己湊出剛好塞進一屏的比例，不用另外改版面尺寸。
+   全螢幕用 Fullscreen API（瀏覽器基於安全理由只信任真人點擊觸發），監聽
+   fullscreenchange 讓按鈕狀態不會跟使用者自己按 Esc 退出的情況不同步。只在
+   壽星這個秘密頁面掛這個控制項，賓客填卡片的表單頁面不受影響。 */
+const STAR_ZOOM_STEP = 0.1, STAR_ZOOM_MIN = 0.5, STAR_ZOOM_MAX = 2.0;
+function getStarZoom(){
+  let v = 1;
+  try { v = parseFloat(localStorage.getItem('starZoomLevel') || '1'); } catch(e){}
+  return (isFinite(v) && v >= STAR_ZOOM_MIN && v <= STAR_ZOOM_MAX) ? v : 1;
+}
+function applyStarZoom(v){
+  v = Math.min(STAR_ZOOM_MAX, Math.max(STAR_ZOOM_MIN, +v.toFixed(2)));
+  document.documentElement.style.zoom = v;
+  try { localStorage.setItem('starZoomLevel', String(v)); } catch(e){}
+  const label = document.getElementById('star-zoom-label');
+  if (label) label.textContent = Math.round(v * 100) + '%';
+  return v;
+}
+function isStarFullscreen(){ return !!document.fullscreenElement; }
+function toggleStarFullscreen(){
+  if (isStarFullscreen()) document.exitFullscreen().catch(function(){});
+  else document.documentElement.requestFullscreen().catch(function(){});
+}
+function updateStarFullscreenBtn(){
+  const btn = document.getElementById('star-fullscreen-btn');
+  if (!btn) return;
+  const fs = isStarFullscreen();
+  btn.setAttribute('aria-label', fs ? '離開全螢幕' : '全螢幕顯示');
+  btn.style.opacity = fs ? '1' : '.85';
+}
+function ensureStarZoomControl(){
+  if (document.getElementById('star-zoom-ctrl')) return;
+  const d = document.createElement('div');
+  d.id = 'star-zoom-ctrl';
+  d.style.cssText = 'position:fixed;bottom:8px;right:8px;z-index:60;display:flex;align-items:center;gap:2px;'
+    + 'background:rgba(46,36,24,.72);color:#fff;border-radius:999px;padding:3px;font-size:12px;font-weight:800;';
+  d.innerHTML =
+    '<button type="button" id="star-fullscreen-btn" aria-label="全螢幕顯示" '
+      + 'style="all:unset;cursor:pointer;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:50%;font-size:14px;">\u26F6</button>'
+    + '<span style="width:1px;height:16px;background:rgba(255,255,255,.3);margin:0 2px;"></span>'
+    + '<button type="button" id="star-zoom-minus" aria-label="縮小畫面" '
+      + 'style="all:unset;cursor:pointer;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:50%;">\uFF0D</button>'
+    + '<span id="star-zoom-label" style="min-width:40px;text-align:center;">100%</span>'
+    + '<button type="button" id="star-zoom-plus" aria-label="放大畫面" '
+      + 'style="all:unset;cursor:pointer;width:26px;height:26px;display:flex;align-items:center;justify-content:center;border-radius:50%;">\uFF0B</button>';
+  document.body.appendChild(d);
+  document.getElementById('star-fullscreen-btn').onclick = toggleStarFullscreen;
+  document.getElementById('star-zoom-minus').onclick = function(){ applyStarZoom(getStarZoom() - STAR_ZOOM_STEP); };
+  document.getElementById('star-zoom-plus').onclick = function(){ applyStarZoom(getStarZoom() + STAR_ZOOM_STEP); };
+  document.addEventListener('fullscreenchange', updateStarFullscreenBtn);
+  updateStarFullscreenBtn();
+  applyStarZoom(getStarZoom());
+}
+
 async function initStarView(){
   document.getElementById('formScreen').hidden = true;
   document.getElementById('doneScreen').hidden = true;
   document.getElementById('starScreen').hidden = false;
+  ensureStarZoomControl();
 
   var key = getStarKey();
   var loadingEl = document.getElementById('svLoading');
@@ -797,18 +856,33 @@ async function initStarView(){
   const TAPE_CLASSES = ['c1','c2','c3','c4'];
 
   // ---- 依「署名」把同一次投稿的卡片跟照片配成一組：Cloudinary 上傳時卡片跟照片
-  // 用的是同一個 name（見 handleSubmit()），這裡直接比對字串把兩邊兜起來，不用
-  // 改動後端或資料庫。極小機率兩位客人剛好填一模一樣的署名，會被當成同一組——
-  // 已經口頭跟 Claire 提過這個限制。 ----
+  // 用的是同一個 name（見 handleSubmit()），這裡比對字串把兩邊兜起來，不用改動
+  // 後端或資料庫。署名比對統一先 trim 再轉小寫（例如「Aru」「aru」會被當成同一
+  // 個人），避免同一位客人不同次投稿大小寫打法不一致、被拆成兩個人。極小機率
+  // 兩位客人剛好填一模一樣的署名，也會被當成同一組——已經口頭跟 Claire 提過
+  // 這個限制。 ----
+  function normName(s){ return (s || '').trim().toLowerCase(); }
+  const photosByNorm = {};
+  photos.forEach(function(p, pi){
+    const nm = normName(p.name);
+    if (nm === '') return;
+    (photosByNorm[nm] = photosByNorm[nm] || []).push({ photo:p, photoIdx:pi });
+  });
+  const claimedNorm = {};
   const submitters = cards.map(function(c){
-    const nm = (c.name || '').trim();
-    const myPhotos = photos
-      .map(function(p, pi){ return { photo:p, photoIdx:pi }; })
-      .filter(function(x){ return nm !== '' && (x.photo.name || '').trim() === nm; });
+    const nm = normName(c.name);
+    const myPhotos = nm !== '' ? (photosByNorm[nm] || []) : [];
+    if (nm !== '') claimedNorm[nm] = true;
     return { card:c, name:c.name || '匿名', photos:myPhotos };
   });
-  // 有照片但配不到任何卡片（署名沒對上）的，另外各自變成一個「只有照片、沒有卡片」
-  // 的項目，避免有人傳了照片卻完全看不到。
+  // 署名沒對到任何卡片、但彼此署名相同（不分大小寫）的照片，合併成同一組——
+  // 不再讓同一個人上傳的多張照片因為沒有搭配卡片，被拆成一張一組。
+  Object.keys(photosByNorm).forEach(function(nm){
+    if (claimedNorm[nm]) return;
+    const group = photosByNorm[nm];
+    submitters.push({ card:null, name: group[0].photo.name || '匿名', photos: group });
+  });
+  // 完全沒填署名的照片，維持一張一組，避免不同人的匿名投稿被誤合併成同一組。
   const claimedPhotoIdx = {};
   submitters.forEach(function(s){ s.photos.forEach(function(x){ claimedPhotoIdx[x.photoIdx] = true; }); });
   photos.forEach(function(p, pi){
@@ -939,8 +1013,22 @@ async function initStarView(){
     1: [{x:50,y:50,r:-3}],
     2: [{x:32,y:36,r:-7},{x:68,y:62,r:6}],
     3: [{x:26,y:26,r:-8},{x:74,y:34,r:6},{x:48,y:74,r:-3}],
-    4: [{x:22,y:22,r:-8},{x:68,y:20,r:6},{x:28,y:68,r:-5},{x:74,y:66,r:7}]
+    4: [{x:22,y:22,r:-8},{x:68,y:20,r:6},{x:28,y:68,r:-5},{x:74,y:66,r:7}],
+    5: [{x:18,y:22,r:-7},{x:50,y:15,r:5},{x:82,y:24,r:-4},{x:30,y:70,r:6},{x:68,y:74,r:-6}],
+    6: [{x:16,y:20,r:-6},{x:50,y:16,r:5},{x:84,y:20,r:-5},{x:16,y:72,r:6},{x:50,y:78,r:-4},{x:84,y:72,r:5}],
+    7: [{x:14,y:18,r:-6},{x:41,y:14,r:5},{x:68,y:18,r:-4},{x:88,y:24,r:6},{x:20,y:70,r:-5},{x:50,y:76,r:6},{x:80,y:70,r:-6}],
+    8: [{x:13,y:20,r:-6},{x:38,y:16,r:5},{x:63,y:20,r:-4},{x:88,y:16,r:6},{x:13,y:72,r:5},{x:38,y:76,r:-6},{x:63,y:72,r:4},{x:88,y:76,r:-5}]
   };
+  // 照片盡量滿版：張數愈少每張愈大，超過 8 張的話位置重複使用上面 8 組、尺寸
+  // 維持跟 8 張時一樣（不無限縮小到看不清楚）。
+  const PHOTO_SIZE_BY_COUNT = {
+    1:{px:460,vw:50}, 2:{px:360,vw:40}, 3:{px:300,vw:34}, 4:{px:260,vw:30},
+    5:{px:215,vw:25}, 6:{px:190,vw:23}, 7:{px:170,vw:20}, 8:{px:155,vw:19}
+  };
+  function photoSpreadSize(count){
+    const s = PHOTO_SIZE_BY_COUNT[Math.min(count,8)];
+    return 'width:min(' + s.px + 'px,' + s.vw + 'vw);';
+  }
   var spreadIdx = 0;
   function renderSpread(){
     if (!submitters.length) return;
@@ -955,10 +1043,11 @@ async function initStarView(){
     if (!s.photos.length){
       html += '<div class="sv-spread-empty">這位還沒有上傳照片</div>';
     } else {
-      const preset = SCATTER_PRESETS[Math.min(s.photos.length,4)];
+      const preset = SCATTER_PRESETS[Math.min(s.photos.length,8)];
+      const sizeStyle = photoSpreadSize(s.photos.length);
       s.photos.forEach(function(x, i){
         const pos = preset[i % preset.length];
-        html += '<div class="sv-spread-photo" style="left:' + pos.x + '%;top:' + pos.y + '%;--rot:' + pos.r + 'deg">' +
+        html += '<div class="sv-spread-photo" style="left:' + pos.x + '%;top:' + pos.y + '%;--rot:' + pos.r + 'deg;' + sizeStyle + '">' +
           svPhotoHtml(x.photo, x.tape, s.pos) + '</div>';
       });
     }
